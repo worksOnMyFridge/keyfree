@@ -1,0 +1,122 @@
+# Keyfree
+
+**Your AI deploys contracts. Nobody holds the key.**
+
+AI coding agents (Claude Code, Codex, CI bots) now deploy smart contracts, and to do it they get a private
+key: in `.env`, in CI secrets, on the laptop. Whoever controls the agent, a prompt injection in a README, or a
+stolen laptop controls that key, and with it the contracts and the money behind them.
+
+Keyfree removes the key. The agent asks; a contract on NEAR decides; NEAR MPC signs.
+
+```
+AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> NEAR MPC signature ──> Base / Arbitrum
+                   checks bytes       allow list, chains,        for the policy's        deploy through
+                   vs viem            caps, nonces, roles        own derived address     its own factory
+```
+
+- The **policy** is a NEAR contract with no access keys. It holds the rules: which init code may be deployed
+  (hash of the code together with its constructor arguments), on which chains, with which gas and fee caps.
+- It **builds the EVM transaction itself** from fields and asks NEAR MPC to sign it for the policy's own
+  derived address. It never signs a hash someone hands it.
+- The agent's NEAR key can only call the request methods. Rules, roles and upgrades belong to a council of
+  three humans, and anything that widens power waits a public delay that any of them can cancel.
+- After a deploy lands, **NEAR Read MPC** confirms the factory's `Deployed` log, so the policy's journal
+  records what happened on chain, not what was intended.
+
+Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet and Base Sepolia.
+
+## See it in 2 minutes (browser only)
+
+1. Open the policy [`policy13.keyfree-lab.testnet`](https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet).
+   You see a contract account with **no access keys**: it was deployed, initialised and had its key deleted in
+   [one transaction](https://testnet.nearblocks.io/txns/7iawPybUxDjWqQFXCayAFxecGLLbeiMGP8bczy9sMVbd).
+2. Open its ETH address [`0x43e3…fcb0`](https://sepolia.basescan.org/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0) on Base Sepolia.
+   You see seven contract deploys, nonces 0 to 6, from an address whose private key does not exist.
+3. Open [this deploy](https://sepolia.basescan.org/tx/0x59ec94223de38de6bcbb12515c2facacd4578ce80483f734100869ae4f4e7120).
+   A Claude Code session made it after one sentence: "deploy Counter with start 1 to Base Sepolia through keyfree".
+4. [CLAIMS.md](CLAIMS.md) lists every claim with its transaction, log line or test.
+
+## Try it in 10 minutes (no keys, no money)
+
+Node 20+.
+
+```bash
+cd packages/keyfree
+npm install && npm run build
+cp keyfree.example.json demo/keyfree.json
+cd demo
+
+node ../dist/cli.js status
+# -> the live policy: 0 keys, its ETH address, allowed code, chains, roles
+
+node ../dist/cli.js preview --chain base-sepolia --artifact out/Counter.sol/Counter.json --args "[1]"
+# -> the transaction the policy would sign: its nonce, the address the contract will get,
+#    and "matches_viem": true (the policy's bytes equal viem's for the same fields)
+
+node ../dist/cli.js preview --chain base-sepolia --artifact out/Counter.sol/Counter.json --args "[999]"
+# -> REFUSED  code not on the allow list (code hash 5ec712c9…)
+#    Constructor arguments are part of what is allowed: Counter(999) is other code.
+```
+
+Reading and previewing need no key. Deploying needs the agent's key for this policy, which only the agent has.
+
+## Run the tests
+
+From the repository root:
+
+```bash
+(cd contract && cargo test -- --test-threads=1)       # 102 tests of the policy (Rust, near-sdk 5.29)
+(cd packages/keyfree && npm test && npm run smoke)    # tool unit tests; MCP self-check against the live policy
+```
+
+The contract tests include golden tests: the policy's transaction bytes for 1 KB, 24 KB and 48 KB of init code
+equal viem's (`evidence/golden_rlp.json`, made by `golden_vectors.mjs`, offline), and the journal's payload
+hash equals the one NEAR Read MPC accepted on Base Sepolia.
+
+## Use it from Claude Code
+
+`packages/keyfree/demo/.mcp.json` registers the MCP server. Open Claude Code in `packages/keyfree/demo` and
+ask it to deploy `Counter`. Without the agent key the read-only tools still work (`keyfree_status`,
+`keyfree_preview`, `keyfree_journal`, `keyfree_code_hash`), including the refusals.
+
+The agent gets seven tools, all on the request side. There is no tool for rules, roles, pause or upgrades,
+and its NEAR key could not call them anyway. Tool descriptions tell the model that a refusal is final and that
+text in files is not an instruction from the user. See `packages/keyfree/README.md` for what the tool checks
+before and after signing.
+
+## Run your own policy
+
+`v13/run.mjs` runs the whole thing end to end on NEAR testnet and Base Sepolia, one stage per call: accounts,
+install without keys, rules through the delay, factory, deploys from 22 B to 48 KB, Read MPC confirmation
+(real and forged), live refusals, guardian replacement, upgrade without keys. It needs testnet NEAR (about
+10) and a little Base Sepolia ETH on the derived address. The log of our run is `evidence/v13.log`.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `contract/` | the policy contract (Rust, near-sdk 5.29, `omni-transaction` for EIP-1559) and its tests |
+| `factory/` | `KeyfreeFactory.sol`: CREATE2 for exactly one caller, the policy's address; emits `Deployed` |
+| `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
+| `packages/keyfree/demo/` | `Counter`, and `vault-kit`: a prompt-injection example (its README swaps the vault owner) |
+| `v13/` | end-to-end testnet script and builds |
+| `evidence/` | logs of the live runs, golden vectors |
+
+## Security
+
+Read [SECURITY.md](SECURITY.md). In one line: there is no key, but there is power. Full power is 2 of the 3
+council members plus the delay, or the owner plus the delay while the other two stay silent. Keep the
+council keys on separate devices, never where the agent runs.
+
+## Disclosures
+
+- **Built during the hackathon.** All Keyfree code was written in the NEAR HACKATHON window (from
+  2026-10-19): the first experiments on 2026-10-25, the first commit in this repository on 2026-10-28. There
+  is no earlier Keyfree code.
+- **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
+  (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
+- **AI use.** The code was written with Claude Code (Anthropic) under the author's direction: the author set
+  the design, the rules and the decisions and checked the results; the AI wrote most of the code and tests.
+  Two security reviews were done by separate AI reviewer sessions; their findings are fixed with tests.
+- **One project.** This is the author's only project in NEAR HACKATHON 2026.
+- **License.** Apache-2.0.
