@@ -35,6 +35,17 @@
    "block_number": 51877482,
    "salt": "0x65a2aa023105cae216efeda213d6837f490e0cca93ef69c0f778207607f1ab9e",
    "init_hash": "0xdbbc39e99a1f5741eef1d546aebae7825e680867a234fcc5ac52aba11cc05237"
+  },
+  {
+   "name": "48 KB",
+   "nonce": 4,
+   "tx": "0x49cd9a5f6c36cbeaf4b555e1d00f0788f640d695d32ebf64e0ddd17a7a58fe4c",
+   "log_index": 0,
+   "transaction_index": 2,
+   "block_hash": "0x183f872d84ca91ea036e962a0b313c5afd427ab5c6acca17acf3d96e8c3b6160",
+   "block_number": 51878447,
+   "salt": "0x03f0d6eae8606203d624e5de77d91293a4c431d6fbc3eb40d25629720c33cba7",
+   "init_hash": "0xc20756d04b1d44a1f4b8ff2d7988b682b36905e7fc9ef6e884e7cd8c8f5b78d7"
   }
  ]
 }

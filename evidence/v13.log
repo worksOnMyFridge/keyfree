@@ -77,3 +77,80 @@ OK   24 KB: promised address 0x1ecf6441e7d21cc8a3e13e23141267dca923bd63 == viem 
   log: keyfree: signed chain 84532 nonce 3 tx 0x97e35ec2b5e08fb8c66c728578105245b90885996595aedc0c98bee63f52547a
 OK   24 KB: signed in 8.5 s, gas 5269282 of 6031000  https://testnet.nearblocks.io/txns/8n6k6y3AExmoPg2sRHcvKkX45UwBdNMHNMEaJpAPL3nz  https://sepolia.basescan.org/tx/0x97e35ec2b5e08fb8c66c728578105245b90885996595aedc0c98bee63f52547a
 OK   24 KB: Deployed(0x1ECf6441E7D21Cc8a3e13E23141267DcA923bd63), 24000 bytes of runtime at the promised address
+--- 2026-10-29T18:11:19.841Z attacks (11 ok, 1 fail)
+OK   agent deploys code that is not on the list -> Smart contract panicked: code not on the allow list
+OK   agent uses a salt without the factory (shared proxy) -> Smart contract panicked: a salt needs the factory (no shared CREATE2 proxy)
+OK   agent signs with a 1 wei fee -> Smart contract panicked: fee below the floor 1000000 of this chain
+OK   agent repeats a salt + code on a new nonce -> Smart contract panicked: salt and code already used on this chain
+FAIL agent's key calls a method outside its list -> Access key does not allow method propose_rule
+OK   owner raises a cap at once -> Smart contract panicked: raising a cap is a rule proposal
+OK   owner re-opens a chain with a lower nonce -> Smart contract panicked: chain already allowed: its nonce moves only by signing
+OK   a stranger pauses -> Smart contract panicked: only owner, guardian or reserve
+OK   confirm_stuck with Latest -> Smart contract panicked: a stuck request needs Safe or Finalized
+  log: keyfree: paused by guard13.keyfree-lab.testnet
+OK   agent deploys while paused -> Smart contract panicked: paused
+  log: keyfree: unpause needs a second vote
+OK   one unpause vote is not enough
+  log: keyfree: unpaused by 2 of 3
+OK   second vote (reserve) unpauses
+--- 2026-10-29T18:12:15.333Z attacks (12 ok, 0 fail)
+OK   agent deploys code that is not on the list -> Smart contract panicked: code not on the allow list
+OK   agent uses a salt without the factory (shared proxy) -> Smart contract panicked: a salt needs the factory (no shared CREATE2 proxy)
+OK   agent signs with a 1 wei fee -> Smart contract panicked: fee below the floor 1000000 of this chain
+OK   agent repeats a salt + code on a new nonce -> Smart contract panicked: salt and code already used on this chain
+OK   agent's key calls a method outside its list -> Access key does not allow method propose_rule
+OK   owner raises a cap at once -> Smart contract panicked: raising a cap is a rule proposal
+OK   owner re-opens a chain with a lower nonce -> Smart contract panicked: chain already allowed: its nonce moves only by signing
+OK   a stranger pauses -> Smart contract panicked: only owner, guardian or reserve
+OK   confirm_stuck with Latest -> Smart contract panicked: a stuck request needs Safe or Finalized
+  log: keyfree: paused by guard13.keyfree-lab.testnet
+OK   agent deploys while paused -> Smart contract panicked: paused
+  log: keyfree: unpause needs a second vote
+OK   one unpause vote is not enough
+  log: keyfree: unpaused by 2 of 3
+OK   second vote (reserve) unpauses
+--- 2026-10-29T18:12:38.189Z deploy 3 (4 ok, 0 fail)
+  balance 0.000065184603591869 ETH before 48 KB
+OK   48 KB: unsigned tx built by the contract == viem (49299 bytes, nonce 4)
+OK   48 KB: promised address 0x6469f07fe84434fe66fe574081be52c77f88734b == viem CREATE2
+  log: keyfree: signing chain 84532 nonce 4 code c20756d04b1d44a1f4b8ff2d7988b682b36905e7fc9ef6e884e7cd8c8f5b78d7 expected Some("0x6469f07fe84434fe66fe574081be52c77f88734b") hash 027401b956a4d90e16744fbdcb92faf860dc46b8167fc739c6ae1bb4b357c130
+  log: keyfree: signed chain 84532 nonce 4 tx 0x49cd9a5f6c36cbeaf4b555e1d00f0788f640d695d32ebf64e0ddd17a7a58fe4c
+OK   48 KB: signed in 8.0 s, gas 5526449 of 6414530  https://testnet.nearblocks.io/txns/Hn3wgJVHPwZea1bVQdWW4yEJf9QxZ48vspF79ruB9Dng  https://sepolia.basescan.org/tx/0x49cd9a5f6c36cbeaf4b555e1d00f0788f640d695d32ebf64e0ddd17a7a58fe4c
+OK   48 KB: Deployed(0x6469F07Fe84434fE66FE574081bE52c77f88734b), 24576 bytes of runtime at the promised address
+--- 2026-10-29T18:16:24.775Z roles (5 ok, 0 fail)
+  log: keyfree: keyfree-lab.testnet proposes Guardian = guard13b.keyfree-lab.testnet, ready at None
+OK   apply with one approval -> Smart contract panicked: needs 2 of 3 approvals
+  log: keyfree: Guardian = guard13b.keyfree-lab.testnet approved 2 of 3, ready at Some(1793297775)
+  log: keyfree: guard13.keyfree-lab.testnet cancels Guardian = guard13b.keyfree-lab.testnet, needs a second cancel
+OK   the old guardian alone cannot cancel its own replacement
+OK   apply before the delay (owner + reserve together) -> Smart contract panicked: role change delay not over
+waiting 180 s for the role delay
+  log: keyfree: Guardian is now guard13b.keyfree-lab.testnet
+OK   guardian is now guard13b.keyfree-lab.testnet
+OK   the old guardian pauses -> Smart contract panicked: only owner, guardian or reserve
+--- 2026-10-29T18:17:03.583Z confirm (3 ok, 0 fail)
+waiting: safe block 51878366, ours 51878447
+waiting: safe block 51878366, ours 51878447
+  log: keyfree: Read MPC chain 84532 tx 0x49cd9a5f6c36cbeaf4b555e1d00f0788f640d695d32ebf64e0ddd17a7a58fe4c expected 82e5b811f23765c5606899a046d06971d5b83e477412baa355bb16dbb4e78190
+  log: keyfree: chain 84532 nonce 4 not confirmed (timeout or mismatch), can retry
+OK   FORGED log position (48 KB, nonce 4): Read MPC answered false in 115.2 s  https://testnet.nearblocks.io/txns/9AKiRUEoe4BNaFt2qgaY8Nc6QMfL4H5kqkfheFyY3noD
+  log: keyfree: Read MPC chain 84532 tx 0x49cd9a5f6c36cbeaf4b555e1d00f0788f640d695d32ebf64e0ddd17a7a58fe4c expected ef0f41e1c7039cb2676beb34ae620370c4150f9175abc1114307d731f09adb45
+  log: keyfree: chain 84532 nonce 4 CONFIRMED by Read MPC
+OK   real log (48 KB, nonce 4): Read MPC answered true in 11.5 s  https://testnet.nearblocks.io/txns/EirjwGS6t1j2d3z3vS8aLNqT6sg2BR6cE3USERnhazmp
+OK   journal line is confirmed
+--- 2026-10-29T18:21:41.133Z upgrade (4 ok, 1 fail)
+  log: keyfree: upgrade to code sha256 c8c4992e9beac8bee669bea3f49967cda30435dbd33a568cab19c593de819f2d (332954 bytes, readable now) proposed, ready at unix 1793298082
+OK   guardian reads the proposed code from the chain: 332954 bytes, sha256 c8c4992e9beac8be... == local build "b"
+FAIL guardian cancelled; the stored code is gone
+  log: keyfree: upgrade to code sha256 c8c4992e9beac8bee669bea3f49967cda30435dbd33a568cab19c593de819f2d (332954 bytes, readable now) proposed, ready at unix 1793298089
+OK   apply before the delay -> Smart contract panicked: upgrade delay not over
+waiting 181 s for the upgrade delay
+  log: keyfree: applying upgrade c8c4992e9beac8bee669bea3f49967cda30435dbd33a568cab19c593de819f2d
+  log: keyfree: migrated to version 2
+OK   upgraded WITHOUT a key: build b, version 2, proposal cleared by migrate  https://testnet.nearblocks.io/txns/BqHPR1LDasmmgLscAYESz7aGhBxdntom846MAsxgFPQp
+OK   policy still has 0 keys
+--- 2026-10-29T18:27:10.376Z cancel (2 ok, 0 fail)
+  log: keyfree: upgrade to code sha256 8b35768cf12234faa731d531592b3831981d75446f77330760ea6da799b418dc (332954 bytes, readable now) proposed, ready at unix 1793298599
+OK   proposal is on the chain: sha256 8b35768cf12234fa...
+  log: keyfree: upgrade cancelled
+OK   guardian cancelled: no proposal, no stored code

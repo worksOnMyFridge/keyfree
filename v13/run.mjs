@@ -33,6 +33,9 @@ const TINY = "0x600a600c600039600a6000f3602a60005260206000f3";
 const scan = (h) => `https://sepolia.basescan.org/tx/${h}`;
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
+// Calls return at EXECUTED_OPTIMISTIC, views read the final block (1-2 blocks behind): wait before reading
+// back what a call just changed (a check right after cancel_upgrade read the old state on 29.10).
+const settle = () => wait(3);
 
 const stateFile = top("evidence/v13_state.json");
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile)) : {};
@@ -90,9 +93,12 @@ const CASES = [
   { name: "48 KB", init: initFor(24576, 49152), runtime: 24576 },
 ];
 
+// The address must hold gas_limit x max fee up front. KF_FEE_X=1 signs at viem's estimate (it already has
+// headroom over the base fee) when the faucet (once a day) left little ETH; the default keeps x2.
+const FEE_X = BigInt(process.env.KF_FEE_X || 2);
 async function fees() {
   const f = await base.estimateFeesPerGas();
-  const max = f.maxFeePerGas * 2n > BigInt(CFG.fee_floor_wei) ? f.maxFeePerGas * 2n : BigInt(CFG.fee_floor_wei);
+  const max = f.maxFeePerGas * FEE_X > BigInt(CFG.fee_floor_wei) ? f.maxFeePerGas * FEE_X : BigInt(CFG.fee_floor_wei);
   return { max_fee_per_gas: Number(max), max_priority_fee_per_gas: Number(f.maxPriorityFeePerGas < max ? f.maxPriorityFeePerGas : max) };
 }
 
@@ -270,7 +276,7 @@ try {
     await refused("agent uses a salt without the factory (shared proxy)", () => act("agent", "request_deploy", req({ salt_hex: used.salt }), { gas: "250" }), "a salt needs the factory");
     await refused("agent signs with a 1 wei fee", () => act("agent", "request_deploy", req({ max_fee_per_gas: 1, max_priority_fee_per_gas: 1 }), { gas: "250" }), "fee below the floor");
     await refused("agent repeats a salt + code on a new nonce", () => act("agent", "request_deploy", req({ salt_hex: used.salt, via_factory: true }), { gas: "250" }), "salt and code already used");
-    await refused("agent's key calls a method outside its list", () => signer("agent").acc.callFunctionRaw({ contractId: P, methodName: "propose_rule", args: { change: { AllowCode: { code_hash: "ab".repeat(32) } } }, gas: teraToGas("30") }), ["MethodNameMismatch", "method name", "not allowed", "isn't allowed"]);
+    await refused("agent's key calls a method outside its list", () => signer("agent").acc.callFunctionRaw({ contractId: P, methodName: "propose_rule", args: { change: { AllowCode: { code_hash: "ab".repeat(32) } } }, gas: teraToGas("30") }), ["MethodNameMismatch", "does not allow method", "not allowed", "isn't allowed"]);
     await refused("owner raises a cap at once", () => act("owner", "lower_limits", { max_gas_limit: CFG.max_gas_limit * 2, max_fee_cap: CFG.max_fee_cap }), "raising a cap is a rule proposal");
     await refused("owner re-opens a chain with a lower nonce", () => act("owner", "propose_rule", { change: { AllowChain: { chain_id: CHAIN, next_nonce: 0, min_fee_per_gas: 1 } } }), "chain already allowed");
     await refused("a stranger pauses", () => signer("guardian2").acc.callFunctionRaw({ contractId: P, methodName: "pause", args: {}, gas: teraToGas("30") }), "only owner, guardian or reserve");
@@ -305,6 +311,7 @@ try {
     const shown = Buffer.from(await view(P, "get_proposed_code"), "base64");
     check(sha(shown) === sha(B), `guardian reads the proposed code from the chain: ${shown.length} bytes, sha256 ${sha(shown).slice(0, 16)}... == local build "b"`);
     await g.callFunctionRaw({ contractId: P, methodName: "cancel_upgrade", args: {}, gas: teraToGas("30") });
+    await settle();
     check((await view(P, "get_status")).proposed === null, "guardian cancelled; the stored code is gone");
     kfLogs(await propose());
     const apply = () => owner.callFunctionRaw({ contractId: P, methodName: "apply_upgrade", args: {}, gas: teraToGas("300") });
@@ -316,6 +323,15 @@ try {
     const st = await view(P, "get_status");
     check(st.build === "b" && st.version === 2 && st.proposed === null, `upgraded WITHOUT a key: build ${st.build}, version ${st.version}, proposal cleared by migrate  ${explorer(up.transaction.hash)}`);
     check((await keysOf(P)).length === 0, "policy still has 0 keys");
+  } else if (stage === "cancel") {
+    // Re-check of the guardian's veto alone: propose a code, the guardian cancels, the proposal and the bytes are gone.
+    const A = fs.readFileSync(WASM.a);
+    kfLogs(await signer("owner").acc.signAndSendTransaction({ receiverId: P, actions: [actions.functionCall("propose_upgrade", A, teraToGas("300"), BigInt(A.length + 1000) * 10n ** 19n)] }));
+    await settle();
+    check((await view(P, "get_status")).proposed?.[0] === sha(A), `proposal is on the chain: sha256 ${sha(A).slice(0, 16)}...`);
+    kfLogs(await signer("guardian2").acc.callFunctionRaw({ contractId: P, methodName: "cancel_upgrade", args: {}, gas: teraToGas("30") }));
+    await settle();
+    check((await view(P, "get_status")).proposed === null && (await view(P, "get_proposed_code")) === null, "guardian cancelled: no proposal, no stored code");
   } else if (stage === "retire") {
     const ownerBefore = BigInt((await provider.viewAccount({ accountId: CFG.lab })).amount);
     await act("owner", "propose_role", { role: "Retire", account: CFG.lab });
