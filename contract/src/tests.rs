@@ -631,3 +631,80 @@ fn reserve_can_cancel_an_upgrade() {
     c.cancel_upgrade();
     assert!(c.proposed.is_none());
 }
+
+// v9: no side doors (audit v2 Н7, Н8, Н9; spec R9, R17, R18).
+#[test]
+#[should_panic(expected = "a salt needs the factory")]
+fn salt_without_the_factory_is_refused() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, Some(SALT.into()), None);
+}
+
+#[test]
+fn a_signed_plain_create_can_be_resigned() {
+    let mut c = idle();
+    let mut code_hash = [0u8; 32];
+    code_hash.copy_from_slice(&env::keccak256_array(&hex::decode(INIT).unwrap()));
+    c.journal.insert(key(84532, 3), Entry { code_hash, salt: [0; 32], factory: [0; 20], addr: [0; 20], tx_hash: [1; 32], status: SIGNED });
+    ctx("agent.testnet", 20);
+    let _ = c.resign(84532, 3, INIT.into(), 300_000, 20_000_000, 1_000_000);
+    let p = c.pending.clone().unwrap();
+    assert_eq!((p.nonce, p.salt.clone(), p.factory.clone()), (3, None, None));
+    assert_eq!(tx_of(&p).to, None, "still a plain creation");
+}
+
+#[test]
+#[should_panic(expected = "chain already allowed")]
+fn owner_cannot_move_the_nonce_down_by_hand() {
+    let mut c = idle();
+    signed_line(&mut c, 3, SIGNED);
+    ctx("owner.testnet", 20);
+    c.allow_chain(84532, 3, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "chain already allowed")]
+fn a_chain_is_opened_only_once() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.allow_chain(421614, 0, 1_000_000);
+    assert_eq!(c.get_next_nonce(421614), Some(0));
+    c.allow_chain(421614, 5, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "a chain needs a fee floor above 0")]
+fn a_chain_needs_a_fee_floor() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.allow_chain(421614, 0, 0);
+}
+
+#[test]
+#[should_panic(expected = "fee below the floor 1000000")]
+fn one_wei_fee_is_refused_before_signing() {
+    let mut c = idle();
+    c.fee_floor.insert(84532, 1_000_000);
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 1, 1, None, None);
+}
+
+#[test]
+#[should_panic(expected = "fee below the floor")]
+fn resign_also_respects_the_floor() {
+    let mut c = idle();
+    c.fee_floor.insert(84532, 1_000_000);
+    signed_line(&mut c, 2, SIGNED);
+    ctx("agent.testnet", 20);
+    let _ = c.resign(84532, 2, INIT.into(), 300_000, 999_999, 1);
+}
+
+#[test]
+fn fee_at_the_floor_is_fine() {
+    let mut c = idle();
+    c.fee_floor.insert(84532, 1_000_000);
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 1_000_000, 1, None, None);
+    assert!(c.pending.is_some());
+}

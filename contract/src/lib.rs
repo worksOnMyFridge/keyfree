@@ -32,14 +32,16 @@
 // a new owner/guardian/reserve needs 2 of 3 approvals (cancel too: 2 of 3, so a stolen guardian cannot
 // block its own replacement); a new agent is proposed by the owner and any council member may cancel it.
 // Unpause needs 2 of 3 votes. All four roles are different accounts.
+// v9 no side doors (audit v2 Н7-Н9; spec R9, R17, R18): a salt only goes through our own factory (the
+// shared CREATE2 proxy is gone, a planned address cannot be taken first); allow_chain only opens a new
+// chain, so the nonce never moves by hand; each chain has a fee floor; resign works for any signed line,
+// a plain creation too.
 use near_sdk::serde_json::{json, Value};
 use near_sdk::store::{IterableSet, LookupMap};
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
 use omni_transaction::evm::types::Signature;
 use omni_transaction::evm::EVMTransaction;
 
-// Deterministic deployment proxy (same address on every EVM chain): input = salt ++ init code.
-const CREATE2_PROXY: [u8; 20] = [0x4e, 0x59, 0xb4, 0x48, 0x47, 0xb3, 0x79, 0x57, 0x85, 0x88, 0x92, 0x0c, 0xa7, 0x8f, 0xbf, 0x26, 0xc0, 0xb4, 0x95, 0x6c];
 const SECP_N: [u8; 32] = hex_lit("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
 const SECP_HALF_N: [u8; 32] = hex_lit("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0");
 // EIP-3860 limit on init code; also keeps the callback inside its gas budget.
@@ -144,6 +146,8 @@ pub struct Keyfree {
     version: u32,
     // keccak(chain ‖ salt ‖ code hash) -> the nonce that salted deploy is bound to.
     used_salts: LookupMap<[u8; 32], u64>,
+    // Lowest max_fee_per_gas per chain, set when the chain is opened.
+    fee_floor: LookupMap<u64, u128>,
     reserve: AccountId,
     role_changes: Vec<RoleChange>,
     unpause_votes: Vec<AccountId>,
@@ -177,6 +181,7 @@ impl Keyfree {
             paused: false,
             version: 1,
             used_salts: LookupMap::new(b"s3".to_vec()),
+            fee_floor: LookupMap::new(b"p3".to_vec()),
             reserve,
             role_changes: vec![],
             unpause_votes: vec![],
@@ -340,10 +345,14 @@ impl Keyfree {
         self.only_owner();
         self.allowed_code.insert(code_hash.to_lowercase());
     }
-    pub fn allow_chain(&mut self, chain_id: u64, next_nonce: u64) {
+    // Opens a new chain once: its current nonce (the address's nonce there) and its fee floor. After that the
+    // nonce moves only by signing, resign or proof, never by hand (two contents on one nonce, Н8).
+    pub fn allow_chain(&mut self, chain_id: u64, next_nonce: u64, min_fee_per_gas: u128) {
         self.only_owner();
-        require!(self.pending.is_none() && self.stuck.is_none(), "a request is open");
+        require!(self.next_nonce.get(&chain_id).is_none(), "chain already allowed: its nonce moves only by signing");
+        require!(min_fee_per_gas > 0, "a chain needs a fee floor above 0");
         self.next_nonce.insert(chain_id, next_nonce);
+        self.fee_floor.insert(chain_id, min_fee_per_gas);
     }
 
     // The owner's factory on a chain (deployed keyless through this contract first).
@@ -390,13 +399,15 @@ impl Keyfree {
         require!(!self.paused, "paused");
         require!(self.pending.is_none() && self.stuck.is_none(), "a request is open");
         let e = self.journal.get(&key(chain_id, nonce)).cloned().unwrap_or_else(|| env::panic_str("no such deploy"));
-        require!(e.status == SIGNED && e.factory != [0u8; 20], "only a signed, unconfirmed factory deploy can be re-signed");
+        require!(e.status == SIGNED, "only a signed, unconfirmed deploy can be re-signed");
         let init_code = hex::decode(init_code_hex.trim_start_matches("0x")).unwrap_or_else(|_| env::panic_str("init code must be hex"));
         require!(env::keccak256_array(&init_code) == e.code_hash, "init code differs from the journal");
         require!(gas_limit <= self.max_gas_limit, "gas limit over the cap");
-        require!(max_fee_per_gas <= self.max_fee_cap && max_priority_fee_per_gas <= max_fee_per_gas, "gas price over the cap");
+        self.require_fees(chain_id, max_fee_per_gas, max_priority_fee_per_gas);
+        // A salt exists only with the factory, so factory == 0 means a plain creation.
+        let factory_deploy = e.factory != [0u8; 20];
         let p = Pending { chain_id, nonce, code_hash: hex::encode(e.code_hash), gas_limit, max_fee_per_gas, max_priority_fee_per_gas,
-            init_code, salt: Some(e.salt.to_vec()), factory: Some(e.factory.to_vec()), since_block: 0 };
+            init_code, salt: factory_deploy.then(|| e.salt.to_vec()), factory: factory_deploy.then(|| e.factory.to_vec()), since_block: 0 };
         require_intrinsic(&p);
         self.sign(p)
     }
@@ -406,7 +417,7 @@ impl Keyfree {
         require!(!self.paused, "paused");
         require!(self.pending.is_none(), "another request is being signed");
         let mut p = self.stuck.take().expect("nothing to retry");
-        require!(max_fee_per_gas <= self.max_fee_cap && max_priority_fee_per_gas <= max_fee_per_gas, "gas price over the cap");
+        self.require_fees(p.chain_id, max_fee_per_gas, max_priority_fee_per_gas);
         p.max_fee_per_gas = max_fee_per_gas;
         p.max_priority_fee_per_gas = max_priority_fee_per_gas;
         self.sign(p)
@@ -586,6 +597,12 @@ impl Keyfree {
         let p = env::predecessor_account_id();
         require!(Some(&p) == self.agent.as_ref() || p == self.owner, "only agent or owner");
     }
+    // A fee under the chain's floor would be signed but never mined: the nonce would wait forever.
+    fn require_fees(&self, chain_id: u64, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) {
+        require!(max_fee_per_gas <= self.max_fee_cap && max_priority_fee_per_gas <= max_fee_per_gas, "gas price over the cap");
+        let floor = self.fee_floor.get(&chain_id).copied().unwrap_or(0);
+        if max_fee_per_gas < floor { env::panic_str(&format!("fee below the floor {floor} of this chain")); }
+    }
     fn is_council(&self, a: &AccountId) -> bool {
         *a == self.owner || *a == self.guardian || *a == self.reserve
     }
@@ -611,7 +628,8 @@ impl Keyfree {
         let code_hash = hex::encode(env::keccak256_array(&init_code));
         require!(self.allowed_code.contains(&code_hash), "code not on the allow list");
         require!(gas_limit <= self.max_gas_limit, "gas limit over the cap");
-        require!(max_fee_per_gas <= self.max_fee_cap && max_priority_fee_per_gas <= max_fee_per_gas, "gas price over the cap");
+        self.require_fees(chain_id, max_fee_per_gas, max_priority_fee_per_gas);
+        require!(salt_hex.is_none() || via_factory, "a salt needs the factory (no shared CREATE2 proxy)");
         let salt = salt_hex.map(|h| {
             let b = hex::decode(h.trim_start_matches("0x")).unwrap_or_else(|_| env::panic_str("salt must be hex"));
             require!(b.len() == 32, "salt must be 32 bytes");
@@ -642,14 +660,13 @@ fn eth_address_of(key: &str) -> Option<String> {
 }
 
 fn tx_of(p: &Pending) -> EVMTransaction {
-    // Plain creation (to = none) or CREATE2 through the proxy; no value is ever sent (A1: no transfers).
+    // Plain creation (to = none) or CREATE2 through our factory; no value is ever sent (A1: no transfers).
     let (to, input) = match (&p.factory, &p.salt) {
         (Some(f), Some(salt)) => {
             let mut to = [0u8; 20];
             to.copy_from_slice(f);
             (Some(to), factory_call(salt, &p.init_code))
         }
-        (_, Some(salt)) => (Some(CREATE2_PROXY), [salt.as_slice(), p.init_code.as_slice()].concat()),
         _ => (None, p.init_code.clone()),
     };
     EVMTransaction {
@@ -681,10 +698,10 @@ fn require_intrinsic(p: &Pending) {
 }
 
 // Address CREATE2 will give the new contract: keccak(0xff ++ deployer ++ salt ++ keccak(init))[12..],
-// where the deployer is our factory or the shared proxy. Plain CREATE is not predicted here.
+// where the deployer is our factory. Plain CREATE is not predicted here.
 fn expected_address(p: &Pending) -> Option<String> {
     let salt = p.salt.as_ref()?;
-    let deployer: &[u8] = p.factory.as_deref().unwrap_or(&CREATE2_PROXY);
+    let deployer: &[u8] = p.factory.as_deref()?;
     let pre = [&[0xffu8][..], deployer, salt, &env::keccak256_array(&p.init_code)].concat();
     Some(format!("0x{}", hex::encode(&env::keccak256_array(&pre)[12..])))
 }
