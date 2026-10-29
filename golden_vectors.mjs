@@ -19,6 +19,11 @@ const cases = [
   { name: "factory_48k", nonce: 11, size: 48 * 1024, factory: true },
 ];
 
+// v14: the one call the policy signs, upgradeTo(implementation) on a proxy.
+const PROXY = "0x" + "22".repeat(20);
+const IMPLEMENTATION = "0x" + "33".repeat(20);
+const upgradeAbi = [{ type: "function", name: "upgradeTo", stateMutability: "nonpayable", inputs: [{ name: "implementation", type: "address" }], outputs: [] }];
+
 const out = cases.map((c) => {
   const code = init(c.size);
   const data = c.factory ? encodeFunctionData({ abi: deployAbi, functionName: "deploy", args: [SALT, code] }) : code;
@@ -32,5 +37,13 @@ const out = cases.map((c) => {
     ...(c.size <= 1024 ? { unsigned_hex: unsigned } : {}),
   };
 });
+{
+  const data = encodeFunctionData({ abi: upgradeAbi, functionName: "upgradeTo", args: [IMPLEMENTATION] });
+  const tx = { ...fee, gas: 100_000n, nonce: 12, to: PROXY, data };
+  const unsigned = serializeTransaction(tx);
+  const signed = serializeTransaction(tx, { r: R, s: S, yParity: 0 });
+  out.push({ name: "proxy_upgrade", nonce: 12, proxy: PROXY, implementation: IMPLEMENTATION, data, data_keccak: keccak256(data),
+    unsigned_len: (unsigned.length - 2) / 2, unsigned_keccak: keccak256(unsigned), signed_len: (signed.length - 2) / 2, signed_keccak: keccak256(signed), unsigned_hex: unsigned });
+}
 fs.writeFileSync(new URL("./evidence/golden_rlp.json", import.meta.url), JSON.stringify({ viem: "2.57.11", salt: SALT, factory: FACTORY, r: R, s: S, cases: out }, null, 2) + "\n");
 for (const c of out) console.log(c.name, "unsigned", c.unsigned_len, "B", c.unsigned_keccak, "signed", c.signed_keccak);

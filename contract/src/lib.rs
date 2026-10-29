@@ -50,6 +50,12 @@
 // the policy (2 of 3 + full delay, Role::Retire); then it is paused for good, sweep() empties the state in
 // portions (all growing collections are iterable now) and finish_retire() deletes the account, sending its
 // NEAR to a council member who approved. apply_upgrade keeps the proposal until migrate has run (Н17).
+// v14 proxy upgrades (the money scenario): besides deploys the policy signs exactly one kind of call,
+// upgradeTo(implementation) on an ERC-1967 proxy whose admin is the policy's address. The council allows one
+// (chain, proxy, implementation) through the rules delay; the contract builds the calldata itself; the
+// allowance is used up by the request, so the same upgrade or a rollback needs a new rule. Read MPC confirms
+// the proxy's Upgraded log. New state goes at the end; migrate reads the v13 layout.
+use near_sdk::borsh::BorshDeserialize;
 use near_sdk::serde_json::{json, Value};
 use near_sdk::json_types::Base64VecU8;
 use near_sdk::store::{IterableMap, IterableSet, LazyOption};
@@ -95,8 +101,10 @@ pub struct Pending {
     pub gas_limit: u128,
     pub max_fee_per_gas: u128,
     pub max_priority_fee_per_gas: u128,
+    // For a proxy upgrade: the calldata the contract built (and code_hash is its keccak).
     pub init_code: Vec<u8>,
     pub salt: Option<Vec<u8>>,
+    // The transaction's `to`: our factory (with a salt) or, without a salt, the proxy being upgraded.
     pub factory: Option<Vec<u8>>,
     pub since_block: u64,
 }
@@ -110,6 +118,16 @@ pub struct Entry {
     pub salt: [u8; 32],
     pub factory: [u8; 20],
     pub addr: [u8; 20],
+    pub tx_hash: [u8; 32],
+    pub status: u8,
+}
+
+// Journal line of a proxy upgrade, same rules as Entry (fixed size, made at request time).
+#[near(serializers = [borsh])]
+#[derive(Clone)]
+pub struct ProxyEntry {
+    pub proxy: [u8; 20],
+    pub implementation: [u8; 20],
     pub tx_hash: [u8; 32],
     pub status: u8,
 }
@@ -152,6 +170,8 @@ pub enum RuleChange {
     EnableChain { chain_id: u64 },
     SetFactory { chain_id: u64, factory_hex: String },
     SetLimits { max_gas_limit: u128, max_fee_cap: u128 },
+    // One upgradeTo(implementation) on one proxy, used up by the request.
+    AllowProxyUpgrade { chain_id: u64, proxy_hex: String, implementation_hex: String },
 }
 
 #[near(serializers = [borsh, json])]
@@ -200,6 +220,61 @@ pub struct Keyfree {
     disabled_chains: IterableSet<u64>,
     // Set once retiring starts (R29): the beneficiary of the account's NEAR. There is no way back.
     retiring: Option<AccountId>,
+    // v14. Allowed proxy upgrades as "chain:0xproxy:0ximplementation".
+    allowed_upgrades: IterableSet<String>,
+    // Journal lines of proxy upgrades, keyed like the deploy journal: a nonce is in at most one of the two.
+    proxy_journal: IterableMap<String, ProxyEntry>,
+}
+
+// The state as v13 wrote it, read once by migrate.
+#[near(serializers = [borsh])]
+pub struct V13 {
+    owner: AccountId,
+    agent: Option<AccountId>,
+    mpc: AccountId,
+    path: String,
+    eth_address: Option<String>,
+    allowed_code: IterableSet<String>,
+    next_nonce: IterableMap<u64, u64>,
+    max_gas_limit: u128,
+    max_fee_cap: u128,
+    pending: Option<Pending>,
+    stuck: Option<Pending>,
+    factories: IterableMap<u64, Vec<u8>>,
+    journal: IterableMap<String, Entry>,
+    guardian: AccountId,
+    upgrade_delay_sec: u64,
+    proposed: Option<(String, u64)>,
+    paused: bool,
+    version: u32,
+    used_salts: IterableMap<[u8; 32], u64>,
+    fee_floor: IterableMap<u64, u128>,
+    reserve: AccountId,
+    role_changes: Vec<RoleChange>,
+    unpause_votes: Vec<AccountId>,
+    proposed_code: LazyOption<Vec<u8>>,
+    rules_delay_sec: u64,
+    rule_proposals: Vec<RuleProposal>,
+    next_rule_id: u32,
+    disabled_chains: IterableSet<u64>,
+    retiring: Option<AccountId>,
+}
+
+impl From<V13> for Keyfree {
+    fn from(o: V13) -> Self {
+        Self {
+            owner: o.owner, agent: o.agent, mpc: o.mpc, path: o.path, eth_address: o.eth_address,
+            allowed_code: o.allowed_code, next_nonce: o.next_nonce, max_gas_limit: o.max_gas_limit, max_fee_cap: o.max_fee_cap,
+            pending: o.pending, stuck: o.stuck, factories: o.factories, journal: o.journal, guardian: o.guardian,
+            upgrade_delay_sec: o.upgrade_delay_sec, proposed: o.proposed, paused: o.paused, version: o.version,
+            used_salts: o.used_salts, fee_floor: o.fee_floor, reserve: o.reserve, role_changes: o.role_changes,
+            unpause_votes: o.unpause_votes, proposed_code: o.proposed_code, rules_delay_sec: o.rules_delay_sec,
+            rule_proposals: o.rule_proposals, next_rule_id: o.next_rule_id, disabled_chains: o.disabled_chains,
+            retiring: o.retiring,
+            allowed_upgrades: IterableSet::new(b"a4".to_vec()),
+            proxy_journal: IterableMap::new(b"k4".to_vec()),
+        }
+    }
 }
 
 #[near]
@@ -240,6 +315,8 @@ impl Keyfree {
             next_rule_id: 0,
             disabled_chains: IterableSet::new(b"d3".to_vec()),
             retiring: None,
+            allowed_upgrades: IterableSet::new(b"a4".to_vec()),
+            proxy_journal: IterableMap::new(b"k4".to_vec()),
         }
     }
 
@@ -343,16 +420,17 @@ impl Keyfree {
             }};
         }
         drain_map!(self.journal);
+        drain_map!(self.proxy_journal);
         drain_map!(self.used_salts);
         drain_map!(self.next_nonce);
         drain_map!(self.fee_floor);
         drain_map!(self.factories);
         drain_set!(self.allowed_code);
+        drain_set!(self.allowed_upgrades);
         drain_set!(self.disabled_chains);
         let _ = budget;
         self.proposed_code.set(None);
-        let left = self.journal.len() + self.used_salts.len() + self.next_nonce.len() + self.fee_floor.len()
-            + self.factories.len() + self.allowed_code.len() + self.disabled_chains.len();
+        let left = self.left_to_sweep();
         env::log_str(&format!("keyfree: swept, {left} entries left"));
         left
     }
@@ -361,8 +439,7 @@ impl Keyfree {
     pub fn finish_retire(&mut self) -> Promise {
         self.only_council();
         let to = self.retiring.clone().unwrap_or_else(|| env::panic_str("the policy is not retiring"));
-        require!(self.journal.is_empty() && self.used_salts.is_empty() && self.next_nonce.is_empty() && self.fee_floor.is_empty()
-            && self.factories.is_empty() && self.allowed_code.is_empty() && self.disabled_chains.is_empty(), "sweep first");
+        require!(self.left_to_sweep() == 0, "sweep first");
         env::log_str(&format!("keyfree: retiring, account deleted, NEAR to {to}"));
         Promise::new(env::current_account_id()).delete_account(to)
     }
@@ -419,11 +496,15 @@ impl Keyfree {
     }
 
     // Runs right after the self-deploy, in the same batch. Every future version's migrate must clear the
-    // proposal and the stored code: that is how a successful upgrade is marked done.
+    // proposal and the stored code: that is how a successful upgrade is marked done. Reads this layout or
+    // the v13 one (v13 bytes are too short for this layout, and this layout is too long for v13).
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let mut s: Self = env::state_read().unwrap_or_else(|| env::panic_str("no state"));
+        let raw = env::storage_read(b"STATE").unwrap_or_else(|| env::panic_str("no state"));
+        let mut s = Self::try_from_slice(&raw)
+            .or_else(|_| V13::try_from_slice(&raw).map(Self::from))
+            .unwrap_or_else(|_| env::panic_str("unknown state layout"));
         s.version += 1;
         s.proposed = None;
         s.proposed_code.set(None);
@@ -527,6 +608,12 @@ impl Keyfree {
         self.factories.remove(&chain_id);
         env::log_str(&format!("keyfree: factory on chain {chain_id} removed by {me}"));
     }
+    pub fn remove_proxy_upgrade(&mut self, chain_id: u64, proxy_hex: String, implementation_hex: String) {
+        let me = self.only_council();
+        let k = upgrade_key(chain_id, &addr20(&proxy_hex, "proxy"), &addr20(&implementation_hex, "implementation"));
+        self.allowed_upgrades.remove(&k);
+        env::log_str(&format!("keyfree: proxy upgrade {k} removed by {me}"));
+    }
     pub fn lower_limits(&mut self, max_gas_limit: u128, max_fee_cap: u128) {
         let me = self.only_council();
         require!(max_gas_limit <= self.max_gas_limit && max_fee_cap <= self.max_fee_cap, "raising a cap is a rule proposal");
@@ -536,7 +623,8 @@ impl Keyfree {
     }
 
     pub fn get_rules(&self) -> Value {
-        json!({ "allowed_code": self.allowed_code.iter().collect::<Vec<_>>(), "max_gas_limit": self.max_gas_limit.to_string(),
+        json!({ "allowed_code": self.allowed_code.iter().collect::<Vec<_>>(), "allowed_proxy_upgrades": self.allowed_upgrades.iter().collect::<Vec<_>>(),
+            "max_gas_limit": self.max_gas_limit.to_string(),
             "max_fee_cap": self.max_fee_cap.to_string(), "rules_delay_sec": self.rules_delay_sec, "proposals": self.rule_proposals })
     }
 
@@ -565,6 +653,43 @@ impl Keyfree {
         code_hash.copy_from_slice(&hex::decode(&p.code_hash).unwrap_or_else(|_| vec![0; 32]));
         self.journal.insert(key(p.chain_id, p.nonce), Entry { code_hash, salt, factory, addr, tx_hash: [0u8; 32], status: REQUESTED });
         if let Some(s) = &p.salt { self.used_salts.insert(salt_key(p.chain_id, s, &code_hash), p.nonce); }
+        self.sign(p)
+    }
+
+    // The bytes the contract would sign for a proxy upgrade.
+    pub fn preview_proxy_upgrade(&self, chain_id: u64, proxy_hex: String, implementation_hex: String, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) -> Value {
+        let p = self.check_proxy_upgrade(chain_id, &proxy_hex, &implementation_hex, gas_limit, max_fee_per_gas, max_priority_fee_per_gas);
+        let unsigned = tx_of(&p).build_for_signing();
+        json!({ "unsigned": format!("0x{}", hex::encode(&unsigned)), "hash": hex::encode(env::keccak256_array(&unsigned)), "nonce": p.nonce,
+            "to": format!("0x{}", hex::encode(p.factory.as_deref().unwrap_or_default())), "data": format!("0x{}", hex::encode(&p.init_code)), "min_gas": intrinsic_gas(&tx_of(&p)) })
+    }
+
+    // The agent asks for one allowed upgradeTo. The allowance is used up here, so whatever happens next the
+    // same call cannot be signed twice, and going back to an older version needs its own rule.
+    pub fn request_proxy_upgrade(&mut self, chain_id: u64, proxy_hex: String, implementation_hex: String, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) -> Promise {
+        self.only_agent_or_owner();
+        require!(!self.paused, "paused");
+        require!(self.eth_address.is_some(), "address not derived yet, call setup");
+        require!(self.pending.is_none(), "another request is being signed");
+        require!(self.stuck.is_none(), "an earlier request did not finish: retry it or wait for release");
+        let p = self.check_proxy_upgrade(chain_id, &proxy_hex, &implementation_hex, gas_limit, max_fee_per_gas, max_priority_fee_per_gas);
+        let (proxy, implementation) = (addr20(&proxy_hex, "proxy"), addr20(&implementation_hex, "implementation"));
+        self.allowed_upgrades.remove(&upgrade_key(chain_id, &proxy, &implementation));
+        self.proxy_journal.insert(key(p.chain_id, p.nonce), ProxyEntry { proxy, implementation, tx_hash: [0u8; 32], status: REQUESTED });
+        self.sign(p)
+    }
+
+    // Like resign for deploys: same chain, nonce, proxy and implementation (from the journal), new gas and fees.
+    pub fn resign_proxy_upgrade(&mut self, chain_id: u64, nonce: u64, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) -> Promise {
+        self.only_agent_or_owner();
+        require!(!self.paused, "paused");
+        require!(self.pending.is_none() && self.stuck.is_none(), "a request is open");
+        let e = self.proxy_journal.get(&key(chain_id, nonce)).cloned().unwrap_or_else(|| env::panic_str("no such proxy upgrade"));
+        require!(e.status == SIGNED, "only a signed, unconfirmed proxy upgrade can be re-signed");
+        require!(gas_limit <= self.max_gas_limit, "gas limit over the cap");
+        self.require_fees(chain_id, max_fee_per_gas, max_priority_fee_per_gas);
+        let p = proxy_pending(chain_id, nonce, &e.proxy, &e.implementation, gas_limit, max_fee_per_gas, max_priority_fee_per_gas);
+        require_intrinsic(&p);
         self.sign(p)
     }
 
@@ -612,7 +737,7 @@ impl Keyfree {
     // A request that got no signature: a new deploy stays bound to its nonce (`stuck`); a re-sign of an
     // already signed line opens nothing, because that line keeps its nonce and content anyway.
     fn park(&mut self, p: Pending, why: &str) {
-        let resign = self.journal.get(&key(p.chain_id, p.nonce)).map(|e| e.status) == Some(SIGNED);
+        let resign = self.line(&key(p.chain_id, p.nonce)).map(|(s, _)| s) == Some(SIGNED);
         if resign {
             env::log_str(&format!("keyfree: re-sign of nonce {} {why}; the signed deploy stays as it was", p.nonce));
         } else {
@@ -639,11 +764,7 @@ impl Keyfree {
                 let next = self.next_nonce.get(&p.chain_id).copied().unwrap_or(0).max(p.nonce + 1);
                 self.next_nonce.insert(p.chain_id, next);
                 let tx_hash = env::keccak256_array(&hex::decode(&raw_hex[2..]).unwrap_or_default());
-                if let Some(mut e) = self.journal.get(&key(p.chain_id, p.nonce)).cloned() {
-                    e.tx_hash = tx_hash;
-                    e.status = SIGNED;
-                    self.journal.insert(key(p.chain_id, p.nonce), e);
-                }
+                self.set_line(&key(p.chain_id, p.nonce), Some(tx_hash), SIGNED);
                 env::log_str(&format!("keyfree: signed chain {} nonce {} tx 0x{}", p.chain_id, p.nonce, hex::encode(tx_hash)));
                 Some(raw_hex)
             }
@@ -654,15 +775,16 @@ impl Keyfree {
         }
     }
 
-    // Ask NEAR Read MPC to confirm a factory deploy from its Deployed log. Anyone may call: the
-    // contract binds the tx hash, factory, new address, code hash and salt itself; the caller only
-    // says where the log sits (block, position), and the MPC must find exactly that log there.
+    // Ask NEAR Read MPC to confirm a factory deploy from its Deployed log, or a proxy upgrade from the proxy's
+    // Upgraded log. Anyone may call: the contract binds the tx hash, emitter and topics itself; the caller
+    // only says where the log sits (block, position), and the MPC must find exactly that log there.
     #[payable]
     pub fn confirm(&mut self, chain_id: u64, nonce: u64, log: LogIn, finality: String) -> Promise {
         self.not_retiring();
-        let e = self.journal.get(&key(chain_id, nonce)).cloned().unwrap_or_else(|| env::panic_str("no such deploy"));
-        require!(e.status == SIGNED, "deploy is not waiting for confirmation");
-        self.read_mpc(chain_id, &e, e.tx_hash, &log, &finality)
+        let k = key(chain_id, nonce);
+        let (status, tx_hash) = self.line(&k).unwrap_or_else(|| env::panic_str("no such deploy"));
+        require!(status == SIGNED, "deploy is not waiting for confirmation");
+        self.read_mpc(chain_id, &k, tx_hash, &log, &finality)
             .then(Self::ext(env::current_account_id()).with_static_gas(Gas::from_tgas(10)).on_confirmed(chain_id, nonce))
     }
 
@@ -675,9 +797,10 @@ impl Keyfree {
         self.not_retiring();
         require!(finality == "Safe" || finality == "Finalized", "a stuck request needs Safe or Finalized");
         let p = self.stuck.clone().unwrap_or_else(|| env::panic_str("nothing stuck"));
-        let e = self.journal.get(&key(p.chain_id, p.nonce)).cloned().unwrap_or_else(|| env::panic_str("no journal line"));
+        let k = key(p.chain_id, p.nonce);
+        require!(self.line(&k).is_some(), "no journal line");
         let tx: [u8; 32] = hex::decode(tx_hash.trim_start_matches("0x")).ok().and_then(|b| b.try_into().ok()).unwrap_or_else(|| env::panic_str("bad tx hash"));
-        self.read_mpc(p.chain_id, &e, tx, &log, &finality)
+        self.read_mpc(p.chain_id, &k, tx, &log, &finality)
             .then(Self::ext(env::current_account_id()).with_static_gas(Gas::from_tgas(10)).on_stuck_confirmed(p.chain_id, p.nonce, hex::encode(tx)))
     }
 
@@ -695,22 +818,25 @@ impl Keyfree {
             self.stuck = None;
             let next = self.next_nonce.get(&chain_id).copied().unwrap_or(0).max(nonce + 1);
             self.next_nonce.insert(chain_id, next);
-            if let Some(mut e) = self.journal.get(&key(chain_id, nonce)).cloned() {
-                if let Some(t) = hex::decode(&tx_hash).ok().and_then(|b| <[u8; 32]>::try_from(b).ok()) { e.tx_hash = t; }
-                e.status = CONFIRMED;
-                self.journal.insert(key(chain_id, nonce), e);
-            }
+            let t = hex::decode(&tx_hash).ok().and_then(|b| <[u8; 32]>::try_from(b).ok());
+            self.set_line(&key(chain_id, nonce), t, CONFIRMED);
         }
         env::log_str(&format!("keyfree: stuck chain {chain_id} nonce {nonce} {}", if ok { "proved landed by Read MPC, nonce moves on" } else { "not proved, stays stuck" }));
         ok
     }
 
-    fn read_mpc(&self, chain_id: u64, e: &Entry, tx_hash: [u8; 32], log: &LogIn, finality: &str) -> Promise {
-        require!(e.factory != [0u8; 20], "only factory deploys can be confirmed");
+    fn read_mpc(&self, chain_id: u64, k: &str, tx_hash: [u8; 32], log: &LogIn, finality: &str) -> Promise {
         let fin = match finality { "Latest" => 0u8, "Safe" => 1, "Finalized" => 2, _ => env::panic_str("finality must be Latest, Safe or Finalized") };
         let (chain_name, variant) = chain_variant(chain_id).unwrap_or_else(|| env::panic_str("Read MPC does not cover this chain"));
         let block_hash: [u8; 32] = hex::decode(log.block_hash.trim_start_matches("0x")).ok().and_then(|b| b.try_into().ok()).unwrap_or_else(|| env::panic_str("bad block hash"));
-        let expected = hex::encode(env::sha256_array(&deployed_payload(variant, e, &tx_hash, log, &block_hash, fin)));
+        let payload = if let Some(e) = self.journal.get(k) {
+            require!(e.factory != [0u8; 20], "only factory deploys can be confirmed");
+            deployed_payload(variant, e, &tx_hash, log, &block_hash, fin)
+        } else {
+            let u = self.proxy_journal.get(k).unwrap_or_else(|| env::panic_str("no such deploy"));
+            upgraded_payload(variant, u, &tx_hash, log, &block_hash, fin)
+        };
+        let expected = hex::encode(env::sha256_array(&payload));
         let mut req = near_sdk::serde_json::Map::new();
         req.insert(chain_name.into(), json!({ "tx_id": hex::encode(tx_hash), "extractors": [{ "Log": { "log_index": log.log_index } }], "finality": finality }));
         let args = json!({ "request": { "request": req, "domain_id": 3, "payload_version": 1, "expected_payload_hash": expected } });
@@ -723,22 +849,22 @@ impl Keyfree {
     pub fn on_confirmed(&mut self, chain_id: u64, nonce: u64) -> bool {
         // The MPC contract already matched its answer to expected_payload_hash; never panic here.
         let ok = callback_json().is_ok();
-        if let (true, Some(mut e)) = (ok, self.journal.get(&key(chain_id, nonce)).cloned()) {
-            e.status = CONFIRMED;
-            self.journal.insert(key(chain_id, nonce), e);
-        }
+        if ok { self.set_line(&key(chain_id, nonce), None, CONFIRMED); }
         env::log_str(&format!("keyfree: chain {chain_id} nonce {nonce} {}", if ok { "CONFIRMED by Read MPC" } else { "not confirmed (timeout or mismatch), can retry" }));
         ok
     }
 
     pub fn get_entry(&self, chain_id: u64, nonce: u64) -> Option<Value> {
-        self.journal.get(&key(chain_id, nonce)).map(|e| {
-            let status = ["requested", "signed", "confirmed"].get(e.status as usize).copied().unwrap_or("?");
-            json!({
-            "status": status,
+        let name = |s: u8| ["requested", "signed", "confirmed"].get(s as usize).copied().unwrap_or("?");
+        let k = key(chain_id, nonce);
+        if let Some(u) = self.proxy_journal.get(&k) {
+            return Some(json!({ "kind": "proxy_upgrade", "status": name(u.status), "tx_hash": format!("0x{}", hex::encode(u.tx_hash)),
+                "proxy": format!("0x{}", hex::encode(u.proxy)), "implementation": format!("0x{}", hex::encode(u.implementation)) }));
+        }
+        self.journal.get(&k).map(|e| json!({
+            "kind": "deploy", "status": name(e.status),
             "tx_hash": format!("0x{}", hex::encode(e.tx_hash)), "address": format!("0x{}", hex::encode(e.addr)),
-            "factory": format!("0x{}", hex::encode(e.factory)), "code_hash": hex::encode(e.code_hash), "salt": format!("0x{}", hex::encode(e.salt)) })
-        })
+            "factory": format!("0x{}", hex::encode(e.factory)), "code_hash": hex::encode(e.code_hash), "salt": format!("0x{}", hex::encode(e.salt)) }))
     }
 
     pub fn get_eth_address(&self) -> Option<String> { self.eth_address.clone() }
@@ -803,6 +929,10 @@ impl Keyfree {
                 require!(hex::decode(factory_hex.trim_start_matches("0x")).map(|f| f.len()) == Ok(20), "factory must be a 20-byte address");
             }
             RuleChange::SetLimits { max_gas_limit, max_fee_cap } => require!(*max_gas_limit > 0 && *max_fee_cap > 0, "caps must be above 0"),
+            RuleChange::AllowProxyUpgrade { proxy_hex, implementation_hex, .. } => {
+                let (proxy, implementation) = (addr20(proxy_hex, "proxy"), addr20(implementation_hex, "implementation"));
+                require!(proxy != [0u8; 20] && implementation != [0u8; 20] && proxy != implementation, "proxy and implementation must be two real addresses");
+            }
         }
     }
 
@@ -821,7 +951,43 @@ impl Keyfree {
                 self.max_gas_limit = *max_gas_limit;
                 self.max_fee_cap = *max_fee_cap;
             }
+            RuleChange::AllowProxyUpgrade { chain_id, proxy_hex, implementation_hex } => {
+                self.allowed_upgrades.insert(upgrade_key(*chain_id, &addr20(proxy_hex, "proxy"), &addr20(implementation_hex, "implementation")));
+            }
         }
+    }
+
+    // A nonce's journal line, deploy or proxy upgrade: (status, tx hash).
+    fn line(&self, k: &str) -> Option<(u8, [u8; 32])> {
+        self.journal.get(k).map(|e| (e.status, e.tx_hash)).or_else(|| self.proxy_journal.get(k).map(|u| (u.status, u.tx_hash)))
+    }
+    fn set_line(&mut self, k: &str, tx_hash: Option<[u8; 32]>, status: u8) {
+        if let Some(mut e) = self.journal.get(k).cloned() {
+            if let Some(t) = tx_hash { e.tx_hash = t; }
+            e.status = status;
+            self.journal.insert(k.to_string(), e);
+        } else if let Some(mut u) = self.proxy_journal.get(k).cloned() {
+            if let Some(t) = tx_hash { u.tx_hash = t; }
+            u.status = status;
+            self.proxy_journal.insert(k.to_string(), u);
+        }
+    }
+    fn left_to_sweep(&self) -> u32 {
+        self.journal.len() + self.proxy_journal.len() + self.used_salts.len() + self.next_nonce.len() + self.fee_floor.len()
+            + self.factories.len() + self.allowed_code.len() + self.allowed_upgrades.len() + self.disabled_chains.len()
+    }
+
+    fn check_proxy_upgrade(&self, chain_id: u64, proxy_hex: &str, implementation_hex: &str, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) -> Pending {
+        let nonce = *self.next_nonce.get(&chain_id).unwrap_or_else(|| env::panic_str("chain not allowed"));
+        require!(!self.disabled_chains.contains(&chain_id), "chain is disabled");
+        require!(self.line(&key(chain_id, nonce)).is_none(), "nonce already used on this chain: re-sync the nonce");
+        let (proxy, implementation) = (addr20(proxy_hex, "proxy"), addr20(implementation_hex, "implementation"));
+        require!(self.allowed_upgrades.contains(&upgrade_key(chain_id, &proxy, &implementation)), "proxy upgrade not on the allow list");
+        require!(gas_limit <= self.max_gas_limit, "gas limit over the cap");
+        self.require_fees(chain_id, max_fee_per_gas, max_priority_fee_per_gas);
+        let p = proxy_pending(chain_id, nonce, &proxy, &implementation, gas_limit, max_fee_per_gas, max_priority_fee_per_gas);
+        require_intrinsic(&p);
+        p
     }
 
     // A fee under the chain's floor would be signed but never mined: the nonce would wait forever.
@@ -857,7 +1023,7 @@ impl Keyfree {
         let nonce = *self.next_nonce.get(&chain_id).unwrap_or_else(|| env::panic_str("chain not allowed"));
         require!(!self.disabled_chains.contains(&chain_id), "chain is disabled");
         // A journal line means this nonce was already given to a deploy: never sign another content on it.
-        require!(self.journal.get(&key(chain_id, nonce)).is_none(), "nonce already used on this chain: re-sync the nonce");
+        require!(self.line(&key(chain_id, nonce)).is_none(), "nonce already used on this chain: re-sync the nonce");
         let init_code = hex::decode(init_code_hex.trim_start_matches("0x")).unwrap_or_else(|_| env::panic_str("init code must be hex"));
         require!(init_code.len() <= MAX_INIT_CODE, "init code too large");
         let code_hash = hex::encode(env::keccak256_array(&init_code));
@@ -895,13 +1061,12 @@ fn eth_address_of(key: &str) -> Option<String> {
 }
 
 fn tx_of(p: &Pending) -> EVMTransaction {
-    // Plain creation (to = none) or CREATE2 through our factory; no value is ever sent (A1: no transfers).
+    // Plain creation (to = none), CREATE2 through our factory, or upgradeTo on a proxy (to = the proxy, the
+    // calldata built by proxy_pending); no value is ever sent (A1: no transfers).
+    let to20 = |f: &[u8]| { let mut to = [0u8; 20]; to.copy_from_slice(f); to };
     let (to, input) = match (&p.factory, &p.salt) {
-        (Some(f), Some(salt)) => {
-            let mut to = [0u8; 20];
-            to.copy_from_slice(f);
-            (Some(to), factory_call(salt, &p.init_code))
-        }
+        (Some(f), Some(salt)) => (Some(to20(f)), factory_call(salt, &p.init_code)),
+        (Some(f), None) => (Some(to20(f)), p.init_code.clone()),
         _ => (None, p.init_code.clone()),
     };
     EVMTransaction {
@@ -952,6 +1117,29 @@ fn factory_call(salt: &[u8], init: &[u8]) -> Vec<u8> {
     out
 }
 
+// ABI call upgradeTo(address implementation), the only call the policy ever signs.
+fn upgrade_call(implementation: &[u8; 20]) -> Vec<u8> {
+    let mut out = env::keccak256_array(b"upgradeTo(address)")[..4].to_vec();
+    out.extend_from_slice(&[0u8; 12]);
+    out.extend_from_slice(implementation);
+    out
+}
+
+fn proxy_pending(chain_id: u64, nonce: u64, proxy: &[u8; 20], implementation: &[u8; 20], gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) -> Pending {
+    let input = upgrade_call(implementation);
+    Pending { chain_id, nonce, code_hash: hex::encode(env::keccak256_array(&input)), gas_limit, max_fee_per_gas, max_priority_fee_per_gas,
+        init_code: input, salt: None, factory: Some(proxy.to_vec()), since_block: 0 }
+}
+
+fn addr20(h: &str, what: &str) -> [u8; 20] {
+    hex::decode(h.trim_start_matches("0x")).ok().and_then(|b| b.try_into().ok())
+        .unwrap_or_else(|| env::panic_str(&format!("{what} must be a 20-byte address")))
+}
+
+fn upgrade_key(chain_id: u64, proxy: &[u8; 20], implementation: &[u8; 20]) -> String {
+    format!("{chain_id}:0x{}:0x{}", hex::encode(proxy), hex::encode(implementation))
+}
+
 fn word(n: u64) -> [u8; 32] {
     let mut w = [0u8; 32];
     w[24..].copy_from_slice(&n.to_be_bytes());
@@ -993,10 +1181,24 @@ fn chain_variant(chain_id: u64) -> Option<(&'static str, u8)> {
 // borsh(ForeignTxSignPayload::V1 { request: <chain>(EvmRpcRequest { tx, [Log{i}], finality }),
 //                                  values: [Evm(Log(EvmLog { .. }))] }); its sha256 is the payload hash.
 fn deployed_payload(variant: u8, e: &Entry, tx_hash: &[u8; 32], log: &LogIn, block_hash: &[u8; 32], finality: u8) -> Vec<u8> {
-    let mut addr_topic = [0u8; 32];
-    addr_topic[12..].copy_from_slice(&e.addr);
-    let topics = [env::keccak256_array(b"Deployed(address,bytes32,bytes32)"), addr_topic, e.code_hash];
-    let data = format!("0x{}", hex::encode(e.salt));
+    let topics = [env::keccak256_array(b"Deployed(address,bytes32,bytes32)"), topic(&e.addr), e.code_hash];
+    log_payload(variant, tx_hash, log, block_hash, finality, &e.factory, &e.salt, &topics)
+}
+
+// ERC-1967 Upgraded(address indexed implementation), emitted by the proxy, no data.
+fn upgraded_payload(variant: u8, u: &ProxyEntry, tx_hash: &[u8; 32], log: &LogIn, block_hash: &[u8; 32], finality: u8) -> Vec<u8> {
+    let topics = [env::keccak256_array(b"Upgraded(address)"), topic(&u.implementation)];
+    log_payload(variant, tx_hash, log, block_hash, finality, &u.proxy, &[], &topics)
+}
+
+fn topic(a: &[u8; 20]) -> [u8; 32] {
+    let mut t = [0u8; 32];
+    t[12..].copy_from_slice(a);
+    t
+}
+
+fn log_payload(variant: u8, tx_hash: &[u8; 32], log: &LogIn, block_hash: &[u8; 32], finality: u8, emitter: &[u8; 20], data: &[u8], topics: &[[u8; 32]]) -> Vec<u8> {
+    let data = format!("0x{}", hex::encode(data));
     let mut b = vec![0u8, variant];
     b.extend_from_slice(tx_hash);
     b.extend_from_slice(&1u32.to_le_bytes());
@@ -1011,11 +1213,11 @@ fn deployed_payload(variant: u8, e: &Entry, tx_hash: &[u8; 32], log: &LogIn, blo
     b.extend_from_slice(tx_hash);
     b.extend_from_slice(block_hash);
     b.extend_from_slice(&log.block_number.to_le_bytes());
-    b.extend_from_slice(&e.factory);
+    b.extend_from_slice(emitter);
     b.extend_from_slice(&(data.len() as u32).to_le_bytes());
     b.extend_from_slice(data.as_bytes());
     b.extend_from_slice(&(topics.len() as u32).to_le_bytes());
-    for t in topics { b.extend_from_slice(&t); }
+    for t in topics { b.extend_from_slice(t); }
     b
 }
 

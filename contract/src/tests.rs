@@ -1216,6 +1216,8 @@ fn flush_all(c: &mut Keyfree) {
     c.factories.flush();
     c.allowed_code.flush();
     c.disabled_chains.flush();
+    c.proxy_journal.flush();
+    c.allowed_upgrades.flush();
 }
 
 // The mock counts storage from a fake base (300 KB) reset by every new context, so the test measures
@@ -1250,7 +1252,7 @@ fn sweep_brings_the_state_under_10_000_bytes_then_the_account_goes_to_the_benefi
     assert_eq!(deleted, vec![acc("owner.testnet")]);
 }
 
-// v14: attack bench additions (attacks/catalog.json maps every attack to a test).
+// Attack bench additions (attacks/catalog.json maps every attack to a test).
 fn with_arg(arg: u8) -> Vec<u8> {
     let mut v = hex::decode(INIT).unwrap();
     v.extend([0u8; 31]);
@@ -1338,4 +1340,272 @@ fn code_that_was_never_allowed_is_refused() {
     let mut c = idle();
     ctx("agent.testnet", 20);
     let _ = c.request_deploy(84532, "6000".into(), 300_000, 14_000_000, 1_000_000, None, None);
+}
+
+// v14: proxy upgrades. The council allows one upgradeTo(implementation) on one proxy through the rules delay;
+// the agent's request uses it up; the policy builds the call itself and Read MPC confirms the Upgraded log.
+const PROXY: &str = "2222222222222222222222222222222222222222";
+const IMPL_V2: &str = "3333333333333333333333333333333333333333";
+const IMPL_V1: &str = "4444444444444444444444444444444444444444";
+const IMPL_EVIL: &str = "5555555555555555555555555555555555555555";
+
+fn upgrade_rule(implementation: &str) -> RuleChange {
+    RuleChange::AllowProxyUpgrade { chain_id: 84532, proxy_hex: format!("0x{PROXY}"), implementation_hex: format!("0x{implementation}") }
+}
+
+// The council allowed proxy -> v2 (the rule ran its delay).
+fn upgrade_allowed() -> Keyfree {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(upgrade_rule(IMPL_V2));
+    ctx_at("guardian.testnet", 21, 1_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    c
+}
+
+fn request_upgrade(c: &mut Keyfree, implementation: &str) {
+    ctx("agent.testnet", 30);
+    let _ = c.request_proxy_upgrade(84532, PROXY.into(), implementation.into(), 100_000, 14_000_000, 1_000_000);
+}
+
+// A signature over the pending proxy upgrade that recovers to the policy's address: the golden R and s
+// recover to some key for any hash, so the test makes that key the policy's.
+fn sign_pending_as_the_policy(c: &mut Keyfree) {
+    let hash = env::keccak256_array(&tx_of(c.pending.as_ref().unwrap()).build_for_signing());
+    let mut rs = [0u8; 64];
+    rs[..32].copy_from_slice(&hex::decode(R).unwrap());
+    rs[32..].copy_from_slice(&hex::decode(S).unwrap());
+    let pk = env::ecrecover(&hash, &rs, 0, true).unwrap();
+    c.eth_address = Some(format!("0x{}", hex::encode(&env::keccak256_array(&pk)[12..])));
+    assert!(c.handle_signed(answer(R, S, 0)).is_some());
+}
+
+#[test]
+fn golden_rlp_proxy_upgrade_matches_viem() {
+    ctx("keyfree.testnet", 10);
+    let p = proxy_pending(84532, 12, &[0x22; 20], &[0x33; 20], 100_000, 14_000_000, 1_000_000);
+    assert_eq!(format!("0x{}", hex::encode(&p.init_code)), format!("0x{}", json_case("proxy_upgrade", "data")), "upgradeTo calldata == viem");
+    check_golden(&p, &json_case("proxy_upgrade", "data_keccak"), 80, &json_case("proxy_upgrade", "unsigned_keccak"), &json_case("proxy_upgrade", "signed_keccak"));
+}
+
+#[test]
+#[should_panic(expected = "rule delay not over")]
+fn a_proxy_upgrade_waits_for_the_rules_delay() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(upgrade_rule(IMPL_V2));
+    ctx_at("owner.testnet", 21, 1_000 + 1_799, vec![]);
+    c.apply_rule(id);
+}
+
+#[test]
+fn the_allowed_upgrade_is_signed_as_a_call_built_by_the_policy() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    let tx = tx_of(c.pending.as_ref().unwrap());
+    assert_eq!(tx.to, Some(<[u8; 20]>::try_from(hex::decode(PROXY).unwrap()).unwrap()));
+    assert_eq!(hex::encode(&tx.input), format!("3659cfe6{}{IMPL_V2}", "00".repeat(12)), "upgradeTo(v2), nothing else");
+    assert_eq!((tx.value, tx.nonce), (0, 4));
+    assert_eq!(c.get_entry(84532, 4).unwrap()["kind"], "proxy_upgrade");
+}
+
+#[test]
+#[should_panic(expected = "proxy upgrade not on the allow list")]
+fn another_implementation_is_refused() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_EVIL);
+}
+
+#[test]
+#[should_panic(expected = "proxy upgrade not on the allow list")]
+fn another_proxy_is_refused() {
+    let mut c = upgrade_allowed();
+    ctx("agent.testnet", 30);
+    let _ = c.request_proxy_upgrade(84532, "66".repeat(20), IMPL_V2.into(), 100_000, 14_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "proxy upgrade not on the allow list")]
+fn the_same_upgrade_cannot_be_signed_twice() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    sign_pending_as_the_policy(&mut c);
+    request_upgrade(&mut c, IMPL_V2);
+}
+
+#[test]
+#[should_panic(expected = "proxy upgrade not on the allow list")]
+fn going_back_to_the_old_version_needs_its_own_rule() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    sign_pending_as_the_policy(&mut c);
+    request_upgrade(&mut c, IMPL_V1);
+}
+
+#[test]
+#[should_panic(expected = "only owner")]
+fn the_agent_cannot_allow_an_upgrade() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    c.propose_rule(upgrade_rule(IMPL_EVIL));
+}
+
+#[test]
+#[should_panic(expected = "proxy upgrade not on the allow list")]
+fn any_council_member_removes_an_allowed_upgrade_at_once() {
+    let mut c = upgrade_allowed();
+    ctx("reserve.testnet", 25);
+    c.remove_proxy_upgrade(84532, PROXY.into(), IMPL_V2.into());
+    request_upgrade(&mut c, IMPL_V2);
+}
+
+#[test]
+#[should_panic(expected = "only agent or owner")]
+fn a_stranger_cannot_request_a_proxy_upgrade() {
+    let mut c = upgrade_allowed();
+    ctx("stranger.testnet", 30);
+    let _ = c.request_proxy_upgrade(84532, PROXY.into(), IMPL_V2.into(), 100_000, 14_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "paused")]
+fn pause_also_stops_proxy_upgrades() {
+    let mut c = upgrade_allowed();
+    ctx("guardian.testnet", 25);
+    c.pause();
+    request_upgrade(&mut c, IMPL_V2);
+}
+
+#[test]
+#[should_panic(expected = "proxy and implementation must be two real addresses")]
+fn a_zero_implementation_is_refused_at_proposal() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.propose_rule(upgrade_rule(&"00".repeat(20)));
+}
+
+#[test]
+fn a_signed_proxy_upgrade_moves_the_nonce_and_its_journal_line() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    sign_pending_as_the_policy(&mut c);
+    assert_eq!(c.get_next_nonce(84532), Some(5));
+    let e = c.get_entry(84532, 4).unwrap();
+    assert_eq!((e["status"].as_str(), e["implementation"].as_str()), (Some("signed"), Some(format!("0x{IMPL_V2}").as_str())));
+}
+
+#[test]
+#[should_panic(expected = "nonce already used on this chain")]
+fn a_deploy_never_takes_the_nonce_of_a_proxy_upgrade() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    c.pending = None; // as if the answer never came and the line stayed
+    ctx("agent.testnet", 31);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+fn a_failed_proxy_upgrade_stays_bound_and_retry_signs_the_same_call() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    let first = tx_of(c.pending.as_ref().unwrap());
+    c.handle_signed(Err(PromiseError::Failed));
+    ctx("agent.testnet", 32);
+    let _ = c.retry(20_000_000, 1_000_000);
+    let again = tx_of(c.pending.as_ref().unwrap());
+    assert_eq!((first.nonce, first.to, first.input.clone()), (again.nonce, again.to, again.input.clone()));
+}
+
+#[test]
+fn resign_of_a_proxy_upgrade_keeps_the_call() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    let first = tx_of(c.pending.as_ref().unwrap());
+    sign_pending_as_the_policy(&mut c);
+    ctx("agent.testnet", 33);
+    let _ = c.resign_proxy_upgrade(84532, 4, 120_000, 30_000_000, 2_000_000);
+    let again = tx_of(c.pending.as_ref().unwrap());
+    assert_eq!((first.nonce, first.to, first.input.clone()), (again.nonce, again.to, again.input.clone()));
+    assert_eq!(again.gas_limit, 120_000);
+}
+
+#[test]
+#[should_panic(expected = "only a signed, unconfirmed proxy upgrade can be re-signed")]
+fn a_requested_proxy_upgrade_cannot_be_resigned() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    c.pending = None;
+    ctx("agent.testnet", 33);
+    let _ = c.resign_proxy_upgrade(84532, 4, 120_000, 30_000_000, 2_000_000);
+}
+
+#[test]
+fn read_mpc_answer_confirms_the_proxy_upgrade() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    sign_pending_as_the_policy(&mut c);
+    ctx("agent.testnet", 34);
+    let _ = c.confirm(84532, 4, log_in(), "Safe".into());
+    ctx_answer(raw(b"{\"payload_hash\":\"x\"}"));
+    assert!(c.on_confirmed(84532, 4));
+    assert_eq!(c.get_entry(84532, 4).unwrap()["status"], "confirmed");
+}
+
+#[test]
+fn the_upgraded_log_names_the_proxy_and_the_implementation() {
+    ctx("keyfree.testnet", 10);
+    let u = |imp: u8| ProxyEntry { proxy: [0x22; 20], implementation: [imp; 20], tx_hash: [1; 32], status: SIGNED };
+    let l = log_in();
+    let p = upgraded_payload(6, &u(0x33), &[1; 32], &l, &[0xcd; 32], 1);
+    let has = |needle: &[u8]| p.windows(needle.len()).any(|w| w == needle);
+    assert!(has(&[0x22; 20]) && has(&env::keccak256_array(b"Upgraded(address)")) && has(&topic(&[0x33; 20])));
+    assert!(has(b"\x02\x00\x00\x000x"), "no data: the string \"0x\"");
+    assert_ne!(env::sha256_array(&p), env::sha256_array(&upgraded_payload(6, &u(0x55), &[1; 32], &l, &[0xcd; 32], 1)), "another implementation, another hash");
+}
+
+#[test]
+fn migrate_reads_the_v13_state() {
+    let c = contract();
+    let old = V13 {
+        owner: c.owner, agent: c.agent, mpc: c.mpc, path: c.path, eth_address: c.eth_address, allowed_code: c.allowed_code,
+        next_nonce: c.next_nonce, max_gas_limit: c.max_gas_limit, max_fee_cap: c.max_fee_cap, pending: None, stuck: c.stuck,
+        factories: c.factories, journal: c.journal, guardian: c.guardian, upgrade_delay_sec: c.upgrade_delay_sec,
+        proposed: Some(("ab".repeat(32), 5)), paused: c.paused, version: 3, used_salts: c.used_salts, fee_floor: c.fee_floor,
+        reserve: c.reserve, role_changes: c.role_changes, unpause_votes: c.unpause_votes, proposed_code: c.proposed_code,
+        rules_delay_sec: c.rules_delay_sec, rule_proposals: c.rule_proposals, next_rule_id: 7, disabled_chains: c.disabled_chains,
+        retiring: None,
+    };
+    let mut old = old;
+    old.allowed_code.flush();
+    old.next_nonce.flush();
+    env::state_write(&old);
+    ctx("keyfree.testnet", 11);
+    let mut s = Keyfree::migrate();
+    assert_eq!((s.version, s.next_rule_id, s.proposed.clone()), (4, 7, None));
+    assert_eq!((s.owner.as_str(), s.get_eth_address()), ("owner.testnet", Some(ADDR.to_string())));
+    assert!(s.allowed_code.contains(&pending().code_hash) && s.allowed_upgrades.is_empty() && s.proxy_journal.is_empty());
+    // and the new rule works on the migrated state
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = s.propose_rule(upgrade_rule(IMPL_V2));
+    ctx_at("owner.testnet", 21, 1_000 + 1_800, vec![]);
+    s.apply_rule(id);
+    assert_eq!(s.allowed_upgrades.len(), 1);
+}
+
+#[test]
+fn sweep_also_empties_the_proxy_upgrades() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    sign_pending_as_the_policy(&mut c);
+    ctx_at("owner.testnet", 40, 9_000, vec![]);
+    let id = c.propose_rule(upgrade_rule(IMPL_V1));
+    ctx_at("owner.testnet", 41, 9_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    assert_eq!((c.proxy_journal.len(), c.allowed_upgrades.len()), (1, 1));
+    retire_proposed(&mut c);
+    ctx_at("guardian.testnet", 22, 1_000 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    ctx("guardian.testnet", 50);
+    while c.sweep(100) > 0 {}
+    assert_eq!((c.proxy_journal.len(), c.allowed_upgrades.len()), (0, 0));
 }
