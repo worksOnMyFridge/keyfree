@@ -36,8 +36,14 @@
 // shared CREATE2 proxy is gone, a planned address cannot be taken first); allow_chain only opens a new
 // chain, so the nonce never moves by hand; each chain has a fee floor; resign works for any signed line,
 // a plain creation too.
+// v10 the guardian sees the code it may veto (audit v2 Н6, spec R26): the owner puts the new wasm itself
+// into the contract state when proposing (storage paid by the attached deposit), the delay starts only
+// then, anyone can read the bytes and check their sha256 against a build of the published commit, and
+// apply_upgrade deploys exactly the stored bytes. A Global Contract would also publish the code, but it
+// burns its storage NEAR for good; state storage is only staked.
 use near_sdk::serde_json::{json, Value};
-use near_sdk::store::{IterableSet, LookupMap};
+use near_sdk::json_types::Base64VecU8;
+use near_sdk::store::{IterableSet, LazyOption, LookupMap};
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
 use omni_transaction::evm::types::Signature;
 use omni_transaction::evm::EVMTransaction;
@@ -151,6 +157,8 @@ pub struct Keyfree {
     reserve: AccountId,
     role_changes: Vec<RoleChange>,
     unpause_votes: Vec<AccountId>,
+    // The proposed wasm, kept apart from the main state so ordinary calls never load it.
+    proposed_code: LazyOption<Vec<u8>>,
 }
 
 #[near]
@@ -185,6 +193,7 @@ impl Keyfree {
             reserve,
             role_changes: vec![],
             unpause_votes: vec![],
+            proposed_code: LazyOption::new(b"u3".to_vec(), None),
         }
     }
 
@@ -256,30 +265,47 @@ impl Keyfree {
             "role_changes": self.role_changes, "unpause_votes": self.unpause_votes })
     }
 
-    // Maintenance without keys. 1) owner publishes the sha256 of the new code;
-    pub fn propose_upgrade(&mut self, code_sha256: String) {
+    // Maintenance without keys. 1) the owner sends the new code itself (raw bytes as the call input) and
+    // pays its storage; it is public from now on and the delay starts. A new proposal replaces the old one
+    // and starts the delay again.
+    #[payable]
+    pub fn propose_upgrade(&mut self) {
         self.only_owner();
-        let ready_at = env::block_timestamp() / 1_000_000_000 + self.upgrade_delay_sec;
-        env::log_str(&format!("keyfree: upgrade to code sha256 {code_sha256} proposed, ready at unix {ready_at}"));
-        self.proposed = Some((code_sha256.to_lowercase(), ready_at));
+        let code = env::input().unwrap_or_default();
+        require!(!code.is_empty(), "send the new wasm as the call input");
+        let before = env::storage_usage();
+        self.proposed_code.set(Some(code.clone()));
+        self.proposed_code.flush();
+        let grown = env::storage_usage().saturating_sub(before) as u128;
+        let cost = grown * env::storage_byte_cost().as_yoctonear();
+        require!(env::attached_deposit().as_yoctonear() >= cost, format!("attach at least {cost} yoctoNEAR for the code storage"));
+        let hash = hex::encode(env::sha256_array(&code));
+        let ready_at = now() + self.upgrade_delay_sec;
+        env::log_str(&format!("keyfree: upgrade to code sha256 {hash} ({} bytes, readable now) proposed, ready at unix {ready_at}", code.len()));
+        self.proposed = Some((hash, ready_at));
     }
 
-    // 2) during the delay the guardian (or the owner) may cancel;
+    // 2) during the delay anyone can read the code; any council member may cancel;
     pub fn cancel_upgrade(&mut self) {
         self.only_council();
         self.proposed = None;
+        self.proposed_code.set(None);
         env::log_str("keyfree: upgrade cancelled");
     }
 
-    // 3) after the delay the owner sends the code itself (raw bytes as the call input) and the contract
-    // deploys it onto its own account and runs migrate. Nothing else can change the code.
+    pub fn get_proposed_code(&self) -> Option<Base64VecU8> {
+        self.proposed_code.get().clone().map(Base64VecU8::from)
+    }
+
+    // 3) after the delay the owner applies it: the contract deploys exactly the stored bytes onto its own
+    // account and runs migrate. Nothing else can change the code.
     pub fn apply_upgrade(&mut self) -> Promise {
         self.only_owner();
         require!(self.pending.is_none(), "a request is being signed");
         let (hash, ready_at) = self.proposed.clone().unwrap_or_else(|| env::panic_str("no upgrade proposed"));
-        require!(env::block_timestamp() / 1_000_000_000 >= ready_at, "upgrade delay not over");
-        let code = env::input().unwrap_or_default();
-        require!(hex::encode(env::sha256_array(&code)) == hash, "code does not match the proposed hash");
+        require!(now() >= ready_at, "upgrade delay not over");
+        let code = self.proposed_code.take().unwrap_or_else(|| env::panic_str("no code stored"));
+        require!(hex::encode(env::sha256_array(&code)) == hash, "stored code does not match the proposed hash");
         self.proposed = None;
         env::log_str(&format!("keyfree: applying upgrade {hash}"));
         Promise::new(env::current_account_id())

@@ -12,14 +12,17 @@ const RAW: &str = "0x02f86e83014a3404830f424083d59f8083030d40808096600a600c60003
 
 fn ctx(pred: &str, height: u64) { ctx_at(pred, height, 0, vec![]) }
 
-// height = block, secs = block time, input = raw call input (the code for apply_upgrade).
-fn ctx_at(pred: &str, height: u64, secs: u64, input: Vec<u8>) {
+// height = block, secs = block time, input = raw call input (the code for propose_upgrade).
+fn ctx_at(pred: &str, height: u64, secs: u64, input: Vec<u8>) { ctx_pay(pred, height, secs, input, 0) }
+
+fn ctx_pay(pred: &str, height: u64, secs: u64, input: Vec<u8>, deposit_milli_near: u128) {
     let mut c = VMContextBuilder::new()
         .current_account_id("keyfree.testnet".parse().unwrap())
         .predecessor_account_id(pred.parse().unwrap())
         .block_height(height)
         .block_timestamp(secs * 1_000_000_000)
         .prepaid_gas(Gas::from_tgas(300))
+        .attached_deposit(NearToken::from_millinear(deposit_milli_near))
         .build();
     c.input = input.into();
     testing_env!(c);
@@ -176,14 +179,14 @@ fn strip_and_sub() {
     assert_eq!(sub(SECP_N, one), n_minus_1);
 }
 
-// Maintenance without keys: propose a hash, wait, guardian may cancel, then only that code goes in.
+// Maintenance without keys: propose the code itself, wait, guardian may cancel, then only that code goes in.
 const CODE: &[u8] = b"pretend this is the new wasm";
 
 fn proposed() -> Keyfree {
     let mut c = contract();
     c.pending = None;
-    ctx_at("owner.testnet", 20, 1_000, vec![]);
-    c.propose_upgrade(hex::encode(env::sha256_array(CODE)));
+    ctx_pay("owner.testnet", 20, 1_000, CODE.to_vec(), 100);
+    c.propose_upgrade();
     c
 }
 
@@ -195,12 +198,71 @@ fn upgrade_waits_for_the_delay() {
     let _ = c.apply_upgrade();
 }
 
+// v10: the code is public for the whole delay and apply uses exactly the stored bytes.
 #[test]
-#[should_panic(expected = "code does not match the proposed hash")]
-fn upgrade_takes_only_the_proposed_code() {
+fn the_proposed_code_is_readable_during_the_delay() {
+    let c = proposed();
+    ctx_at("guardian.testnet", 21, 1_100, vec![]);
+    let code: Vec<u8> = c.get_proposed_code().unwrap().into();
+    assert_eq!(code, CODE);
+    assert_eq!(c.proposed.as_ref().map(|p| p.0.clone()), Some(hex::encode(env::sha256_array(CODE))));
+}
+
+#[test]
+fn apply_ignores_bytes_sent_at_apply_time() {
     let mut c = proposed();
+    // the owner (or a thief with the owner key) tries to slip other bytes in at the last moment
     ctx_at("owner.testnet", 21, 1_000 + 3_600, b"other code".to_vec());
     let _ = c.apply_upgrade();
+    assert!(c.proposed.is_none() && c.get_proposed_code().is_none());
+    let deployed: Vec<Vec<u8>> = near_sdk::test_utils::get_created_receipts().into_iter()
+        .flat_map(|r| r.actions)
+        .filter_map(|a| match a { near_sdk::mock::MockAction::DeployContract { code, .. } => Some(code), _ => None })
+        .collect();
+    assert_eq!(deployed, vec![CODE.to_vec()], "exactly the stored, public code goes in");
+}
+
+#[test]
+#[should_panic(expected = "upgrade delay not over")]
+fn a_new_proposal_starts_the_delay_again() {
+    let mut c = proposed();
+    ctx_pay("owner.testnet", 21, 3_000, b"other code".to_vec(), 100);
+    c.propose_upgrade();
+    assert_eq!(c.get_proposed_code().map(Vec::<u8>::from), Some(b"other code".to_vec()));
+    ctx_at("owner.testnet", 22, 1_000 + 3_600, vec![]);
+    let _ = c.apply_upgrade();
+}
+
+#[test]
+#[should_panic(expected = "for the code storage")]
+fn proposing_needs_a_deposit_for_the_code_storage() {
+    let mut c = contract();
+    ctx_at("owner.testnet", 20, 1_000, CODE.to_vec());
+    c.propose_upgrade();
+}
+
+#[test]
+#[should_panic(expected = "send the new wasm as the call input")]
+fn proposing_needs_the_code() {
+    let mut c = contract();
+    ctx_pay("owner.testnet", 20, 1_000, vec![], 100);
+    c.propose_upgrade();
+}
+
+#[test]
+#[should_panic(expected = "only owner")]
+fn guardian_cannot_propose_code() {
+    let mut c = contract();
+    ctx_pay("guardian.testnet", 20, 1_000, CODE.to_vec(), 100);
+    c.propose_upgrade();
+}
+
+#[test]
+fn cancel_removes_the_stored_code() {
+    let mut c = proposed();
+    ctx_at("guardian.testnet", 21, 1_100, vec![]);
+    c.cancel_upgrade();
+    assert!(c.get_proposed_code().is_none());
 }
 
 #[test]
