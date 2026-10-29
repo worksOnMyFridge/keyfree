@@ -1,0 +1,36 @@
+--- 2026-10-29T22:01:11.555Z check (0 ok, 0 fail)
+keyfree-lab.testnet: 3.359 NEAR
+policy13.keyfree-lab.testnet: 19.016 NEAR
+agent13b.keyfree-lab.testnet: 1.971 NEAR
+guard13b.keyfree-lab.testnet: 0.298 NEAR
+reserve13.keyfree-lab.testnet: 0.299 NEAR
+policy: build b, version 2, keys 0, ETH 0.000030558161154302 on 0x43e3cb8d471680307f0c232e5ac190828681fcb0
+v14 wasm 362719 bytes, stake ~3.63719 NEAR, sha256 764eb8f81ff528e0...
+--- 2026-10-29T22:03:19.621Z treasury (12 ok, 0 fail)
+  log: keyfree: rule 10 proposed: AllowCode { code_hash: "22acdc2c08d1dda990dd3d5f62c24227c4cc6ebfc3edf58c6b6f6ad6caa9dd1e" }, ready at unix 1793311350
+  log: keyfree: rule 11 proposed: AllowCode { code_hash: "171e5abfc53e91f434844a52b362fab39d61b93c5a682948c3ad2f01328d1d91" }, ready at unix 1793311353
+  log: keyfree: rule 12 proposed: AllowCode { code_hash: "4ab6b92897127274904a2ddb5fdfd1887a119f688c8182b7516d89ece9f95f67" }, ready at unix 1793311355
+proposed rules 10, 11, 12: AllowCode, AllowCode, AllowCode
+OK   apply a rule before the delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 10 applied: AllowCode { code_hash: "22acdc2c08d1dda990dd3d5f62c24227c4cc6ebfc3edf58c6b6f6ad6caa9dd1e" }
+  log: keyfree: rule 11 applied: AllowCode { code_hash: "171e5abfc53e91f434844a52b362fab39d61b93c5a682948c3ad2f01328d1d91" }
+  log: keyfree: rule 12 applied: AllowCode { code_hash: "4ab6b92897127274904a2ddb5fdfd1887a119f688c8182b7516d89ece9f95f67" }
+applied rules 10, 11, 12
+OK   treasury v1: unsigned tx built by the contract == viem (nonce 7)
+  log: keyfree: signing chain 84532 nonce 7 code 22acdc2c08d1dda990dd3d5f62c24227c4cc6ebfc3edf58c6b6f6ad6caa9dd1e expected Some("0xd52f1a3d44e9361fbd7f538abefbae9647b2284c") hash 81c79e288c3a80d582d223f5dccd28bea242929ce898412eecc2607ab14eb9fe
+  log: keyfree: signed chain 84532 nonce 7 tx 0xe90a60dac64b966a7ca93474f26ed8fed46e3a2a43da97e3620480ede2d23217
+OK   treasury v1: landed, gas 204236 of 455250  https://testnet.nearblocks.io/txns/6hninm9Qq1LozYM5EczgMqxAnHaoVAJdzJSgdM8p1UL  https://sepolia.basescan.org/tx/0xe90a60dac64b966a7ca93474f26ed8fed46e3a2a43da97e3620480ede2d23217
+OK   treasury v1 at the promised address 0xd52f1a3d44e9361fbd7f538abefbae9647b2284c
+OK   treasury proxy: unsigned tx built by the contract == viem (nonce 8)
+  log: keyfree: signing chain 84532 nonce 8 code 171e5abfc53e91f434844a52b362fab39d61b93c5a682948c3ad2f01328d1d91 expected Some("0x5319b76fda54f4144d6b134016f6415ad169dfaa") hash b7c5938ff6785f6b41eddbc8659c2cb84092476f5e940b174768a147db88d2ef
+  log: keyfree: signed chain 84532 nonce 8 tx 0x158eb231d17777a82148d34ddd9a09fdc786d3758e0df3c537c924e6ed43ac85
+OK   treasury proxy: landed, gas 236680 of 466820  https://testnet.nearblocks.io/txns/BpPM6jUacnFp55dHf8D5svpZZTXPyt8tGMdYVWMV77nX  https://sepolia.basescan.org/tx/0x158eb231d17777a82148d34ddd9a09fdc786d3758e0df3c537c924e6ed43ac85
+OK   treasury proxy at the promised address 0x5319b76fda54f4144d6b134016f6415ad169dfaa
+OK   treasury v2: unsigned tx built by the contract == viem (nonce 9)
+  log: keyfree: signing chain 84532 nonce 9 code 4ab6b92897127274904a2ddb5fdfd1887a119f688c8182b7516d89ece9f95f67 expected Some("0x269bdae85a7864e882bdd97d61fc5bc084594060") hash 624a1600998d74253652da3d3df2e40a9f20b9feac8f3324f895b395ae16f3f9
+  log: keyfree: signed chain 84532 nonce 9 tx 0xf880c96365282fcdc01c240ebc35ccba15e0c792b0e3b8134f6ebc55dc6348eb
+OK   treasury v2: landed, gas 282683 of 469570  https://testnet.nearblocks.io/txns/kf2SfpMDZQXv9g45WqUUgQA38SVYVoyvJGXuq4cMsxW  https://sepolia.basescan.org/tx/0xf880c96365282fcdc01c240ebc35ccba15e0c792b0e3b8134f6ebc55dc6348eb
+OK   treasury v2 at the promised address 0x269bdae85a7864e882bdd97d61fc5bc084594060
+OK   proxy admin = the policy's keyless address 0x43e3cb8d471680307f0c232e5ac190828681fcb0
+OK   proxy 0x5319b76fda54f4144d6b134016f6415ad169dfaa runs TreasuryV1 (version() = 1)

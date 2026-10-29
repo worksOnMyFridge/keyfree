@@ -1,0 +1,27 @@
+{
+ "salts": {
+  "v1": "0xce552404e1bd4df3c965bd2ee682ffb16b0d5ac4e1ddcdafb56166a495e7177f",
+  "proxy": "0x22f45bec21c1fa91ba2fb9e4052763918f847f7853a032e079941a56cb956d32",
+  "v2": "0x2f31ce7955de115a9f2261941b995389f19162bfd4ef602f5aa4c251010cf463"
+ },
+ "v1": "0xd52f1a3d44e9361fbd7f538abefbae9647b2284c",
+ "deploys": [
+  {
+   "name": "v1",
+   "nonce": 7,
+   "tx": "0xe90a60dac64b966a7ca93474f26ed8fed46e3a2a43da97e3620480ede2d23217"
+  },
+  {
+   "name": "proxy",
+   "nonce": 8,
+   "tx": "0x158eb231d17777a82148d34ddd9a09fdc786d3758e0df3c537c924e6ed43ac85"
+  },
+  {
+   "name": "v2",
+   "nonce": 9,
+   "tx": "0xf880c96365282fcdc01c240ebc35ccba15e0c792b0e3b8134f6ebc55dc6348eb"
+  }
+ ],
+ "proxy": "0x5319b76fda54f4144d6b134016f6415ad169dfaa",
+ "v2": "0x269bdae85a7864e882bdd97d61fc5bc084594060"
+}

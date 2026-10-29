@@ -11,3 +11,4 @@ v13/config.json
 packages/keyfree/demo/keyfree.json
 # build output of the package
 packages/keyfree/dist/
+v14/config.json
