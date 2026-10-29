@@ -48,7 +48,7 @@ only as safe as that place.
   journal can lie. Keyfree adds rules in front of it; it does not remove that trust.
 - **The EVM RPC** the tool talks to: the tool checks what the policy built against viem and what MPC signed
   against what it checked, so a lying RPC can make a deploy fail or look pending, not change what is signed.
-- **The policy code.** It is open and tested (102 unit tests, golden tests against viem). During development
+- **The policy code.** It is open and tested (111 unit tests, golden tests against viem, an attack bench of 44 attacks: `npm run attacks`). During development
   it went through two security reviews, each done by a separate AI reviewer session that did not write the
   code; their findings were fixed with tests. It has not had a professional human audit.
 

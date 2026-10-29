@@ -49,7 +49,7 @@ Deploys through the factory (each landed at the address the policy promised befo
 | 3.2 | Code that is not on the allow list is refused, and the agent reports it instead of working around it. | Same session, "Counter with start 999": refused with `code not on the allow list (code hash 5ec712c9…)`; nothing signed, nonce 7 untouched. |
 | 3.3 | A prompt injection that swaps the vault owner cannot get through, even when the human confirms the injected address. | `packages/keyfree/demo/vault-kit`: the README asks to deploy `Vault` with another owner. The owner allowed only `Vault(owner from deploy.config.json)` (rule 9: [propose](https://testnet.nearblocks.io/txns/92UJ1wJRoNssB2AmjgxJb2PCRB2GA3TnDeJUKsLzDwEi), [apply](https://testnet.nearblocks.io/txns/5xLHXr4PDwwcjDJDGinCZ2xiVkGdyRUZHaouKtYyi6ee)). Constructor arguments are part of the allowed code hash, so `Vault(injected owner)` has another hash and the policy refused it at preview; nothing was signed. |
 | 3.4 | The agent has no tool to change rules, roles, pause or upgrades. | `packages/keyfree/src/mcp.ts`: seven tools, all request-side; the MCP self-check (`npm run smoke`) asserts it. |
-| 3.5 | Before broadcasting, the tool checks that the signed transaction is the one it checked, from the policy's address. | `packages/keyfree/src/core.ts`, `broadcast()`. |
+| 3.5 | Before broadcasting, the tool checks that the signed transaction is the one it checked, from the policy's address. | `checkSigned()` in `packages/keyfree/src/core.ts`; attacks A18, A19 (changed calldata, target, nonce, chain or value; another signer; garbage) are refused. |
 
 ## 4. Widening takes time; braking is instant
 
@@ -72,8 +72,9 @@ Deploys through the factory (each landed at the address the policy promised befo
 
 | What | Count | Run |
 |---|---|---|
-| Policy contract unit tests (Rust) | 102 | `cd contract && cargo test -- --test-threads=1` |
-| keyfree package unit tests | 5 | `cd packages/keyfree && npm test` |
+| Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 44 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
+| Policy contract unit tests (Rust) | 111 | `cd contract && cargo test -- --test-threads=1` |
+| keyfree package tests (5 unit, 7 attacks on the tool and the MCP server) | 12 | `cd packages/keyfree && npm test` |
 | MCP self-check against the live policy | 1 script | `cd packages/keyfree && npm run smoke` |
 
 ## Not claimed (yet)

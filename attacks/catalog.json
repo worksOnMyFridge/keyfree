@@ -1,0 +1,70 @@
+{
+  "note": "Each attack is a test that must end in a refusal. rust = contract/src/tests.rs (the real policy code on near-sdk's mocked chain); node = packages/keyfree/test/attacks.test.mjs; live = seen on testnet (evidence/v13.log, CLAIMS.md).",
+  "groups": [
+    {
+      "who": "The agent, or a prompt injection that steers it",
+      "attacks": [
+        { "id": "A1", "attack": "deploy code the owner never allowed", "rust": "code_that_was_never_allowed_is_refused", "refusal": "code not on the allow list", "live": "v13 attacks; Claude Code Counter(999)" },
+        { "id": "A2", "attack": "same contract, other constructor arguments (swap the vault owner)", "rust": "other_constructor_arguments_are_other_code", "refusal": "code not on the allow list", "live": "vault-kit, Claude Code" },
+        { "id": "A3", "attack": "use a salt without our factory (shared CREATE2 proxy: someone takes the address first)", "rust": "salt_without_the_factory_is_refused", "refusal": "a salt needs the factory", "live": "v13 attacks" },
+        { "id": "A4", "attack": "repeat a salt + code on a new nonce (make an old Deployed log prove a new nonce)", "rust": "same_salt_and_code_cannot_take_a_second_nonce", "refusal": "salt and code already used on this chain", "live": "v13 attacks" },
+        { "id": "A5", "attack": "gas below the intrinsic minimum (signed, never mined, the nonce queue blocks)", "rust": "too_little_gas_is_refused_before_signing", "refusal": "gas limit below the intrinsic minimum" },
+        { "id": "A6", "attack": "fee of 1 wei (signed, never mined)", "rust": "one_wei_fee_is_refused_before_signing", "refusal": "fee below the floor", "live": "v13 attacks" },
+        { "id": "A7", "attack": "gas over the cap (burn the address's ETH)", "rust": "gas_over_the_cap_is_refused", "refusal": "gas limit over the cap" },
+        { "id": "A8", "attack": "fee over the cap", "rust": "fee_over_the_cap_is_refused", "refusal": "gas price over the cap" },
+        { "id": "A9", "attack": "a chain the owner never allowed", "rust": "a_chain_that_was_never_allowed_is_refused", "refusal": "chain not allowed" },
+        { "id": "A10", "attack": "a chain a council member disabled", "rust": "disabled_chain_refuses_new_deploys", "refusal": "chain is disabled" },
+        { "id": "A11", "attack": "deploy while the policy is paused", "rust": "guardian_pause_blocks_deploys", "refusal": "paused", "live": "v13 attacks" },
+        { "id": "A12", "attack": "move money: a deploy that sends value", "rust": "no_signed_transaction_ever_sends_value", "refusal": "value is always 0 (the contract cannot build anything else)" },
+        { "id": "A13", "attack": "widen the rules", "rust": "agent_cannot_propose_rules", "refusal": "only owner", "live": "v13 attacks: the agent's key cannot even call it" },
+        { "id": "A14", "attack": "make itself owner or guardian", "rust": "agent_cannot_touch_roles", "refusal": "only owner, guardian or reserve" },
+        { "id": "A15", "attack": "propose new code for the policy itself", "rust": "agent_cannot_propose_an_upgrade", "refusal": "only owner" },
+        { "id": "A16", "attack": "call any non-request method with the agent's NEAR key", "liveOnly": true, "refusal": "Access key does not allow method (NEAR protocol, before the contract runs)", "live": "v13 attacks" },
+        { "id": "A17", "attack": "find an owner tool in MCP, or pass a private key to a tool", "node": "mcp: the agent gets no owner tools, and a private_key argument is rejected before the handler", "refusal": "no such tool; unknown argument rejected" },
+        { "id": "A18", "attack": "get another transaction broadcast than the one checked (calldata, target, nonce, chain or value changed)", "node": ["tool: a signed transaction with other calldata (swapped init code) is not broadcast", "tool: a signed transaction to another target, nonce or chain is not broadcast", "tool: a signed transaction that sends value is not broadcast"], "refusal": "not the one that was checked" },
+        { "id": "A19", "attack": "get a transaction signed by another key broadcast, or garbage", "node": ["tool: the right transaction signed by another key is not broadcast", "tool: garbage instead of a signed transaction is not broadcast"], "refusal": "not by the policy's address / does not parse" }
+      ]
+    },
+    {
+      "who": "A thief with one or two council keys",
+      "attacks": [
+        { "id": "K1", "attack": "stolen guardian pauses and cancels forever", "rust": "stolen_guardian_cannot_freeze_the_contract_forever", "refusal": "owner + reserve replace it after the delay; its own cancel is not enough", "live": "v13 roles" },
+        { "id": "K2", "attack": "one key changes a role", "rust": "one_key_cannot_change_roles", "refusal": "needs 2 of 3 approvals", "live": "v13 roles" },
+        { "id": "K3", "attack": "two keys together skip the delay", "rust": "owner_and_guardian_together_cannot_skip_the_delay", "refusal": "role change delay not over", "live": "v13 roles" },
+        { "id": "K4", "attack": "stolen owner allows its own code at once", "rust": "new_code_waits_for_the_rules_delay", "refusal": "rule delay not over", "live": "v13 install, factory" },
+        { "id": "K5", "attack": "stolen owner raises the caps at once", "rust": "caps_cannot_be_raised_at_once", "refusal": "raising a cap is a rule proposal", "live": "v13 attacks" },
+        { "id": "K6", "attack": "stolen owner swaps the policy code at once", "rust": "upgrade_waits_for_the_delay", "refusal": "upgrade delay not over", "live": "v13 upgrade" },
+        { "id": "K7", "attack": "stolen owner sends other bytes at apply time than it proposed", "rust": "apply_ignores_bytes_sent_at_apply_time", "refusal": "only the stored, public code is deployed" },
+        { "id": "K8", "attack": "stolen owner moves a nonce down (two contents on one nonce)", "rust": "owner_cannot_move_the_nonce_down_by_hand", "refusal": "chain already allowed: its nonce moves only by signing", "live": "v13 attacks" },
+        { "id": "K9", "attack": "disable a chain, then open it again with a lower nonce", "rust": "disabling_a_chain_cannot_be_used_to_reset_its_nonce", "refusal": "chain already allowed" },
+        { "id": "K10", "attack": "fill the state with proposals", "rust": "a_stolen_owner_key_cannot_fill_the_state_with_proposals", "refusal": "too many open rule proposals" },
+        { "id": "K11", "attack": "one key retires the policy and takes its NEAR", "rust": "one_key_cannot_retire_the_policy", "refusal": "needs 2 of 3 approvals" },
+        { "id": "K12", "attack": "retire to an outside account", "rust": "the_beneficiary_is_a_council_member", "refusal": "the beneficiary must be a council member" },
+        { "id": "K13", "attack": "one key unpauses alone", "rust": "one_unpause_vote_is_not_enough", "refusal": "needs a second vote", "live": "v13 attacks" }
+      ]
+    },
+    {
+      "who": "A stranger with no role",
+      "attacks": [
+        { "id": "S1", "attack": "re-initialise the policy with own roles", "rust": "stranger_cannot_reinit", "refusal": "only the contract account" },
+        { "id": "S2", "attack": "request a deploy", "rust": "stranger_cannot_request_a_deploy", "refusal": "only agent or owner" },
+        { "id": "S3", "attack": "pause it", "rust": "stranger_cannot_pause", "refusal": "only owner, guardian or reserve", "live": "v13 attacks" },
+        { "id": "S4", "attack": "move a stuck nonce with a proof", "rust": "stranger_cannot_confirm_stuck", "refusal": "only agent or owner" },
+        { "id": "S5", "attack": "empty a retiring policy's state", "rust": "stranger_cannot_sweep", "refusal": "only owner, guardian or reserve" }
+      ]
+    },
+    {
+      "who": "A broken or hostile MPC answer, or a lying chain",
+      "attacks": [
+        { "id": "M1", "attack": "11 kinds of broken signing answers", "rust": "broken_answers_never_freeze_the_contract", "refusal": "request parked, nonce bound, nothing frozen" },
+        { "id": "M2", "attack": "empty, non-JSON, null or oversized raw answer", "rust": "odd_raw_answers_never_freeze_the_contract", "refusal": "request parked, no panic" },
+        { "id": "M3", "attack": "a valid signature of another key", "rust": "signature_of_another_key_is_refused", "refusal": "signature recovers to another address" },
+        { "id": "M4", "attack": "a late answer leaks a signature for a timed-out request", "rust": "leaked_signature_and_retry_can_only_spend_the_nonce_on_the_same_deploy", "refusal": "that nonce can only carry the same deploy" },
+        { "id": "M5", "attack": "a proof for an old nonce moves the nonce back", "rust": "proof_of_an_old_stuck_nonce_never_moves_the_nonce_back", "refusal": "next nonce never goes down" },
+        { "id": "M6", "attack": "prove a stuck deploy from a block that can still vanish", "rust": "confirm_stuck_refuses_latest", "refusal": "a stuck request needs Safe or Finalized", "live": "v13 attacks" },
+        { "id": "M7", "attack": "a forged log position for the journal", "rust": "golden_payload_hash_of_the_forged_log_position", "refusal": "other payload hash: Read MPC does not confirm", "live": "v13 confirm: Read MPC answered false" },
+        { "id": "M8", "attack": "a new request overwrites a used journal line", "rust": "new_request_never_overwrites_a_used_nonce", "refusal": "nonce already used on this chain" }
+      ]
+    }
+  ]
+}

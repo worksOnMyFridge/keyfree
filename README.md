@@ -60,13 +60,26 @@ node ../dist/cli.js preview --chain base-sepolia --artifact out/Counter.sol/Coun
 
 Reading and previewing need no key. Deploying needs the agent's key for this policy, which only the agent has.
 
+## Try to break it
+
+```bash
+(cd packages/keyfree && npm install)   # once
+npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20+
+```
+
+44 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
+stranger, a broken or hostile MPC answer. Each one is a test that must end in a refusal with a stated reason;
+the bench prints `attack -> refusal` and writes the table to [`evidence/attacks.md`](evidence/attacks.md), with
+the testnet run where the same refusal was seen live. Contract attacks run the real policy code on near-sdk's
+mocked chain; tool attacks run the built `keyfree` package.
+
 ## Run the tests
 
 From the repository root:
 
 ```bash
-(cd contract && cargo test -- --test-threads=1)       # 102 tests of the policy (Rust, near-sdk 5.29)
-(cd packages/keyfree && npm test && npm run smoke)    # tool unit tests; MCP self-check against the live policy
+(cd contract && cargo test -- --test-threads=1)       # 111 tests of the policy (Rust, near-sdk 5.29)
+(cd packages/keyfree && npm test && npm run smoke)    # 12 tool tests; MCP self-check against the live policy
 ```
 
 The contract tests include golden tests: the policy's transaction bytes for 1 KB, 24 KB and 48 KB of init code
@@ -100,7 +113,8 @@ install without keys, rules through the delay, factory, deploys from 22 B to 48 
 | `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
 | `packages/keyfree/demo/` | `Counter`, and `vault-kit`: a prompt-injection example (its README swaps the vault owner) |
 | `v13/` | end-to-end testnet script and builds |
-| `evidence/` | logs of the live runs, golden vectors |
+| `attacks/` | the attack catalog and `npm run attacks` |
+| `evidence/` | logs of the live runs, golden vectors, the attack table |
 
 ## Security
 

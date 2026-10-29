@@ -183,11 +183,7 @@ export class Keyfree {
   }
 
   private async broadcast(chain: ChainConfig, raw: Hex, nearTx: string, nonce: number, codeHash: string, expected: string | null, want: TransactionSerializableEIP1559): Promise<DeployResult> {
-    // What came back signed must be exactly what we checked, signed by our own address.
-    const got = parseTransaction(raw);
-    const same = got.chainId === want.chainId && got.nonce === want.nonce && (got.to ?? undefined)?.toLowerCase() === want.to?.toLowerCase() && got.data === want.data && (got.value ?? 0n) === 0n;
-    const from = (await recoverTransactionAddress({ serializedTransaction: raw as `0x02${string}` })).toLowerCase();
-    if (!same || from !== (await this.address()).toLowerCase()) throw new Error(`The signed transaction is not the one that was checked (from ${from}). Not broadcasting.`);
+    await checkSigned(raw, want, await this.address());
     const c = evm(chain);
     const hash = await c.sendRawTransaction({ serializedTransaction: raw });
     const rc = await c.waitForTransactionReceipt({ hash, timeout: 180_000 });
@@ -240,6 +236,22 @@ export class Keyfree {
     }
     return { chain: chain.name, next_nonce: next, lines };
   }
+}
+
+// What came back signed must be exactly what was checked (chain, nonce, target, data, no value), signed by
+// the policy's own address. Anything else is not broadcast.
+export async function checkSigned(raw: Hex, want: TransactionSerializableEIP1559, address: Hex): Promise<void> {
+  let got;
+  try {
+    got = parseTransaction(raw);
+  } catch {
+    throw new Error("The signed transaction does not parse. Not broadcasting.");
+  }
+  const same = got.chainId === want.chainId && got.nonce === want.nonce && (got.to ?? undefined)?.toLowerCase() === want.to?.toLowerCase()
+    && got.data === want.data && (got.value ?? 0n) === 0n && got.type === "eip1559";
+  if (!same) throw new Error("The signed transaction is not the one that was checked. Not broadcasting.");
+  const from = (await recoverTransactionAddress({ serializedTransaction: raw as `0x02${string}` })).toLowerCase();
+  if (from !== address.toLowerCase()) throw new Error(`The signed transaction is signed by ${from}, not by the policy's address. Not broadcasting.`);
 }
 
 function asPreviewError(e: unknown): Error {

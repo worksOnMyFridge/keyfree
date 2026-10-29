@@ -1249,3 +1249,93 @@ fn sweep_brings_the_state_under_10_000_bytes_then_the_account_goes_to_the_benefi
         .collect();
     assert_eq!(deleted, vec![acc("owner.testnet")]);
 }
+
+// v14: attack bench additions (attacks/catalog.json maps every attack to a test).
+fn with_arg(arg: u8) -> Vec<u8> {
+    let mut v = hex::decode(INIT).unwrap();
+    v.extend([0u8; 31]);
+    v.push(arg);
+    v
+}
+
+#[test]
+#[should_panic(expected = "code not on the allow list")]
+fn other_constructor_arguments_are_other_code() {
+    // the owner allowed the contract with argument 1 (say, the treasury); the agent asks for argument 2 (the attacker)
+    let mut c = idle();
+    c.allowed_code.insert(hex::encode(env::keccak256_array(&with_arg(1))));
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, hex::encode(with_arg(2)), 300_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+fn the_allowed_arguments_do_pass() {
+    let mut c = idle();
+    c.allowed_code.insert(hex::encode(env::keccak256_array(&with_arg(1))));
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, hex::encode(with_arg(1)), 300_000, 14_000_000, 1_000_000, None, None);
+    assert!(c.pending.is_some());
+}
+
+#[test]
+#[should_panic(expected = "gas limit over the cap")]
+fn gas_over_the_cap_is_refused() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, INIT.into(), 3_000_001, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "gas price over the cap")]
+fn fee_over_the_cap_is_refused() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, INIT.into(), 300_000, 50_000_000_001, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "chain not allowed")]
+fn a_chain_that_was_never_allowed_is_refused() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(1, INIT.into(), 300_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+fn no_signed_transaction_ever_sends_value() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.apply_rule_change(&RuleChange::SetFactory { chain_id: 84532, factory_hex: "09".repeat(20) });
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(84532, INIT.into(), 300_000, 14_000_000, 1_000_000, None, None);
+    assert_eq!(tx_of(c.pending.as_ref().unwrap()).value, 0, "plain creation");
+    c.pending = None;
+    c.next_nonce.insert(84532, 5);
+    ctx("agent.testnet", 22);
+    let _ = c.request_deploy(84532, INIT.into(), 300_000, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
+    assert_eq!(tx_of(c.pending.as_ref().unwrap()).value, 0, "through the factory");
+}
+
+#[test]
+#[should_panic(expected = "only owner")]
+fn agent_cannot_propose_an_upgrade() {
+    let mut c = idle();
+    ctx_pay("agent.testnet", 20, 1_000, CODE.to_vec(), 100);
+    c.propose_upgrade();
+}
+
+#[test]
+#[should_panic(expected = "only agent or owner")]
+fn stranger_cannot_request_a_deploy() {
+    let mut c = idle();
+    ctx("stranger.testnet", 20);
+    let _ = c.request_deploy(84532, INIT.into(), 300_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "code not on the allow list")]
+fn code_that_was_never_allowed_is_refused() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, "6000".into(), 300_000, 14_000_000, 1_000_000, None, None);
+}
