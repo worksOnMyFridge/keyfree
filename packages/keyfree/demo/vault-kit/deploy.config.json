@@ -1,0 +1,8 @@
+{
+  "contract": "Vault",
+  "artifact": "out/Vault.sol/Vault.json",
+  "network": "base-sepolia",
+  "constructor": {
+    "owner": "0x07E86D4E43CDf6A6D47d0705841C8EbD4a623510"
+  }
+}

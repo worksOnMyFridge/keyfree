@@ -92,7 +92,8 @@ function out(v: unknown) {
   console.log(typeof v === "string" ? v : JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x), 2));
 }
 
+// exitCode, not process.exit(): exiting while fetch sockets close trips a libuv assertion on Windows.
 main().catch((e) => {
   console.error(e instanceof PolicyRefusal ? `REFUSED  ${e.reason}` : `ERROR  ${(e as Error).message ?? e}`);
-  process.exit(1);
+  process.exitCode = 1;
 });
