@@ -214,7 +214,6 @@ fn apply_ignores_bytes_sent_at_apply_time() {
     // the owner (or a thief with the owner key) tries to slip other bytes in at the last moment
     ctx_at("owner.testnet", 21, 1_000 + 3_600, b"other code".to_vec());
     let _ = c.apply_upgrade();
-    assert!(c.proposed.is_none() && c.get_proposed_code().is_none());
     let deployed: Vec<Vec<u8>> = near_sdk::test_utils::get_created_receipts().into_iter()
         .flat_map(|r| r.actions)
         .filter_map(|a| match a { near_sdk::mock::MockAction::DeployContract { code, .. } => Some(code), _ => None })
@@ -283,12 +282,25 @@ fn agent_cannot_upgrade() {
     let _ = c.apply_upgrade();
 }
 
+// Н17: apply keeps the proposal; only a migrate that really ran marks the upgrade done.
 #[test]
-fn upgrade_after_the_delay_with_the_right_code() {
+fn apply_keeps_the_proposal_until_migrate_has_run() {
     let mut c = proposed();
-    ctx_at("owner.testnet", 21, 1_000 + 3_600, CODE.to_vec());
+    ctx_at("owner.testnet", 21, 1_000 + 3_600, vec![]);
     let _ = c.apply_upgrade();
-    assert!(c.proposed.is_none());
+    assert!(c.proposed.is_some() && c.get_proposed_code().is_some(), "a failed migrate leaves everything to retry");
+}
+
+#[test]
+fn migrate_marks_the_upgrade_done() {
+    let mut c = proposed();
+    ctx_at("owner.testnet", 21, 1_000 + 3_600, vec![]);
+    let _ = c.apply_upgrade();
+    env::state_write(&c);
+    ctx_at("keyfree.testnet", 22, 1_000 + 3_601, vec![]);
+    let s = Keyfree::migrate();
+    assert_eq!(s.version, 2);
+    assert!(s.proposed.is_none() && s.get_proposed_code().is_none());
 }
 
 #[test]
@@ -1086,4 +1098,154 @@ fn odd_raw_answer_does_not_set_an_address() {
     ctx_answer(raw(b"\x00\x01"));
     assert_eq!(c.on_derived(), None);
     assert!(c.eth_address.is_none());
+}
+
+// v13: retire (spec R29). DeleteAccount refuses more than 10 000 bytes of state, and a missing beneficiary
+// loses the NEAR, so: 2 of 3 + full delay, final, sweep in portions, pay a council member who approved.
+fn retire_proposed(c: &mut Keyfree) {
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Retire, acc("owner.testnet"));
+    ctx_at("reserve.testnet", 21, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+}
+
+fn retired() -> Keyfree {
+    let mut c = idle();
+    retire_proposed(&mut c);
+    ctx_at("guardian.testnet", 22, 1_000 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    c
+}
+
+#[test]
+#[should_panic(expected = "role change delay not over")]
+fn retire_waits_the_full_delay() {
+    let mut c = idle();
+    retire_proposed(&mut c);
+    ctx_at("guardian.testnet", 22, 1_000 + 3_599, vec![]);
+    c.apply_role(acc("owner.testnet"));
+}
+
+#[test]
+#[should_panic(expected = "needs 2 of 3 approvals")]
+fn one_key_cannot_retire_the_policy() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Retire, acc("owner.testnet"));
+    ctx_at("owner.testnet", 21, 100_000, vec![]);
+    c.apply_role(acc("owner.testnet"));
+}
+
+#[test]
+#[should_panic(expected = "the beneficiary must be a council member")]
+fn the_beneficiary_is_a_council_member() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.propose_role(Role::Retire, acc("exchange-deposit.testnet"));
+}
+
+#[test]
+#[should_panic(expected = "the beneficiary must have approved the retirement")]
+fn the_beneficiary_must_have_signed() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Retire, acc("guardian.testnet"));
+    ctx_at("reserve.testnet", 21, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("owner.testnet", 22, 1_000 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+}
+
+#[test]
+fn one_cancel_does_not_stop_a_retirement_two_do() {
+    let mut c = idle();
+    retire_proposed(&mut c);
+    ctx("guardian.testnet", 22);
+    c.cancel_role(acc("owner.testnet"));
+    assert_eq!(c.role_changes.len(), 1);
+    ctx("reserve.testnet", 23);
+    c.cancel_role(acc("owner.testnet"));
+    assert!(c.role_changes.is_empty());
+}
+
+#[test]
+fn retiring_is_final() {
+    let c = retired();
+    assert!(c.paused && c.retiring == Some(acc("owner.testnet")));
+    ctx("owner.testnet", 30);
+    for (name, r) in [
+        ("unpause", std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { let mut c = retired(); ctx("owner.testnet", 30); c.unpause(); }))),
+        ("rule", std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { let mut c = retired(); ctx("owner.testnet", 30); c.propose_rule(code_rule()); }))),
+        ("upgrade", std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { let mut c = retired(); ctx_pay("owner.testnet", 30, 9_000, CODE.to_vec(), 100); c.propose_upgrade(); }))),
+        ("role", std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { let mut c = retired(); ctx("owner.testnet", 30); c.propose_role(Role::Guardian, acc("g2.testnet")); }))),
+        ("deploy", std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { let mut c = retired(); ctx("agent.testnet", 30); let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None); }))),
+    ] {
+        assert!(r.is_err(), "{name} must be refused while retiring");
+    }
+}
+
+#[test]
+#[should_panic(expected = "the policy is not retiring")]
+fn sweep_only_after_the_decision() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.sweep(10);
+}
+
+#[test]
+#[should_panic(expected = "only owner, guardian or reserve")]
+fn stranger_cannot_sweep() {
+    let mut c = retired();
+    ctx("stranger.testnet", 30);
+    c.sweep(10);
+}
+
+#[test]
+#[should_panic(expected = "sweep first")]
+fn the_account_is_not_deleted_before_the_sweep() {
+    let mut c = retired();
+    ctx("owner.testnet", 30);
+    let _ = c.finish_retire();
+}
+
+fn flush_all(c: &mut Keyfree) {
+    c.journal.flush();
+    c.used_salts.flush();
+    c.next_nonce.flush();
+    c.fee_floor.flush();
+    c.factories.flush();
+    c.allowed_code.flush();
+    c.disabled_chains.flush();
+}
+
+// The mock counts storage from a fake base (300 KB) reset by every new context, so the test measures
+// bytes added and freed inside one context, plus the size of the main state that stays.
+#[test]
+fn sweep_brings_the_state_under_10_000_bytes_then_the_account_goes_to_the_beneficiary() {
+    let mut c = idle();
+    flush_all(&mut c);
+    let base = env::storage_usage();
+    for n in 0..200 { signed_line(&mut c, 100 + n, CONFIRMED); }
+    for n in 0..200u64 { c.used_salts.insert(env::keccak256_array(&n.to_le_bytes()), n); }
+    flush_all(&mut c);
+    let added = env::storage_usage() - base;
+    assert!(added > 10_000, "a busy policy is over the DeleteAccount limit: {added} bytes of collections");
+    retire_proposed(&mut c);
+    ctx_at("guardian.testnet", 22, 1_000 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    ctx("guardian.testnet", 30);
+    let before = env::storage_usage();
+    let mut rounds = 0;
+    while c.sweep(150) > 0 { rounds += 1; assert!(rounds < 10); }
+    flush_all(&mut c);
+    let freed = before - env::storage_usage();
+    assert!(freed >= added, "sweep freed {freed} of {added} bytes");
+    let main_state = near_sdk::borsh::to_vec(&c).unwrap().len();
+    assert!(main_state < 5_000, "what stays is only the main state: {main_state} bytes");
+    let _ = c.finish_retire();
+    let deleted: Vec<AccountId> = near_sdk::test_utils::get_created_receipts().into_iter()
+        .flat_map(|r| r.actions)
+        .filter_map(|a| match a { near_sdk::mock::MockAction::DeleteAccount { beneficiary_id, .. } => Some(beneficiary_id), _ => None })
+        .collect();
+    assert_eq!(deleted, vec![acc("owner.testnet")]);
 }

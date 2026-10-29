@@ -46,9 +46,13 @@
 // (remove code, disable a chain, remove a factory, lower caps) is a brake: one council member, at once.
 // A disabled chain keeps its nonce, so turning it back on can never reset the nonce (Н8).
 // v12 callbacks read their answer as raw bytes (spec R12, audit v2 Н13): no answer, however odd, panics.
+// v13 retire (spec R29): a keyless account cannot be deleted by anyone but itself, so the council can retire
+// the policy (2 of 3 + full delay, Role::Retire); then it is paused for good, sweep() empties the state in
+// portions (all growing collections are iterable now) and finish_retire() deletes the account, sending its
+// NEAR to a council member who approved. apply_upgrade keeps the proposal until migrate has run (Н17).
 use near_sdk::serde_json::{json, Value};
 use near_sdk::json_types::Base64VecU8;
-use near_sdk::store::{IterableSet, LazyOption, LookupMap, LookupSet};
+use near_sdk::store::{IterableMap, IterableSet, LazyOption};
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
 use omni_transaction::evm::types::Signature;
 use omni_transaction::evm::EVMTransaction;
@@ -120,9 +124,11 @@ pub struct LogIn {
     pub block_number: u64,
 }
 
+// Retire is not a role: it is the council decision to retire the policy (R29), and its `account` is the
+// beneficiary of the account's NEAR. It goes through the same 2 of 3 + full delay + 2 of 3 cancel.
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Role { Owner, Guardian, Reserve, Agent }
+pub enum Role { Owner, Guardian, Reserve, Agent, Retire }
 
 // One open change per proposer (so at most three, and a stolen key cannot fill the slots of others).
 #[near(serializers = [borsh, json])]
@@ -164,14 +170,15 @@ pub struct Keyfree {
     mpc: AccountId,
     path: String,
     eth_address: Option<String>,
+    // Everything that grows is iterable, so retiring can empty it (DeleteAccount needs <= 10 000 bytes).
     allowed_code: IterableSet<String>,
-    next_nonce: LookupMap<u64, u64>,
+    next_nonce: IterableMap<u64, u64>,
     max_gas_limit: u128,
     max_fee_cap: u128,
     pending: Option<Pending>,
     stuck: Option<Pending>,
-    factories: LookupMap<u64, Vec<u8>>,
-    journal: LookupMap<String, Entry>,
+    factories: IterableMap<u64, Vec<u8>>,
+    journal: IterableMap<String, Entry>,
     guardian: AccountId,
     // Also the delay for role changes.
     upgrade_delay_sec: u64,
@@ -179,9 +186,9 @@ pub struct Keyfree {
     paused: bool,
     version: u32,
     // keccak(chain ‖ salt ‖ code hash) -> the nonce that salted deploy is bound to.
-    used_salts: LookupMap<[u8; 32], u64>,
+    used_salts: IterableMap<[u8; 32], u64>,
     // Lowest max_fee_per_gas per chain, set when the chain is opened.
-    fee_floor: LookupMap<u64, u128>,
+    fee_floor: IterableMap<u64, u128>,
     reserve: AccountId,
     role_changes: Vec<RoleChange>,
     unpause_votes: Vec<AccountId>,
@@ -190,7 +197,9 @@ pub struct Keyfree {
     rules_delay_sec: u64,
     rule_proposals: Vec<RuleProposal>,
     next_rule_id: u32,
-    disabled_chains: LookupSet<u64>,
+    disabled_chains: IterableSet<u64>,
+    // Set once retiring starts (R29): the beneficiary of the account's NEAR. There is no way back.
+    retiring: Option<AccountId>,
 }
 
 #[near]
@@ -208,20 +217,20 @@ impl Keyfree {
             owner, agent: Some(agent), mpc, path,
             eth_address: None,
             allowed_code: IterableSet::new(b"c3".to_vec()),
-            next_nonce: LookupMap::new(b"n3".to_vec()),
+            next_nonce: IterableMap::new(b"n3".to_vec()),
             max_gas_limit: 3_000_000,
             max_fee_cap: 50_000_000_000,
             pending: None,
             stuck: None,
-            factories: LookupMap::new(b"f3".to_vec()),
-            journal: LookupMap::new(b"j3".to_vec()),
+            factories: IterableMap::new(b"f3".to_vec()),
+            journal: IterableMap::new(b"j3".to_vec()),
             guardian,
             upgrade_delay_sec,
             proposed: None,
             paused: false,
             version: 1,
-            used_salts: LookupMap::new(b"s3".to_vec()),
-            fee_floor: LookupMap::new(b"p3".to_vec()),
+            used_salts: IterableMap::new(b"s3".to_vec()),
+            fee_floor: IterableMap::new(b"p3".to_vec()),
             reserve,
             role_changes: vec![],
             unpause_votes: vec![],
@@ -229,13 +238,15 @@ impl Keyfree {
             rules_delay_sec,
             rule_proposals: vec![],
             next_rule_id: 0,
-            disabled_chains: LookupSet::new(b"d3".to_vec()),
+            disabled_chains: IterableSet::new(b"d3".to_vec()),
+            retiring: None,
         }
     }
 
     // Roles. 1) a council member proposes (the owner alone for a new agent); replaces their own open one.
     pub fn propose_role(&mut self, role: Role, account: AccountId) {
         let me = self.only_council();
+        self.not_retiring();
         if role == Role::Agent { require!(me == self.owner, "only owner proposes a new agent"); }
         self.require_free(role, &account);
         self.role_changes.retain(|c| c.proposer != me);
@@ -282,6 +293,16 @@ impl Keyfree {
             Role::Guardian => self.guardian = c.account.clone(),
             Role::Reserve => self.reserve = c.account.clone(),
             Role::Agent => self.agent = Some(c.account.clone()),
+            Role::Retire => {
+                // The NEAR goes to an account that signed this decision, so it surely exists: a deleted
+                // account's balance sent to a missing beneficiary is lost.
+                require!(c.approvals.contains(&c.account), "the beneficiary must have approved the retirement");
+                require!(self.pending.is_none(), "a request is being signed");
+                self.retiring = Some(c.account.clone());
+                self.paused = true;
+                self.proposed = None;
+                self.rule_proposals.clear();
+            }
         }
         // Approvals and votes were given by the old council: start over.
         self.role_changes.clear();
@@ -298,7 +319,52 @@ impl Keyfree {
 
     pub fn get_roles(&self) -> Value {
         json!({ "owner": self.owner, "guardian": self.guardian, "reserve": self.reserve, "agent": self.agent,
-            "role_changes": self.role_changes, "unpause_votes": self.unpause_votes })
+            "role_changes": self.role_changes, "unpause_votes": self.unpause_votes, "retiring": self.retiring })
+    }
+
+    // Retiring (R29), after the council decision (Role::Retire) ran its delay. 1) empty the state in
+    // portions; DeleteAccount refuses an account with more than 10 000 bytes of state. Returns what is left.
+    pub fn sweep(&mut self, limit: u32) -> u32 {
+        self.only_council();
+        require!(self.retiring.is_some(), "the policy is not retiring");
+        let mut budget = limit as usize;
+        macro_rules! drain_map {
+            ($m:expr) => {{
+                let keys: Vec<_> = $m.keys().take(budget).cloned().collect();
+                budget -= keys.len();
+                for k in keys { $m.remove(&k); }
+            }};
+        }
+        macro_rules! drain_set {
+            ($s:expr) => {{
+                let items: Vec<_> = $s.iter().take(budget).cloned().collect();
+                budget -= items.len();
+                for x in items { $s.remove(&x); }
+            }};
+        }
+        drain_map!(self.journal);
+        drain_map!(self.used_salts);
+        drain_map!(self.next_nonce);
+        drain_map!(self.fee_floor);
+        drain_map!(self.factories);
+        drain_set!(self.allowed_code);
+        drain_set!(self.disabled_chains);
+        let _ = budget;
+        self.proposed_code.set(None);
+        let left = self.journal.len() + self.used_salts.len() + self.next_nonce.len() + self.fee_floor.len()
+            + self.factories.len() + self.allowed_code.len() + self.disabled_chains.len();
+        env::log_str(&format!("keyfree: swept, {left} entries left"));
+        left
+    }
+
+    // 2) when the state is empty, delete the account; its NEAR goes to the beneficiary.
+    pub fn finish_retire(&mut self) -> Promise {
+        self.only_council();
+        let to = self.retiring.clone().unwrap_or_else(|| env::panic_str("the policy is not retiring"));
+        require!(self.journal.is_empty() && self.used_salts.is_empty() && self.next_nonce.is_empty() && self.fee_floor.is_empty()
+            && self.factories.is_empty() && self.allowed_code.is_empty() && self.disabled_chains.is_empty(), "sweep first");
+        env::log_str(&format!("keyfree: retiring, account deleted, NEAR to {to}"));
+        Promise::new(env::current_account_id()).delete_account(to)
     }
 
     // Maintenance without keys. 1) the owner sends the new code itself (raw bytes as the call input) and
@@ -307,6 +373,7 @@ impl Keyfree {
     #[payable]
     pub fn propose_upgrade(&mut self) {
         self.only_owner();
+        self.not_retiring();
         let code = env::input().unwrap_or_default();
         require!(!code.is_empty(), "send the new wasm as the call input");
         let before = env::storage_usage();
@@ -334,27 +401,32 @@ impl Keyfree {
     }
 
     // 3) after the delay the owner applies it: the contract deploys exactly the stored bytes onto its own
-    // account and runs migrate. Nothing else can change the code.
+    // account and runs migrate. Nothing else can change the code. The proposal stays until migrate has run:
+    // deploy + migrate is one atomic batch, so if migrate fails the old code and the proposal are both
+    // still there and nothing has to wait a second delay (audit v2 Н17).
     pub fn apply_upgrade(&mut self) -> Promise {
         self.only_owner();
+        self.not_retiring();
         require!(self.pending.is_none(), "a request is being signed");
         let (hash, ready_at) = self.proposed.clone().unwrap_or_else(|| env::panic_str("no upgrade proposed"));
         require!(now() >= ready_at, "upgrade delay not over");
-        let code = self.proposed_code.take().unwrap_or_else(|| env::panic_str("no code stored"));
+        let code = self.proposed_code.get().clone().unwrap_or_else(|| env::panic_str("no code stored"));
         require!(hex::encode(env::sha256_array(&code)) == hash, "stored code does not match the proposed hash");
-        self.proposed = None;
         env::log_str(&format!("keyfree: applying upgrade {hash}"));
         Promise::new(env::current_account_id())
             .deploy_contract(code)
             .function_call("migrate", b"{}".to_vec(), NearToken::from_yoctonear(0), Gas::from_tgas(30))
     }
 
-    // Runs right after the self-deploy; same state layout, so it only bumps the version.
+    // Runs right after the self-deploy, in the same batch. Every future version's migrate must clear the
+    // proposal and the stored code: that is how a successful upgrade is marked done.
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
         let mut s: Self = env::state_read().unwrap_or_else(|| env::panic_str("no state"));
         s.version += 1;
+        s.proposed = None;
+        s.proposed_code.set(None);
         env::log_str(&format!("keyfree: migrated to version {}", s.version));
         s
     }
@@ -368,6 +440,7 @@ impl Keyfree {
     }
     pub fn unpause(&mut self) {
         let me = self.only_council();
+        self.not_retiring();
         require!(self.paused, "not paused");
         if !self.unpause_votes.contains(&me) { self.unpause_votes.push(me); }
         if self.unpause_votes.len() >= 2 {
@@ -385,6 +458,7 @@ impl Keyfree {
 
     // Ask the MPC which secp256k1 key belongs to (this contract, path) and keep its ETH address.
     pub fn setup(&mut self) -> Promise {
+        self.not_retiring();
         require!(self.eth_address.is_none(), "address already set");
         let args = json!({ "path": self.path, "predecessor": env::current_account_id(), "domain_id": 0 });
         Promise::new(self.mpc.clone())
@@ -405,6 +479,7 @@ impl Keyfree {
     // Rules (A5/A6, R6). Widening: 1) the owner proposes, the rules delay runs;
     pub fn propose_rule(&mut self, change: RuleChange) -> u32 {
         self.only_owner();
+        self.not_retiring();
         self.validate_rule(&change);
         require!(self.rule_proposals.len() < MAX_RULE_PROPOSALS, "too many open rule proposals");
         let id = self.next_rule_id;
@@ -426,6 +501,7 @@ impl Keyfree {
     // 3) after the delay a council member applies it (checked again against the state of now).
     pub fn apply_rule(&mut self, id: u32) {
         self.only_council();
+        self.not_retiring();
         let i = self.rule_proposals.iter().position(|r| r.id == id).unwrap_or_else(|| env::panic_str("no such rule proposal"));
         require!(now() >= self.rule_proposals[i].ready_at, "rule delay not over");
         let r = self.rule_proposals.remove(i);
@@ -583,6 +659,7 @@ impl Keyfree {
     // says where the log sits (block, position), and the MPC must find exactly that log there.
     #[payable]
     pub fn confirm(&mut self, chain_id: u64, nonce: u64, log: LogIn, finality: String) -> Promise {
+        self.not_retiring();
         let e = self.journal.get(&key(chain_id, nonce)).cloned().unwrap_or_else(|| env::panic_str("no such deploy"));
         require!(e.status == SIGNED, "deploy is not waiting for confirmation");
         self.read_mpc(chain_id, &e, e.tx_hash, &log, &finality)
@@ -595,6 +672,7 @@ impl Keyfree {
     #[payable]
     pub fn confirm_stuck(&mut self, tx_hash: String, log: LogIn, finality: String) -> Promise {
         self.only_agent_or_owner();
+        self.not_retiring();
         require!(finality == "Safe" || finality == "Finalized", "a stuck request needs Safe or Finalized");
         let p = self.stuck.clone().unwrap_or_else(|| env::panic_str("nothing stuck"));
         let e = self.journal.get(&key(p.chain_id, p.nonce)).cloned().unwrap_or_else(|| env::panic_str("no journal line"));
@@ -760,8 +838,15 @@ impl Keyfree {
         require!(self.is_council(&p), "only owner, guardian or reserve");
         p
     }
-    // The new holder of `role` must not hold any other role (R5).
+    fn not_retiring(&self) {
+        require!(self.retiring.is_none(), "the policy is retiring");
+    }
+    // The new holder of `role` must not hold any other role (R5). A retirement pays a council member.
     fn require_free(&self, role: Role, account: &AccountId) {
+        if role == Role::Retire {
+            require!(self.is_council(account), "the beneficiary must be a council member");
+            return;
+        }
         let held = [(Role::Owner, Some(&self.owner)), (Role::Guardian, Some(&self.guardian)), (Role::Reserve, Some(&self.reserve)), (Role::Agent, self.agent.as_ref())];
         for (r, a) in held {
             if r != role && a == Some(account) { env::panic_str("account already holds another role"); }
