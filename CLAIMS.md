@@ -1,8 +1,8 @@
 # Claims and evidence
 
 Every claim below points to something you can check yourself: a transaction, a line of the run log
-(`evidence/v13.log`), a test, or a read-only call. Everything ran on NEAR testnet and Base Sepolia on
-2026-10-29. Links were re-checked against the chains the same day.
+(`evidence/v13.log`, `evidence/v14.log`), a test, or a read-only call. Everything ran on NEAR testnet and
+Base Sepolia on 2026-10-29. Links were re-checked against the chains the same day.
 
 Live accounts and addresses:
 
@@ -11,7 +11,8 @@ Live accounts and addresses:
 | Policy contract (NEAR) | [`policy13.keyfree-lab.testnet`](https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet) |
 | Its keyless ETH address | [`0x43e3cb8d471680307f0c232e5ac190828681fcb0`](https://sepolia.basescan.org/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0) |
 | Its CREATE2 factory (Base Sepolia) | [`0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f`](https://sepolia.basescan.org/address/0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f) |
-| Agent account | `agent13b.keyfree-lab.testnet` |
+| Agent account | `agent14.keyfree-lab.testnet` (before v14: `agent13b`) |
+| Treasury proxy (Base Sepolia) | [`0x5319b76fda54f4144d6b134016f6415ad169dfaa`](https://sepolia.basescan.org/address/0x5319b76fda54f4144d6b134016f6415ad169dfaa) |
 
 ## 1. Nobody holds the key
 
@@ -19,9 +20,9 @@ Live accounts and addresses:
 |---|---|---|
 | 1.1 | The policy account has no access keys at all. | Code, init and key deletion in one transaction: [7iawPybU…](https://testnet.nearblocks.io/txns/7iawPybUxDjWqQFXCayAFxecGLLbeiMGP8bczy9sMVbd) (`DeployContract`, `new`, `DeleteKey`). Check now: `view_access_key_list` for the policy returns `[]`. |
 | 1.2 | The ETH address is derived from NEAR MPC inside the contract, not typed in by anyone. | `setup()` asks the MPC for `derived_public_key` and keeps the address (`contract/src/lib.rs`, `on_derived`); log line `ETH address derived on-chain from the MPC` in `evidence/v13.log`. |
-| 1.3 | Every deploy was signed by NEAR MPC for that address; no private key was used anywhere. | All 7 Base Sepolia transactions below are sent from `0x43e3…fcb0`, nonces 0 to 6 in a row, value 0. |
-| 1.4 | The agent's NEAR key can only call six request methods on the policy. | `agent13b` holds one function-call key: `request_deploy, resign, retry, release, confirm, confirm_stuck`, receiver = the policy. Calling anything else is refused by the protocol before the contract runs: `Access key does not allow method propose_rule` (`evidence/v13.log`, attacks). |
-| 1.5 | The contract was upgraded without any key, and still has none. | Upgrade a→b: [BqHPR1LD…](https://testnet.nearblocks.io/txns/BqHPR1LDasmmgLscAYESz7aGhBxdntom846MAsxgFPQp); `get_status` shows build `b`, version 2; keys still `[]`. |
+| 1.3 | Every transaction was signed by NEAR MPC for that address; no private key was used anywhere. | All 11 Base Sepolia transactions in this file are sent from `0x43e3…fcb0`, nonces 0 to 10 in a row, value 0. |
+| 1.4 | The agent's NEAR key can only call the request methods on the policy. | `agent14` holds one function-call key, receiver = the policy: `request_deploy, request_proxy_upgrade, resign, resign_proxy_upgrade, retry, release, confirm, confirm_stuck` ([created](https://testnet.nearblocks.io/txns/o5Tb3Ny9JHus1kaFnYMfmV3DeqkQRjgKpEUcBA4XYun)). Calling anything else is refused by the protocol before the contract runs: `Access key does not allow method propose_rule` (`evidence/v13.log` attacks, `evidence/v14.log` allow). |
+| 1.5 | The contract was upgraded twice without any key, and its data survived. | a→b: [BqHPR1LD…](https://testnet.nearblocks.io/txns/BqHPR1LDasmmgLscAYESz7aGhBxdntom846MAsxgFPQp); b→v14: [C3J8KRin…](https://testnet.nearblocks.io/txns/C3J8KRino8NDCcKf9gChqooYM8bTAPQhHvAn9BAGf1cH), after the guardian read the 362 719 stored bytes and matched their sha256 `764eb8f8…` with the local build. `get_status` shows build `v14`, version 3; keys still `[]`; allowed codes, nonces and the journal are as before (`evidence/v14.log`, upgrade). |
 
 ## 2. The policy builds the transaction itself
 
@@ -46,10 +47,10 @@ Deploys through the factory (each landed at the address the policy promised befo
 | # | Claim | Evidence |
 |---|---|---|
 | 3.1 | A real Claude Code session, asked in one sentence, deployed a contract through the MCP server. | "Deploy Counter with start 1 to Base Sepolia through keyfree": [0x59ec9422…](https://sepolia.basescan.org/tx/0x59ec94223de38de6bcbb12515c2facacd4578ce80483f734100869ae4f4e7120), NEAR [8cbFAVWf…](https://testnet.nearblocks.io/txns/8cbFAVWfpgDaSyJiFb4qJhqVeWfqxZZggi8qosBfBvja); `number()` of [`0xc821…5b3a`](https://sepolia.basescan.org/address/0xc8210fd2b9cff6760882d22a59fc7fa6f7c65b3a) returns 1. |
-| 3.2 | Code that is not on the allow list is refused, and the agent reports it instead of working around it. | Same session, "Counter with start 999": refused with `code not on the allow list (code hash 5ec712c9…)`; nothing signed, nonce 7 untouched. |
+| 3.2 | Code that is not on the allow list is refused, and the agent reports it instead of working around it. | Same session, "Counter with start 999": refused with `code not on the allow list (code hash 5ec712c9…)`; nothing signed, the next nonce stayed 7. |
 | 3.3 | A prompt injection that swaps the vault owner cannot get through, even when the human confirms the injected address. | `packages/keyfree/demo/vault-kit`: the README asks to deploy `Vault` with another owner. The owner allowed only `Vault(owner from deploy.config.json)` (rule 9: [propose](https://testnet.nearblocks.io/txns/92UJ1wJRoNssB2AmjgxJb2PCRB2GA3TnDeJUKsLzDwEi), [apply](https://testnet.nearblocks.io/txns/5xLHXr4PDwwcjDJDGinCZ2xiVkGdyRUZHaouKtYyi6ee)). Constructor arguments are part of the allowed code hash, so `Vault(injected owner)` has another hash and the policy refused it at preview; nothing was signed. |
 | 3.3a | So the recipient of a vault is chosen by the council, not by the agent or by whoever talks to it. | `Vault` (`packages/keyfree/demo/vault-kit/contracts/Vault.sol`) takes its owner in the constructor and keeps it `immutable`; only the owner can withdraw. The only `Vault` the policy can sign is the one in rule 9. Check now: `keyfree hash` of `Vault(0x07E8…3510)` is `474fbc98…`, which `get_status` lists; `Vault(0xF4be…AF0c)` is `aa3a1a11…`, which it does not. |
-| 3.4 | The agent has no tool to change rules, roles, pause or upgrades. | `packages/keyfree/src/mcp.ts`: seven tools, all request-side; the MCP self-check (`npm run smoke`) asserts it. |
+| 3.4 | The agent has no tool to change rules, roles, pause or the policy's code. | `packages/keyfree/src/mcp.ts`: nine tools, all request-side (`keyfree_upgrade` asks for a proxy upgrade the council allowed; it cannot allow one); the MCP self-check (`npm run smoke`) asserts the list. |
 | 3.5 | Before broadcasting, the tool checks that the signed transaction is the one it checked, from the policy's address. | `checkSigned()` in `packages/keyfree/src/core.ts`; attacks A18, A19 (changed calldata, target, nonce, chain or value; another signer; garbage) are refused. |
 
 ## 4. Widening takes time; braking is instant
@@ -73,15 +74,36 @@ Deploys through the factory (each landed at the address the policy promised befo
 
 | What | Count | Run |
 |---|---|---|
-| Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 44 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
-| Policy contract unit tests (Rust) | 111 | `cd contract && cargo test -- --test-threads=1` |
-| keyfree package tests (5 unit, 7 attacks on the tool and the MCP server) | 12 | `cd packages/keyfree && npm test` |
+| Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 53 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
+| Policy contract unit tests (Rust) | 133 | `cd contract && cargo test -- --test-threads=1` |
+| keyfree package tests (5 unit, 8 attacks on the tool and the MCP server) | 13 | `cd packages/keyfree && npm test` |
 | MCP self-check against the live policy | 1 script | `cd packages/keyfree && npm run smoke` |
+
+## 7. A treasury upgrade: only the one the council allowed
+
+The treasury (`packages/keyfree/demo/treasury`) is an ERC-1967 proxy with no way to change its admin. All
+three parts were deployed keyless through the policy's factory, at addresses the policy promised first:
+
+| Part | Address | Base Sepolia | NEAR request |
+|---|---|---|---|
+| TreasuryV1(owner) | [`0xd52f…284c`](https://sepolia.basescan.org/address/0xd52f1a3d44e9361fbd7f538abefbae9647b2284c) | [0xe90a60da…](https://sepolia.basescan.org/tx/0xe90a60dac64b966a7ca93474f26ed8fed46e3a2a43da97e3620480ede2d23217) | [6hninm9Q…](https://testnet.nearblocks.io/txns/6hninm9Qq1LozYM5EczgMqxAnHaoVAJdzJSgdM8p1UL) |
+| TreasuryProxy(v1, admin = the policy) | [`0x5319…dfaa`](https://sepolia.basescan.org/address/0x5319b76fda54f4144d6b134016f6415ad169dfaa) | [0x158eb231…](https://sepolia.basescan.org/tx/0x158eb231d17777a82148d34ddd9a09fdc786d3758e0df3c537c924e6ed43ac85) | [BpPM6jUa…](https://testnet.nearblocks.io/txns/BpPM6jUacnFp55dHf8D5svpZZTXPyt8tGMdYVWMV77nX) |
+| TreasuryV2(owner, 0.01 ETH a day) | [`0x269b…4060`](https://sepolia.basescan.org/address/0x269bdae85a7864e882bdd97d61fc5bc084594060) | [0xf880c963…](https://sepolia.basescan.org/tx/0xf880c96365282fcdc01c240ebc35ccba15e0c792b0e3b8134f6ebc55dc6348eb) | [kf2SfpMD…](https://testnet.nearblocks.io/txns/kf2SfpMDZQXv9g45WqUUgQA38SVYVoyvJGXuq4cMsxW) |
+
+| # | Claim | Evidence |
+|---|---|---|
+| 7.1 | The proxy's admin is the policy's keyless address, so no person can change the treasury's code. | ERC-1967 admin slot of the proxy = `0x43e3…fcb0` (`evidence/v14.log`, treasury); `TreasuryProxy.sol` has no function that changes it. |
+| 7.2 | An upgrade needs a council rule for exactly (chain, proxy, implementation), and it waits the rules delay. | Before rule 13 the agent's request was refused `proxy upgrade not on the allow list`; applying rule 13 early: `rule delay not over`; the agent's key cannot propose it: `Access key does not allow method propose_rule` (`evidence/v14.log`, allow). |
+| 7.3 | With the rule, the agent upgraded the live treasury from v1 to v2 through the `keyfree upgrade` tool. | [0xd9673701…](https://sepolia.basescan.org/tx/0xd9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25), NEAR [3Hhip3r3…](https://testnet.nearblocks.io/txns/3Hhip3r38i4oAU2mk7mjJKTmEE56XbGVzjVWwmgXhMAp), nonce 10. Check now: `version()` of the proxy returns 2. Before signing, the tool checked the admin slot, the implementation's code, a simulation and that the policy's bytes equal viem's. |
+| 7.4 | Any other upgrade is refused: another implementation, the same upgrade again, a rollback to v1. | `proxy upgrade not on the allow list` for all three, live (`evidence/v14.log`, allow and after); the allowance is gone after the request (`get_rules`: `allowed_proxy_upgrades: []`). |
+| 7.5 | The calldata is built by the policy, never taken from the caller, and equals viem's. | `upgrade_call` in `contract/src/lib.rs`; golden test `golden_rlp_proxy_upgrade_matches_viem`. |
+| 7.6 | NEAR Read MPC confirms the proxy's `Upgraded` log, and not a forged position. | Real log: [8PdE3yE5…](https://testnet.nearblocks.io/txns/8PdE3yE5zPyDPsQSFwCBc5tg3d6v2BmF38qfsJcsaAL8) returned `true` in 21 s, journal line 10 is `confirmed`; block number + 1: [CaJnpGjZ…](https://testnet.nearblocks.io/txns/CaJnpGjZqpzg3XLbQ8DZHp3V19pSGrVHZ3paZq6icrJv) returned `false`. Golden test `golden_payload_hash_of_the_confirmed_treasury_upgrade` reproduces both hashes offline. |
 
 ## Not claimed (yet)
 
 - Only testnets: NEAR testnet and Base Sepolia. Nothing on mainnet.
 - Arbitrum: the contract knows the chain, but no deploy there has been run.
-- `resign`, `release`, `retry` and `confirm_stuck` are covered by unit tests only; the live run had no MPC or network failure to recover from.
+- `resign`, `resign_proxy_upgrade`, `release`, `retry` and `confirm_stuck` are covered by unit tests only; the live runs had no MPC or network failure to recover from.
+- Calls other than `upgradeTo` on a proxy: the policy cannot sign them at all.
 - Retiring a policy (`sweep`, `finish_retire`) is covered by unit tests only; the live policy is kept for review.
 - In the live run the owner key sat on the same laptop as the agent. See SECURITY.md.

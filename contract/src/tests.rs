@@ -1563,6 +1563,28 @@ fn the_upgraded_log_names_the_proxy_and_the_implementation() {
     assert_ne!(env::sha256_array(&p), env::sha256_array(&upgraded_payload(6, &u(0x55), &[1; 32], &l, &[0xcd; 32], 1)), "another implementation, another hash");
 }
 
+// The live treasury upgrade on Base Sepolia (evidence/v14.log): Read MPC CONFIRMED expected hash 6d4522da…0f89 and
+// refused the forged position (block number + 1) with a94b80b0…6c34.
+fn live_upgrade() -> (ProxyEntry, [u8; 32], [u8; 32]) {
+    let h = |s: &str| -> Vec<u8> { hex::decode(s).unwrap() };
+    let mut u = ProxyEntry { proxy: [0; 20], implementation: [0; 20], tx_hash: [0; 32], status: SIGNED };
+    u.proxy.copy_from_slice(&h("5319b76fda54f4144d6b134016f6415ad169dfaa"));
+    u.implementation.copy_from_slice(&h("269bdae85a7864e882bdd97d61fc5bc084594060"));
+    let mut tx = [0u8; 32]; tx.copy_from_slice(&h("d9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25"));
+    let mut bh = [0u8; 32]; bh.copy_from_slice(&h("34b322b5ebe297954f593718b1c52f316f3872588c1f95813e7f8aace4f3840d"));
+    (u, tx, bh)
+}
+
+#[test]
+fn golden_payload_hash_of_the_confirmed_treasury_upgrade() {
+    ctx("keyfree.testnet", 10);
+    let (u, tx, bh) = live_upgrade();
+    let real = LogIn { log_index: 0, transaction_index: 2, block_hash: String::new(), block_number: 51962615 };
+    assert_eq!(hex::encode(env::sha256_array(&upgraded_payload(6, &u, &tx, &real, &bh, 1))), "6d4522daea0ef726ccd5afefd0b18435d31b1714f82b6339e3b89e03c2e30f89");
+    let forged = LogIn { block_number: 51962616, ..real };
+    assert_eq!(hex::encode(env::sha256_array(&upgraded_payload(6, &u, &tx, &forged, &bh, 1))), "a94b80b0e5fcfd71f62023d7b546619e2f6395d190c7599c43e2742bfbe86c34");
+}
+
 #[test]
 fn migrate_reads_the_v13_state() {
     let c = contract();

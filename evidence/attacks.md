@@ -29,11 +29,11 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | A17 | find an owner tool in MCP, or pass a private key to a tool | refused | no such tool; unknown argument rejected | tool: 1 test |  |
 | A18 | get another transaction broadcast than the one checked (calldata, target, nonce, chain or value changed) | refused | not the one that was checked | tool: 3 tests |  |
 | A19 | get a transaction signed by another key broadcast, or garbage | refused | not by the policy's address / does not parse | tool: 2 tests |  |
-| A20 | upgrade the treasury proxy to an implementation the council never allowed (one that pays someone else) | refused | proxy upgrade not on the allow list | `another_implementation_is_refused` |  |
+| A20 | upgrade the treasury proxy to an implementation the council never allowed (one that pays someone else) | refused | proxy upgrade not on the allow list | `another_implementation_is_refused` | v14 allow (the factory stood in for the attacker's implementation) |
 | A21 | use an allowed implementation on another proxy | refused | proxy upgrade not on the allow list | `another_proxy_is_refused` |  |
-| A22 | sign the same allowed upgrade a second time | refused | proxy upgrade not on the allow list (the allowance is used up) | `the_same_upgrade_cannot_be_signed_twice` |  |
-| A23 | roll the treasury back to its old version | refused | proxy upgrade not on the allow list | `going_back_to_the_old_version_needs_its_own_rule` |  |
-| A24 | allow an upgrade itself | refused | only owner | `the_agent_cannot_allow_an_upgrade` |  |
+| A22 | sign the same allowed upgrade a second time | refused | proxy upgrade not on the allow list (the allowance is used up) | `the_same_upgrade_cannot_be_signed_twice` | v14 after |
+| A23 | roll the treasury back to its old version | refused | proxy upgrade not on the allow list | `going_back_to_the_old_version_needs_its_own_rule` | v14 after |
+| A24 | allow an upgrade itself | refused | only owner | `the_agent_cannot_allow_an_upgrade` | v14 allow: the agent's key cannot even call it |
 | A25 | get a signed upgrade to another implementation broadcast | refused | not the one that was checked | tool: 1 test |  |
 | A26 | give the nonce of a proxy upgrade to a deploy | refused | nonce already used on this chain | `a_deploy_never_takes_the_nonce_of_a_proxy_upgrade` |  |
 

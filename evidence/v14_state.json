@@ -23,5 +23,10 @@
   }
  ],
  "proxy": "0x5319b76fda54f4144d6b134016f6415ad169dfaa",
- "v2": "0x269bdae85a7864e882bdd97d61fc5bc084594060"
+ "v2": "0x269bdae85a7864e882bdd97d61fc5bc084594060",
+ "rule": 13,
+ "upgrade": {
+  "nonce": 10,
+  "tx": "0xd9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25"
+ }
 }

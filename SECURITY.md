@@ -7,13 +7,14 @@ by four different accounts:
 
 | Role | Can do at once | Can do only after the delay |
 |---|---|---|
-| Agent (an AI or CI) | ask for a deploy of allowed code; retry, re-sign or confirm its own deploys | nothing else |
-| Owner | brake (see below) | rules (new code, chain, factory, higher caps), an upgrade and a new agent, all proposed by the owner alone; plus everything a guardian can do |
+| Agent (an AI or CI) | ask for a deploy of allowed code, or for an allowed proxy upgrade; retry, re-sign or confirm its own requests | nothing else |
+| Owner | brake (see below) | rules (new code, chain, factory, higher caps, a proxy upgrade), an upgrade of the policy and a new agent, all proposed by the owner alone; plus everything a guardian can do |
 | Guardian | brake | propose, approve or cancel a new owner, guardian or reserve, or the retirement: each needs 2 of the 3 council members |
 | Reserve | brake | same as the guardian |
 
 Brakes are instant and need one council member (owner, guardian or reserve): pause, revoke the agent, remove
-code, disable a chain, remove a factory, lower caps, cancel an upgrade or a rule proposal.
+code or an allowed proxy upgrade, disable a chain, remove a factory, lower caps, cancel an upgrade or a rule
+proposal.
 
 Anything that widens power waits, and the wait cannot be shortened, not even by two members together:
 
@@ -48,7 +49,7 @@ only as safe as that place.
   journal can lie. Keyfree adds rules in front of it; it does not remove that trust.
 - **The EVM RPC** the tool talks to: the tool checks what the policy built against viem and what MPC signed
   against what it checked, so a lying RPC can make a deploy fail or look pending, not change what is signed.
-- **The policy code.** It is open and tested (111 unit tests, golden tests against viem, an attack bench of 44 attacks: `npm run attacks`). During development
+- **The policy code.** It is open and tested (133 unit tests, golden tests against viem, an attack bench of 53 attacks: `npm run attacks`). During development
   it went through two security reviews, each done by a separate AI reviewer session that did not write the
   code; their findings were fixed with tests. It has not had a professional human audit.
 
@@ -62,12 +63,15 @@ only as safe as that place.
 - **A signed transaction is public.** The policy returns the signed raw transaction; anyone who sees it can
   broadcast it. That is sending, not a new signature: it can only spend the nonce on the content the rules
   allowed.
-- **Deploys only.** The policy signs contract creations (plain or through its own CREATE2 factory) with value
-  0. It does not sign calls or transfers.
+- **Deploys and one kind of call.** The policy signs contract creations (plain or through its own CREATE2
+  factory) and `upgradeTo(implementation)` on a proxy, always with value 0. It signs no other call and no
+  transfer.
 - **Money after the deploy.** Keyfree fixes who a contract pays at the moment it is deployed: an owner or a
   recipient passed to the constructor is part of the allowed hash. After that the contract obeys its own
-  code and its owner. If the vault's owner key is stolen, or the vault has an admin who can change the
-  owner, Keyfree does not help; allow only code whose money paths you have read.
+  code and its owner. If the vault's owner key is stolen, Keyfree does not help. For a treasury behind a
+  proxy whose admin is the policy, a code change is an allowed upgrade or nothing: the council should allow
+  only an implementation whose code it has read (best one it deployed through Keyfree, with an allowed
+  hash). A proxy with another admin, or with a way to change its admin, is outside Keyfree.
 - Testnets only so far; Arbitrum not run yet; see "Not claimed" in CLAIMS.md.
 
 ## Reporting

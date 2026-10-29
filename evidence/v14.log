@@ -34,3 +34,47 @@ OK   treasury v2: landed, gas 282683 of 469570  https://testnet.nearblocks.io/tx
 OK   treasury v2 at the promised address 0x269bdae85a7864e882bdd97d61fc5bc084594060
 OK   proxy admin = the policy's keyless address 0x43e3cb8d471680307f0c232e5ac190828681fcb0
 OK   proxy 0x5319b76fda54f4144d6b134016f6415ad169dfaa runs TreasuryV1 (version() = 1)
+--- 2026-10-29T22:40:00.058Z upgrade (6 ok, 0 fail)
+  log: keyfree: upgrade to code sha256 764eb8f81ff528e00bf7f5967ddd40f7769022a6e79cf0658acff43ca767a52b (362719 bytes, readable now) proposed, ready at unix 1793313587
+OK   guardian reads the proposed code from the chain: 362719 bytes, sha256 764eb8f81ff528e0... == local build "v14"
+OK   apply before the delay -> Smart contract panicked: upgrade delay not over
+waiting 175 s for the upgrade delay
+  log: keyfree: applying upgrade 764eb8f81ff528e00bf7f5967ddd40f7769022a6e79cf0658acff43ca767a52b
+  log: keyfree: migrated to version 3
+OK   upgraded WITHOUT a key: build v14, version 3  https://testnet.nearblocks.io/txns/C3J8KRino8NDCcKf9gChqooYM8bTAPQhHvAn9BAGf1cH
+OK   policy still has 0 keys
+OK   v13 state migrated: 10 codes, next nonce 10, journal line 6 "confirmed"
+OK   new: allowed_proxy_upgrades = []
+--- 2026-10-29T22:47:25.991Z agent agent14.keyfree-lab.testnet (2 ok, 0 fail)
+  created agent14.keyfree-lab.testnet (function-call key on 8 methods, no allowance) https://testnet.nearblocks.io/txns/o5Tb3Ny9JHus1kaFnYMfmV3DeqkQRjgKpEUcBA4XYun
+  log: keyfree: keyfree-lab.testnet proposes Agent = agent14.keyfree-lab.testnet, ready at Some(1793314035)
+OK   apply the new agent before the delay -> Smart contract panicked: role change delay not over
+waiting 182 s for the agent delay
+  log: keyfree: Agent is now agent14.keyfree-lab.testnet
+OK   agent is now agent14.keyfree-lab.testnet (write it into v14/config.json)
+--- 2026-10-29T22:49:08.032Z allow (5 ok, 0 fail)
+OK   agent asks for the upgrade before any rule -> Smart contract panicked: proxy upgrade not on the allow list
+OK   agent's key allows the upgrade itself -> Access key does not allow method propose_rule
+  log: keyfree: rule 13 proposed: AllowProxyUpgrade { chain_id: 84532, proxy_hex: "0x5319b76fda54f4144d6b134016f6415ad169dfaa", implementation_hex: "0x269bdae85a7864e882bdd97d61fc5bc084594060" }, ready at unix 1793314135
+proposed rules 13: AllowProxyUpgrade
+OK   apply a rule before the delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 13 applied: AllowProxyUpgrade { chain_id: 84532, proxy_hex: "0x5319b76fda54f4144d6b134016f6415ad169dfaa", implementation_hex: "0x269bdae85a7864e882bdd97d61fc5bc084594060" }
+applied rules 13
+OK   allowed: 84532:0x5319b76fda54f4144d6b134016f6415ad169dfaa:0x269bdae85a7864e882bdd97d61fc5bc084594060
+OK   agent asks for another implementation (the factory stands in for an attacker's contract) -> Smart contract panicked: proxy upgrade not on the allow list
+--- 2026-10-29T22:53:24.376Z after (5 ok, 0 fail)
+OK   proxy 0x5319b76fda54f4144d6b134016f6415ad169dfaa runs TreasuryV2 now (version() = 2)
+OK   journal line 10: proxy upgrade to v2, signed, tx 0xd9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25
+OK   the allowance is used up
+OK   the same upgrade again -> Smart contract panicked: proxy upgrade not on the allow list
+OK   rollback to v1 -> Smart contract panicked: proxy upgrade not on the allow list
+--- 2026-10-29T23:03:50.241Z confirm (4 ok, 0 fail)
+OK   Upgraded(0x269BdAE85A7864e882bdd97d61FC5BC084594060) from the proxy, block 51962615
+  log: keyfree: Read MPC chain 84532 tx 0xd9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25 expected a94b80b0e5fcfd71f62023d7b546619e2f6395d190c7599c43e2742bfbe86c34
+  log: keyfree: chain 84532 nonce 10 not confirmed (timeout or mismatch), can retry
+OK   FORGED log position: Read MPC answered false in 121.5 s  https://testnet.nearblocks.io/txns/CaJnpGjZqpzg3XLbQ8DZHp3V19pSGrVHZ3paZq6icrJv
+  log: keyfree: Read MPC chain 84532 tx 0xd9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25 expected 6d4522daea0ef726ccd5afefd0b18435d31b1714f82b6339e3b89e03c2e30f89
+  log: keyfree: chain 84532 nonce 10 CONFIRMED by Read MPC
+OK   real Upgraded log: Read MPC answered true in 21.2 s  https://testnet.nearblocks.io/txns/8PdE3yE5zPyDPsQSFwCBc5tg3d6v2BmF38qfsJcsaAL8
+OK   journal line is confirmed

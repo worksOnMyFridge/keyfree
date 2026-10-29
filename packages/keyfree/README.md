@@ -11,13 +11,15 @@ The rules live in a NEAR contract (the policy), NEAR MPC signs, this package che
 | `keyfree_code_hash` | the hash the allow list must hold for an artifact + constructor arguments (offline) |
 | `keyfree_preview` | builds and checks a deploy, signs nothing |
 | `keyfree_deploy` | the policy builds the transaction, MPC signs, the tool re-checks and broadcasts |
-| `keyfree_retry` | re-signs a deploy the MPC did not answer in time (same nonce, same content) |
-| `keyfree_confirm` | NEAR Read MPC confirms the factory's `Deployed` log: the journal line becomes a fact |
+| `keyfree_upgrade_preview` | builds and checks `upgradeTo(implementation)` on a proxy, signs nothing |
+| `keyfree_upgrade` | one proxy upgrade the council allowed: the policy builds the call, MPC signs, the tool re-checks and broadcasts |
+| `keyfree_retry` | re-signs a deploy or upgrade the MPC did not answer in time (same nonce, same content) |
+| `keyfree_confirm` | NEAR Read MPC confirms the factory's `Deployed` log (or the proxy's `Upgraded` log): the journal line becomes a fact |
 | `keyfree_journal` | the policy's journal for a chain |
 
-The agent gets no tool for rules, roles, pause or upgrades. Its NEAR key is a function-call key that may only
-call `request_deploy`, `resign`, `retry`, `release`, `confirm`, `confirm_stuck`; anything else is refused by the
-protocol before it reaches the contract.
+The agent gets no tool for rules, roles, pause or the policy's own code. Its NEAR key is a function-call key that
+may only call `request_deploy`, `request_proxy_upgrade`, `resign`, `resign_proxy_upgrade`, `retry`, `release`,
+`confirm`, `confirm_stuck`; anything else is refused by the protocol before it reaches the contract.
 
 ## What the tool checks before and after signing
 
@@ -28,6 +30,10 @@ protocol before it reaches the contract.
    address equals viem's CREATE2.
 5. The address holds `gas limit x max fee` (a signed nonce that cannot be mined would block the chain's queue).
 6. The signed transaction is that same transaction and recovers to the policy's address. Only then it is broadcast.
+
+For a proxy upgrade, steps 1 and 2 are: exactly this (chain, proxy, implementation) is allowed, the proxy's
+ERC-1967 admin slot holds the policy's address, and the implementation has code. After broadcasting, the
+proxy's `Upgraded` log must name that implementation.
 
 ## Run
 
@@ -42,4 +48,5 @@ node dist/cli.js status                              # from a folder with keyfre
 Claude Code: open `demo/` (it has `.mcp.json`), then ask "deploy Counter with start 1 to Base Sepolia".
 
 Human (council) commands sign with a key from `~/.near-credentials` (`--as <account>`, default `owner`):
-`keyfree rules allow-code <hash>`, `keyfree rules apply <id>`, `keyfree pause`, ... see `keyfree help`.
+`keyfree rules allow-code <hash>`, `keyfree rules allow-upgrade <chain> <proxy> <implementation>`,
+`keyfree rules apply <id>`, `keyfree pause`, ... see `keyfree help`.
