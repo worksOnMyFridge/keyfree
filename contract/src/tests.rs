@@ -56,7 +56,7 @@ fn high_s() -> String {
 #[test]
 fn golden_signature_gives_the_broadcast_tx() {
     let mut c = contract();
-    assert_eq!(c.on_signed(answer(R, S, 0)).as_deref(), Some(RAW));
+    assert_eq!(c.handle_signed(answer(R, S, 0)).as_deref(), Some(RAW));
     assert_eq!(c.get_next_nonce(84532), Some(5));
     assert!(c.pending.is_none() && c.stuck.is_none());
 }
@@ -64,7 +64,7 @@ fn golden_signature_gives_the_broadcast_tx() {
 #[test]
 fn high_s_is_flipped_to_the_same_tx() {
     let mut c = contract();
-    assert_eq!(c.on_signed(answer(R, &high_s(), 1)).as_deref(), Some(RAW));
+    assert_eq!(c.handle_signed(answer(R, &high_s(), 1)).as_deref(), Some(RAW));
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn broken_answers_never_freeze_the_contract() {
     ];
     for (name, res) in bad {
         let mut c = contract();
-        assert_eq!(c.on_signed(res), None, "{name}");
+        assert_eq!(c.handle_signed(res), None, "{name}");
         assert!(c.pending.is_none(), "{name}: pending cleared");
         assert_eq!(c.stuck.as_ref().map(|p| p.nonce), Some(4), "{name}: nonce stays bound");
         assert_eq!(c.get_next_nonce(84532), Some(4), "{name}: nonce not advanced");
@@ -95,7 +95,7 @@ fn broken_answers_never_freeze_the_contract() {
 fn signature_of_another_key_is_refused() {
     let mut c = contract();
     c.eth_address = Some("0x0000000000000000000000000000000000000001".into());
-    assert_eq!(c.on_signed(answer(R, S, 0)), None);
+    assert_eq!(c.handle_signed(answer(R, S, 0)), None);
     assert!(c.stuck.is_some());
 }
 
@@ -103,14 +103,14 @@ fn signature_of_another_key_is_refused() {
 fn answer_without_pending_is_ignored() {
     let mut c = contract();
     c.pending = None;
-    assert_eq!(c.on_signed(answer(R, S, 0)), None);
+    assert_eq!(c.handle_signed(answer(R, S, 0)), None);
 }
 
 #[test]
 #[should_panic(expected = "an earlier request did not finish")]
 fn new_request_blocked_while_stuck() {
     let mut c = contract();
-    c.on_signed(Err(PromiseError::Failed));
+    c.handle_signed(Err(PromiseError::Failed));
     ctx("agent.testnet", 20);
     c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
 }
@@ -118,7 +118,7 @@ fn new_request_blocked_while_stuck() {
 #[test]
 fn retry_resigns_only_the_same_content() {
     let mut c = contract();
-    c.on_signed(Err(PromiseError::Failed));
+    c.handle_signed(Err(PromiseError::Failed));
     ctx("agent.testnet", 20);
     let _ = c.retry(20_000_000, 1_000_000);
     let p = c.pending.clone().unwrap();
@@ -306,7 +306,7 @@ fn guardian_pause_blocks_deploys() {
 #[test]
 fn leaked_signature_and_retry_can_only_spend_the_nonce_on_the_same_deploy() {
     let mut c = contract();
-    c.on_signed(Err(PromiseError::Failed));
+    c.handle_signed(Err(PromiseError::Failed));
     let leaked = tx_of(c.stuck.as_ref().unwrap());
     ctx("agent.testnet", 20);
     let _ = c.retry(30_000_000, 2_000_000);
@@ -322,9 +322,9 @@ fn leaked_signature_and_retry_can_only_spend_the_nonce_on_the_same_deploy() {
 #[test]
 fn proof_that_the_stuck_deploy_landed_moves_the_nonce_on() {
     let mut c = contract();
-    c.on_signed(Err(PromiseError::Failed));
+    c.handle_signed(Err(PromiseError::Failed));
     ctx("keyfree.testnet", 30);
-    assert!(c.on_stuck_confirmed(84532, 4, "ab".repeat(32), Ok(json!({ "payload_hash": "x" }))));
+    assert!(c.handle_stuck_confirmed(84532, 4, "ab".repeat(32), Ok(json!({ "payload_hash": "x" }))));
     assert!(c.stuck.is_none());
     assert_eq!(c.get_next_nonce(84532), Some(5));
 }
@@ -332,10 +332,10 @@ fn proof_that_the_stuck_deploy_landed_moves_the_nonce_on() {
 #[test]
 fn failed_or_stale_proof_keeps_it_stuck() {
     let mut c = contract();
-    c.on_signed(Err(PromiseError::Failed));
+    c.handle_signed(Err(PromiseError::Failed));
     ctx("keyfree.testnet", 30);
-    assert!(!c.on_stuck_confirmed(84532, 4, "ab".repeat(32), Err(PromiseError::Failed)));
-    assert!(!c.on_stuck_confirmed(84532, 3, "ab".repeat(32), Ok(json!({}))));
+    assert!(!c.handle_stuck_confirmed(84532, 4, "ab".repeat(32), Err(PromiseError::Failed)));
+    assert!(!c.handle_stuck_confirmed(84532, 3, "ab".repeat(32), Ok(json!({}))));
     assert_eq!(c.stuck.as_ref().map(|p| p.nonce), Some(4));
     assert_eq!(c.get_next_nonce(84532), Some(4));
 }
@@ -408,7 +408,7 @@ fn proof_of_an_old_stuck_nonce_never_moves_the_nonce_back() {
     c.stuck = Some(Pending { nonce: 2, ..pending() });
     signed_line(&mut c, 2, REQUESTED);
     ctx("keyfree.testnet", 30);
-    assert!(c.on_stuck_confirmed(84532, 2, "ab".repeat(32), Ok(json!({}))));
+    assert!(c.handle_stuck_confirmed(84532, 2, "ab".repeat(32), Ok(json!({}))));
     assert_eq!(c.get_next_nonce(84532), Some(4));
 }
 
@@ -420,7 +420,7 @@ fn failed_resign_leaves_the_signed_deploy_as_it_was() {
     ctx("agent.testnet", 20);
     let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
     ctx("keyfree.testnet", 21);
-    assert_eq!(c.on_signed(Err(PromiseError::Failed)), None);
+    assert_eq!(c.handle_signed(Err(PromiseError::Failed)), None);
     assert!(c.pending.is_none() && c.stuck.is_none(), "a failed re-sign opens nothing");
     let e = c.journal.get(&key(84532, 2)).unwrap();
     assert_eq!((e.status, e.tx_hash), (SIGNED, [1; 32]));
@@ -1020,4 +1020,70 @@ fn a_bad_factory_is_refused_at_proposal() {
     let mut c = idle();
     ctx("owner.testnet", 20);
     c.propose_rule(RuleChange::SetFactory { chain_id: 84532, factory_hex: "0x1234".into() });
+}
+
+// v12: callbacks read the raw answer (spec R12, audit v2 Н13). The mock feeds the bytes the MPC would return.
+fn ctx_answer(result: near_sdk::PromiseResult) {
+    let c = VMContextBuilder::new()
+        .current_account_id("keyfree.testnet".parse().unwrap())
+        .predecessor_account_id("keyfree.testnet".parse().unwrap())
+        .block_height(11)
+        .prepaid_gas(Gas::from_tgas(300))
+        .build();
+    testing_env!(c, near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![result]);
+}
+
+fn raw(bytes: &[u8]) -> near_sdk::PromiseResult { near_sdk::PromiseResult::Successful(bytes.to_vec()) }
+
+#[test]
+fn raw_golden_answer_still_gives_the_broadcast_tx() {
+    let mut c = contract();
+    ctx_answer(raw(&near_sdk::serde_json::to_vec(&answer(R, S, 0).unwrap()).unwrap()));
+    assert_eq!(c.on_signed().as_deref(), Some(RAW));
+}
+
+#[test]
+fn odd_raw_answers_never_freeze_the_contract() {
+    let cases: Vec<(&str, near_sdk::PromiseResult)> = vec![
+        ("empty body", raw(b"")),
+        ("not json", raw(b"\xff\x00signature")),
+        ("half json", raw(b"{\"big_r\":")),
+        ("json null", raw(b"null")),
+        ("too long", raw(&vec![b' '; 20_000])),
+        ("failed", near_sdk::PromiseResult::Failed),
+    ];
+    for (name, res) in cases {
+        let mut c = contract();
+        ctx_answer(res);
+        assert_eq!(c.on_signed(), None, "{name}");
+        assert!(c.pending.is_none(), "{name}: pending cleared");
+        assert_eq!(c.stuck.as_ref().map(|p| p.nonce), Some(4), "{name}: nonce stays bound");
+    }
+}
+
+#[test]
+fn odd_raw_answer_does_not_confirm_the_journal() {
+    let mut c = idle();
+    signed_line(&mut c, 2, SIGNED);
+    ctx_answer(raw(b"not json"));
+    assert!(!c.on_confirmed(84532, 2));
+    assert_eq!(c.journal.get(&key(84532, 2)).unwrap().status, SIGNED);
+}
+
+#[test]
+fn odd_raw_answer_does_not_move_a_stuck_nonce() {
+    let mut c = contract();
+    c.handle_signed(Err(PromiseError::Failed));
+    ctx_answer(raw(b""));
+    assert!(!c.on_stuck_confirmed(84532, 4, "ab".repeat(32)));
+    assert_eq!((c.stuck.as_ref().map(|p| p.nonce), c.get_next_nonce(84532)), (Some(4), Some(4)));
+}
+
+#[test]
+fn odd_raw_answer_does_not_set_an_address() {
+    let mut c = contract();
+    c.eth_address = None;
+    ctx_answer(raw(b"\x00\x01"));
+    assert_eq!(c.on_derived(), None);
+    assert!(c.eth_address.is_none());
 }

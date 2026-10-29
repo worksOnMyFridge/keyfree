@@ -45,6 +45,7 @@
 // higher caps) is an owner proposal that waits rules_delay_sec and any council member may cancel; narrowing
 // (remove code, disable a chain, remove a factory, lower caps) is a brake: one council member, at once.
 // A disabled chain keeps its nonce, so turning it back on can never reset the nonce (Н8).
+// v12 callbacks read their answer as raw bytes (spec R12, audit v2 Н13): no answer, however odd, panics.
 use near_sdk::serde_json::{json, Value};
 use near_sdk::json_types::Base64VecU8;
 use near_sdk::store::{IterableSet, LazyOption, LookupMap, LookupSet};
@@ -56,6 +57,8 @@ const SECP_N: [u8; 32] = hex_lit("fffffffffffffffffffffffffffffffebaaedce6af48a0
 const SECP_HALF_N: [u8; 32] = hex_lit("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0");
 // EIP-3860 limit on init code; also keeps the callback inside its gas budget.
 const MAX_INIT_CODE: usize = 49_152;
+// Longest callback answer we read; an MPC signature or a Read MPC answer is well under 1 KB.
+const MAX_CALLBACK_BYTES: usize = 16 * 1024;
 // Open rule proposals at once (bounds the state a stolen owner key can fill).
 const MAX_RULE_PROPOSALS: usize = 8;
 // MPC yield timeout is 200 blocks; after this many blocks a pending request may be released.
@@ -390,8 +393,8 @@ impl Keyfree {
     }
 
     #[private]
-    pub fn on_derived(&mut self, #[callback_result] res: Result<String, PromiseError>) -> Option<String> {
-        let addr = res.ok().and_then(|k| eth_address_of(&k));
+    pub fn on_derived(&mut self) -> Option<String> {
+        let addr = callback_json().ok().and_then(|k| k.as_str().and_then(eth_address_of));
         match &addr {
             Some(a) => { env::log_str(&format!("keyfree: derived address {a}")); self.eth_address = addr.clone(); }
             None => env::log_str("keyfree: could not derive the address"),
@@ -543,7 +546,12 @@ impl Keyfree {
     }
 
     #[private]
-    pub fn on_signed(&mut self, #[callback_result] res: Result<Value, PromiseError>) -> Option<String> {
+    pub fn on_signed(&mut self) -> Option<String> {
+        let res = callback_json();
+        self.handle_signed(res)
+    }
+
+    fn handle_signed(&mut self, res: Result<Value, PromiseError>) -> Option<String> {
         // Never panic here: a panic would roll back `pending.take()` and freeze the contract.
         let Some(p) = self.pending.take() else { env::log_str("keyfree: answer without a pending request"); return None; };
         let outcome = match res {
@@ -596,7 +604,12 @@ impl Keyfree {
     }
 
     #[private]
-    pub fn on_stuck_confirmed(&mut self, chain_id: u64, nonce: u64, tx_hash: String, #[callback_result] res: Result<Value, PromiseError>) -> bool {
+    pub fn on_stuck_confirmed(&mut self, chain_id: u64, nonce: u64, tx_hash: String) -> bool {
+        let res = callback_json();
+        self.handle_stuck_confirmed(chain_id, nonce, tx_hash, res)
+    }
+
+    fn handle_stuck_confirmed(&mut self, chain_id: u64, nonce: u64, tx_hash: String, res: Result<Value, PromiseError>) -> bool {
         // Never panic here either.
         let still = self.stuck.as_ref().map(|p| (p.chain_id, p.nonce)) == Some((chain_id, nonce));
         let ok = res.is_ok() && still;
@@ -629,9 +642,9 @@ impl Keyfree {
     }
 
     #[private]
-    pub fn on_confirmed(&mut self, chain_id: u64, nonce: u64, #[callback_result] res: Result<Value, PromiseError>) -> bool {
+    pub fn on_confirmed(&mut self, chain_id: u64, nonce: u64) -> bool {
         // The MPC contract already matched its answer to expected_payload_hash; never panic here.
-        let ok = res.is_ok();
+        let ok = callback_json().is_ok();
         if let (true, Some(mut e)) = (ok, self.journal.get(&key(chain_id, nonce)).cloned()) {
             e.status = CONFIRMED;
             self.journal.insert(key(chain_id, nonce), e);
@@ -863,6 +876,18 @@ fn word(n: u64) -> [u8; 32] {
 fn key(chain_id: u64, nonce: u64) -> String { format!("{chain_id}:{nonce}") }
 
 fn now() -> u64 { env::block_timestamp() / 1_000_000_000 }
+
+// The answer a callback got, read by hand (spec R12, audit v2 Н13). With #[callback_result] near-sdk parses
+// the JSON in its generated wrapper and panics on an empty or non-JSON answer before our code runs, which
+// would roll the callback back. Here every odd answer (failed, too long, empty, not JSON) is just an error.
+fn callback_json() -> Result<Value, PromiseError> {
+    if env::promise_results_count() != 1 { return Err(PromiseError::Failed); }
+    let bytes = env::promise_result_checked(0, MAX_CALLBACK_BYTES)?;
+    near_sdk::serde_json::from_slice(&bytes).map_err(|_| {
+        env::log_str(&format!("keyfree: callback answer is not JSON ({} bytes)", bytes.len()));
+        PromiseError::Failed
+    })
+}
 
 // Approvals a role change needs: a new agent is the owner's call (cancellable), the council needs 2 of 3.
 fn need(role: Role) -> usize { if role == Role::Agent { 1 } else { 2 } }
