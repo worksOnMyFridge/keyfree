@@ -66,16 +66,36 @@ function createServer(): McpServer {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, async (a) => run(() => kf.deploy(a)));
 
+  const upgradeArgs = {
+    chain: chainArg,
+    proxy: z.string().describe("Address of the ERC-1967 proxy (its admin must be the policy's address)"),
+    implementation: z.string().describe("Address of the new implementation the proxy should run"),
+  };
+
+  server.registerTool("keyfree_upgrade_preview", {
+    title: "Preview a proxy upgrade",
+    description: `Build and check upgradeTo(implementation) on a proxy without signing: that the policy allows exactly this (chain, proxy, implementation), that the proxy's admin is the policy's address, that the implementation has code, the current implementation, gas, the ETH it needs up front, and that the policy's transaction equals viem's. Read only. ${RULE}`,
+    inputSchema: z.strictObject(upgradeArgs),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async (a) => run(() => kf.previewUpgrade(a)));
+
+  server.registerTool("keyfree_upgrade", {
+    title: "Upgrade a proxy",
+    description: `Switch a proxy (e.g. a treasury) to a new implementation with no private key: the policy signs upgradeTo(implementation) only if the human council allowed exactly this upgrade, and each allowance works once. The tool checks the signed bytes, broadcasts, and checks the proxy's Upgraded log. Example: "upgrade the treasury to v2" -> proxy and implementation addresses from the project's config. ${RULE}`,
+    inputSchema: z.strictObject(upgradeArgs),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, async (a) => run(() => kf.upgradeProxy(a)));
+
   server.registerTool("keyfree_retry", {
-    title: "Retry a stuck deploy",
-    description: `When keyfree_deploy said the MPC did not sign in time: re-sign the same deploy (same nonce, same content, new fees) and broadcast it. Nothing else can use that nonce. ${RULE}`,
+    title: "Retry a stuck deploy or upgrade",
+    description: `When keyfree_deploy or keyfree_upgrade said the MPC did not sign in time: re-sign the same request (same nonce, same content, new fees) and broadcast it. Nothing else can use that nonce. ${RULE}`,
     inputSchema: z.strictObject({ chain: chainArg }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, async (a) => run(() => kf.retry(a.chain)));
 
   server.registerTool("keyfree_confirm", {
-    title: "Confirm a deploy in the journal",
-    description: "Ask NEAR Read MPC to confirm a factory deploy from its Deployed log, so the policy's journal line becomes a verified fact (what landed, not what was intended). Needs a Safe block (~20 min on Base Sepolia); returns at once with blocks_to_go when it is too early - call again later.",
+    title: "Confirm a deploy or upgrade in the journal",
+    description: "Ask NEAR Read MPC to confirm a factory deploy from its Deployed log (or a proxy upgrade from the proxy's Upgraded log), so the policy's journal line becomes a verified fact (what landed, not what was intended). Needs a Safe block (~20 min on Base Sepolia); returns at once with blocks_to_go when it is too early - call again later.",
     inputSchema: z.strictObject({ chain: chainArg, nonce: z.number().int().min(0).describe("Nonce from keyfree_deploy or keyfree_journal") }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, async (a) => run(() => kf.confirm(a.chain, a.nonce)));

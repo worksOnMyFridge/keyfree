@@ -22,7 +22,14 @@
         { "id": "A16", "attack": "call any non-request method with the agent's NEAR key", "liveOnly": true, "refusal": "Access key does not allow method (NEAR protocol, before the contract runs)", "live": "v13 attacks" },
         { "id": "A17", "attack": "find an owner tool in MCP, or pass a private key to a tool", "node": "mcp: the agent gets no owner tools, and a private_key argument is rejected before the handler", "refusal": "no such tool; unknown argument rejected" },
         { "id": "A18", "attack": "get another transaction broadcast than the one checked (calldata, target, nonce, chain or value changed)", "node": ["tool: a signed transaction with other calldata (swapped init code) is not broadcast", "tool: a signed transaction to another target, nonce or chain is not broadcast", "tool: a signed transaction that sends value is not broadcast"], "refusal": "not the one that was checked" },
-        { "id": "A19", "attack": "get a transaction signed by another key broadcast, or garbage", "node": ["tool: the right transaction signed by another key is not broadcast", "tool: garbage instead of a signed transaction is not broadcast"], "refusal": "not by the policy's address / does not parse" }
+        { "id": "A19", "attack": "get a transaction signed by another key broadcast, or garbage", "node": ["tool: the right transaction signed by another key is not broadcast", "tool: garbage instead of a signed transaction is not broadcast"], "refusal": "not by the policy's address / does not parse" },
+        { "id": "A20", "attack": "upgrade the treasury proxy to an implementation the council never allowed (one that pays someone else)", "rust": "another_implementation_is_refused", "refusal": "proxy upgrade not on the allow list" },
+        { "id": "A21", "attack": "use an allowed implementation on another proxy", "rust": "another_proxy_is_refused", "refusal": "proxy upgrade not on the allow list" },
+        { "id": "A22", "attack": "sign the same allowed upgrade a second time", "rust": "the_same_upgrade_cannot_be_signed_twice", "refusal": "proxy upgrade not on the allow list (the allowance is used up)" },
+        { "id": "A23", "attack": "roll the treasury back to its old version", "rust": "going_back_to_the_old_version_needs_its_own_rule", "refusal": "proxy upgrade not on the allow list" },
+        { "id": "A24", "attack": "allow an upgrade itself", "rust": "the_agent_cannot_allow_an_upgrade", "refusal": "only owner" },
+        { "id": "A25", "attack": "get a signed upgrade to another implementation broadcast", "node": "tool: a signed proxy upgrade to another implementation is not broadcast", "refusal": "not the one that was checked" },
+        { "id": "A26", "attack": "give the nonce of a proxy upgrade to a deploy", "rust": "a_deploy_never_takes_the_nonce_of_a_proxy_upgrade", "refusal": "nonce already used on this chain" }
       ]
     },
     {
@@ -40,7 +47,8 @@
         { "id": "K10", "attack": "fill the state with proposals", "rust": "a_stolen_owner_key_cannot_fill_the_state_with_proposals", "refusal": "too many open rule proposals" },
         { "id": "K11", "attack": "one key retires the policy and takes its NEAR", "rust": "one_key_cannot_retire_the_policy", "refusal": "needs 2 of 3 approvals" },
         { "id": "K12", "attack": "retire to an outside account", "rust": "the_beneficiary_is_a_council_member", "refusal": "the beneficiary must be a council member" },
-        { "id": "K13", "attack": "one key unpauses alone", "rust": "one_unpause_vote_is_not_enough", "refusal": "needs a second vote", "live": "v13 attacks" }
+        { "id": "K13", "attack": "one key unpauses alone", "rust": "one_unpause_vote_is_not_enough", "refusal": "needs a second vote", "live": "v13 attacks" },
+        { "id": "K14", "attack": "stolen owner allows a treasury upgrade to its own implementation at once", "rust": "a_proxy_upgrade_waits_for_the_rules_delay", "refusal": "rule delay not over" }
       ]
     },
     {
@@ -50,7 +58,8 @@
         { "id": "S2", "attack": "request a deploy", "rust": "stranger_cannot_request_a_deploy", "refusal": "only agent or owner" },
         { "id": "S3", "attack": "pause it", "rust": "stranger_cannot_pause", "refusal": "only owner, guardian or reserve", "live": "v13 attacks" },
         { "id": "S4", "attack": "move a stuck nonce with a proof", "rust": "stranger_cannot_confirm_stuck", "refusal": "only agent or owner" },
-        { "id": "S5", "attack": "empty a retiring policy's state", "rust": "stranger_cannot_sweep", "refusal": "only owner, guardian or reserve" }
+        { "id": "S5", "attack": "empty a retiring policy's state", "rust": "stranger_cannot_sweep", "refusal": "only owner, guardian or reserve" },
+        { "id": "S6", "attack": "request a proxy upgrade", "rust": "a_stranger_cannot_request_a_proxy_upgrade", "refusal": "only agent or owner" }
       ]
     },
     {

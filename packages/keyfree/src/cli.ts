@@ -14,16 +14,20 @@ agent (agent key):
   hash  --artifact <file> [--args <json>] code hash the allow list must hold (or --init <hex>)
   preview --chain <c> --artifact <file>   build and check, sign nothing
   deploy  --chain <c> --artifact <file> [--args <json>] [--salt <hex>]
-  retry   --chain <c>                     re-sign a stuck deploy with new fees
+  upgrade-preview --chain <c> --proxy <addr> --implementation <addr>
+  upgrade --chain <c> --proxy <addr> --implementation <addr>   one allowed upgradeTo on a proxy
+  retry   --chain <c>                     re-sign a stuck deploy or upgrade with new fees
   confirm --chain <c> --nonce <n>         journal line -> confirmed by Read MPC (needs a Safe block)
   journal --chain <c> [--limit <n>]
 
 council (human key, --as <account>):
   rules                                   allow list, caps, open proposals
   rules allow-code <hash>                 widening: waits the rules delay, any council member may cancel
+  rules allow-upgrade <chain> <proxy> <implementation>   one upgradeTo, used up by the request
   rules allow-chain <chain> <nonce> <floor_wei> | rules set-factory <chain> <address> | rules set-limits <gas> <fee_wei>
   rules apply <id> | rules cancel <id>
-  remove-code <hash> | disable-chain <chain> | remove-factory <chain> | lower-limits <gas> <fee_wei>   brakes, at once
+  remove-code <hash> | remove-upgrade <chain> <proxy> <implementation> | disable-chain <chain> | remove-factory <chain>
+  lower-limits <gas> <fee_wei>            brakes, at once
   pause | unpause | roles
 `;
 
@@ -61,6 +65,8 @@ async function main() {
     case "status": return out(await kf.status());
     case "preview": return out(await kf.preview({ chain: f.chain, salt: f.salt, ...codeOf(f) }));
     case "deploy": return out(await kf.deploy({ chain: f.chain, salt: f.salt, ...codeOf(f) }));
+    case "upgrade-preview": return out(await kf.previewUpgrade({ chain: f.chain, proxy: f.proxy, implementation: f.implementation }));
+    case "upgrade": return out(await kf.upgradeProxy({ chain: f.chain, proxy: f.proxy, implementation: f.implementation }));
     case "retry": return out(await kf.retry(f.chain));
     case "confirm": return out(await kf.confirm(f.chain, Number(f.nonce)));
     case "journal": return out(await kf.journal(f.chain, Number(f.limit ?? 10)));
@@ -73,12 +79,14 @@ async function main() {
         sub === "allow-chain" ? { AllowChain: { chain_id: chainId(a), next_nonce: Number(b), min_fee_per_gas: Number(c) } } :
         sub === "enable-chain" ? { EnableChain: { chain_id: chainId(a) } } :
         sub === "set-factory" ? { SetFactory: { chain_id: chainId(a), factory_hex: b } } :
-        sub === "set-limits" ? { SetLimits: { max_gas_limit: Number(a), max_fee_cap: Number(b) } } : null;
+        sub === "set-limits" ? { SetLimits: { max_gas_limit: Number(a), max_fee_cap: Number(b) } } :
+        sub === "allow-upgrade" ? { AllowProxyUpgrade: { chain_id: chainId(a), proxy_hex: b, implementation_hex: c } } : null;
       if (change) return out(await council(cfg, kf, f.as, "propose_rule", { change }));
       if (sub === "apply" || sub === "cancel") return out(await council(cfg, kf, f.as, `${sub}_rule`, { id: Number(a) }));
       throw new Error(`Unknown rules command "${sub}".\n\n${HELP}`);
     }
     case "remove-code": return out(await council(cfg, kf, f.as, "remove_code", { code_hash: pos[0] }));
+    case "remove-upgrade": return out(await council(cfg, kf, f.as, "remove_proxy_upgrade", { chain_id: chainId(pos[0]), proxy_hex: pos[1], implementation_hex: pos[2] }));
     case "disable-chain": return out(await council(cfg, kf, f.as, "disable_chain", { chain_id: chainId(pos[0]) }));
     case "remove-factory": return out(await council(cfg, kf, f.as, "remove_factory", { chain_id: chainId(pos[0]) }));
     case "lower-limits": return out(await council(cfg, kf, f.as, "lower_limits", { max_gas_limit: Number(pos[0]), max_fee_cap: Number(pos[1]) }));

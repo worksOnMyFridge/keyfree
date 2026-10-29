@@ -19,6 +19,16 @@ export const FACTORY_ABI = [
   { type: "function", name: "keyfree", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
 ] as const;
 
+// ERC-1967 proxy: the one call the policy signs, and the log Read MPC confirms.
+export const PROXY_ABI = [
+  { type: "event", name: "Upgraded", anonymous: false, inputs: [{ indexed: true, name: "implementation", type: "address" }] },
+  { type: "function", name: "upgradeTo", stateMutability: "nonpayable", inputs: [{ name: "implementation", type: "address" }], outputs: [] },
+] as const;
+export const IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as const;
+export const ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103" as const;
+
+export const slotAddress = (word: Hex | undefined) => (word ? `0x${word.slice(-40)}`.toLowerCase() : null);
+
 const clients = new Map<number, PublicClient>();
 export function evm(chain: ChainConfig): PublicClient {
   let c = clients.get(chain.chain_id);

@@ -1,23 +1,34 @@
-// The agent's flows: status, preview, deploy, retry, confirm, journal. Everything the policy builds is checked
-// against viem before it is signed, and everything it signs is checked again before it is broadcast.
+// The agent's flows: status, preview, deploy, proxy upgrade, retry, confirm, journal. Everything the policy builds is
+// checked against viem before it is signed, and everything it signs is checked again before it is broadcast.
 import {
-  decodeEventLog, encodeFunctionData, getContractAddress, parseTransaction, recoverTransactionAddress, serializeTransaction,
+  decodeEventLog, encodeFunctionData, getAddress, getContractAddress, isAddress, parseTransaction, recoverTransactionAddress, serializeTransaction,
   type Hex, type TransactionSerializableEIP1559,
 } from "viem";
 import { agentKey, findChain, type ChainConfig, type Config } from "./config.js";
 import { loadCode, type CodeInput } from "./code.js";
-import { evm, FACTORY_ABI, randomSalt, txLink, addressLink } from "./evm.js";
+import { evm, FACTORY_ABI, PROXY_ABI, ADMIN_SLOT, IMPLEMENTATION_SLOT, slotAddress, randomSalt, txLink, addressLink } from "./evm.js";
 import { Policy, PolicyRefusal } from "./near.js";
 
 interface Preview { unsigned: Hex; hash: string; nonce: number; expected_address: string | null; min_gas: number }
-interface Entry { status: string; tx_hash: string; address: string; factory: string; code_hash: string; salt: string }
-interface Rules { allowed_code: string[]; max_gas_limit: string; max_fee_cap: string; rules_delay_sec: number; proposals: unknown[] }
+interface Entry {
+  kind?: "deploy" | "proxy_upgrade"; status: string; tx_hash: string;
+  address?: string; factory?: string; code_hash?: string; salt?: string; proxy?: string; implementation?: string;
+}
+interface Rules { allowed_code: string[]; allowed_proxy_upgrades?: string[]; max_gas_limit: string; max_fee_cap: string; rules_delay_sec: number; proposals: unknown[] }
 
 export interface DeployInput extends CodeInput {
   chain: string | number;
   salt?: string;
   via_factory?: boolean;
 }
+
+export interface UpgradeInput {
+  chain: string | number;
+  proxy: string;
+  implementation: string;
+}
+
+export const upgradeKey = (chainId: number, proxy: string, implementation: string) => `${chainId}:${proxy.toLowerCase()}:${implementation.toLowerCase()}`;
 
 export interface DeployResult {
   chain: string;
@@ -66,7 +77,7 @@ export class Keyfree {
       policy: this.cfg.policy, policy_keys: keys, address, build: st.build, version: st.version, paused: st.paused,
       agent: roles.agent, owner: roles.owner, guardian: roles.guardian, reserve: roles.reserve, retiring: roles.retiring,
       upgrade_delay_sec: st.upgrade_delay_sec, rules_delay_sec: rules.rules_delay_sec, pending_upgrade: st.proposed,
-      allowed_code: rules.allowed_code, max_gas_limit: rules.max_gas_limit, max_fee_cap: rules.max_fee_cap, chains,
+      allowed_code: rules.allowed_code, allowed_proxy_upgrades: rules.allowed_proxy_upgrades ?? [], max_gas_limit: rules.max_gas_limit, max_fee_cap: rules.max_fee_cap, chains,
     };
   }
 
@@ -80,16 +91,75 @@ export class Keyfree {
     return { max_fee_per_gas: max, max_priority_fee_per_gas: prio };
   }
 
-  private async previewWithFloor(args: Record<string, unknown>, chain: ChainConfig): Promise<{ pv: Preview; args: Record<string, unknown> }> {
+  private async previewWithFloor(args: Record<string, unknown>, chain: ChainConfig, method = "preview"): Promise<{ pv: Preview; args: Record<string, unknown> }> {
     try {
-      return { pv: await this.policy.view<Preview>("preview", args), args };
+      return { pv: await this.policy.view<Preview>(method, args), args };
     } catch (e) {
       const floor = /fee below the floor (\d+)/.exec(String((e as Error).message));
       if (!floor) throw asPreviewError(e);
       const f = await this.fees(chain, BigInt(floor[1]));
       const again = { ...args, max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) };
-      return { pv: await this.policy.view<Preview>("preview", again).catch((e2) => { throw asPreviewError(e2); }), args: again };
+      return { pv: await this.policy.view<Preview>(method, again).catch((e2) => { throw asPreviewError(e2); }), args: again };
     }
+  }
+
+  // A proxy upgrade, built and checked, nothing signed: the policy must allow exactly (chain, proxy, implementation),
+  // the proxy's admin must be the policy's own address, the implementation must have code, and the bytes must equal viem's.
+  private async upgradePlan(input: UpgradeInput) {
+    const chain = findChain(this.cfg, input.chain);
+    if (!isAddress(input.proxy) || !isAddress(input.implementation)) throw new Error("proxy and implementation must be 0x addresses.");
+    const proxy = getAddress(input.proxy);
+    const implementation = getAddress(input.implementation);
+    const [address, rules] = await Promise.all([this.address(), this.policy.view<Rules>("get_rules")]);
+    const k = upgradeKey(chain.chain_id, proxy, implementation);
+    if (!(rules.allowed_proxy_upgrades ?? []).includes(k)) {
+      throw new PolicyRefusal(`proxy upgrade not on the allow list (${k}). Only a human owner can allow it: keyfree rules allow-upgrade ${chain.name} ${proxy} ${implementation} (it then waits ${rules.rules_delay_sec} s and can be cancelled). Each allowance is used once.`);
+    }
+    const c = evm(chain);
+    const [admin, current, implCode] = await Promise.all([
+      c.getStorageAt({ address: proxy, slot: ADMIN_SLOT }), c.getStorageAt({ address: proxy, slot: IMPLEMENTATION_SLOT }), c.getCode({ address: implementation }),
+    ]);
+    if (slotAddress(admin) !== address.toLowerCase()) throw new Error(`The proxy ${proxy} has admin ${slotAddress(admin)}, not the policy's address ${address}. Not signing.`);
+    if (!implCode || implCode === "0x") throw new Error(`The implementation ${implementation} has no code on ${chain.name}. Not signing.`);
+    const f = await this.fees(chain);
+    const cap = Number(rules.max_gas_limit);
+    const base = { chain_id: chain.chain_id, proxy_hex: proxy, implementation_hex: implementation, max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) };
+    const first = await this.previewWithFloor({ ...base, gas_limit: cap }, chain, "preview_proxy_upgrade");
+    const data = encodeFunctionData({ abi: PROXY_ABI, functionName: "upgradeTo", args: [implementation] });
+    let est: bigint;
+    try {
+      est = await c.estimateGas({ account: address, to: proxy, data, value: 0n });
+    } catch (e) {
+      throw new Error(`The chain says this upgrade would fail (simulation): ${String((e as Error).message).split("\n")[0]}. Nothing was signed.`);
+    }
+    const gas = Math.min(cap, Math.max(first.pv.min_gas, Number((est * 125n) / 100n)));
+    const { pv, args } = await this.previewWithFloor({ ...first.args, gas_limit: gas }, chain, "preview_proxy_upgrade");
+    const mine = serializeTransaction(this.fields(chain, pv.nonce, proxy, data, args));
+    if (pv.unsigned !== mine) throw new Error("The transaction the policy built differs from viem's for the same fields. Not signing; report this.");
+    const reserve = BigInt(gas) * BigInt(args.max_fee_per_gas as number);
+    const balance = await c.getBalance({ address });
+    if (balance < reserve) {
+      throw new Error(`Not enough ETH on ${address} for this upgrade: needs ${reserve} wei up front (gas ${gas} x fee ${args.max_fee_per_gas}), has ${balance}. Fund the address; nothing was signed.`);
+    }
+    return { chain, address, proxy, implementation, current: slotAddress(current), pv, args, data, reserve, balance };
+  }
+
+  async previewUpgrade(input: UpgradeInput) {
+    const p = await this.upgradePlan(input);
+    return {
+      chain: p.chain.name, nonce: p.pv.nonce, proxy: p.proxy, from_implementation: p.current, to_implementation: p.implementation,
+      gas_limit: p.args.gas_limit, max_fee_per_gas: String(p.args.max_fee_per_gas), reserve_wei: p.reserve.toString(), balance_wei: p.balance.toString(),
+      matches_viem: true, note: "The allowance is used by the request: after it, the same upgrade (or a rollback) needs a new rule.",
+    };
+  }
+
+  async upgradeProxy(input: UpgradeInput): Promise<DeployResult> {
+    const p = await this.upgradePlan(input);
+    const res = await this.policy.call<Hex>(this.agent(), "request_proxy_upgrade", p.args, AGENT_GAS);
+    if (!res.value) {
+      throw new Error(`The MPC did not sign in time (NEAR tx ${this.policy.tx(res.txHash)}). Nonce ${p.pv.nonce} stays bound to this exact upgrade; call keyfree_retry (later, with new fees). Nothing was broadcast.`);
+    }
+    return this.broadcast(p.chain, res.value, res.txHash, p.pv.nonce, "", null, this.fields(p.chain, p.pv.nonce, p.proxy, p.data, p.args), p.implementation);
   }
 
   // Build everything, check it, but sign nothing.
@@ -178,17 +248,27 @@ export class Keyfree {
     if (!res.value) throw new Error(`Still not signed (NEAR tx ${this.policy.tx(res.txHash)}). Try again later.`);
     const t = parseTransaction(res.value);
     const entry = await this.policy.view<Entry | null>("get_entry", { chain_id: chain.chain_id, nonce: open.stuck });
-    return this.broadcast(chain, res.value, res.txHash, open.stuck, entry?.code_hash ?? "", entry && entry.address !== `0x${"0".repeat(40)}` ? entry.address : null,
-      { type: "eip1559", chainId: chain.chain_id, nonce: open.stuck, to: t.to ?? undefined, data: t.data, value: 0n, gas: t.gas!, maxFeePerGas: t.maxFeePerGas!, maxPriorityFeePerGas: t.maxPriorityFeePerGas! });
+    const upgrade = entry?.kind === "proxy_upgrade" ? entry.implementation : undefined;
+    return this.broadcast(chain, res.value, res.txHash, open.stuck, entry?.code_hash ?? "", entry?.address && entry.address !== `0x${"0".repeat(40)}` ? entry.address : null,
+      { type: "eip1559", chainId: chain.chain_id, nonce: open.stuck, to: t.to ?? undefined, data: t.data, value: 0n, gas: t.gas!, maxFeePerGas: t.maxFeePerGas!, maxPriorityFeePerGas: t.maxPriorityFeePerGas! }, upgrade);
   }
 
-  private async broadcast(chain: ChainConfig, raw: Hex, nearTx: string, nonce: number, codeHash: string, expected: string | null, want: TransactionSerializableEIP1559): Promise<DeployResult> {
+  // `upgrade` = the implementation, for a proxy upgrade (its log is Upgraded, not Deployed).
+  private async broadcast(chain: ChainConfig, raw: Hex, nearTx: string, nonce: number, codeHash: string, expected: string | null, want: TransactionSerializableEIP1559, upgrade?: string): Promise<DeployResult> {
     await checkSigned(raw, want, await this.address());
     const c = evm(chain);
     const hash = await c.sendRawTransaction({ serializedTransaction: raw });
     const rc = await c.waitForTransactionReceipt({ hash, timeout: 180_000 });
-    let address = rc.contractAddress?.toLowerCase() ?? null;
     const log = rc.logs.find((l) => l.address.toLowerCase() === want.to?.toLowerCase());
+    if (upgrade) {
+      const links = { near: this.policy.tx(nearTx), evm: txLink(chain, hash), contract: addressLink(chain, want.to!) };
+      const base = { chain: chain.name, nonce, address: want.to!.toLowerCase(), code_hash: "", near_tx: nearTx, evm_tx: hash, gas_used: rc.gasUsed.toString(), links };
+      if (rc.status !== "success" || !log) return { ...base, next: "The upgrade reverted on chain (the nonce is used, the proxy is unchanged)." };
+      const now = (decodeEventLog({ abi: PROXY_ABI, data: log.data, topics: log.topics }).args as { implementation: string }).implementation.toLowerCase();
+      if (now !== upgrade.toLowerCase()) throw new Error(`The proxy logged implementation ${now}, not ${upgrade}.`);
+      return { ...base, next: `Upgraded: the proxy now runs ${now}. To write it into the journal as a fact, call keyfree_confirm with nonce ${nonce} once the block is Safe (~20 min on Base Sepolia).` };
+    }
+    let address = rc.contractAddress?.toLowerCase() ?? null;
     if (log) address = (decodeEventLog({ abi: FACTORY_ABI, data: log.data, topics: log.topics }).args as { addr: string }).addr.toLowerCase();
     if (rc.status !== "success") {
       return { chain: chain.name, nonce, address: null, code_hash: codeHash, near_tx: nearTx, evm_tx: hash, gas_used: rc.gasUsed.toString(),
@@ -212,8 +292,9 @@ export class Keyfree {
     const c = evm(chain);
     const rc = await c.getTransactionReceipt({ hash: e.tx_hash as Hex }).catch(() => null);
     if (!rc) return { status: "not_landed", nonce, next: `Transaction ${e.tx_hash} is not on ${chain.name} yet (or a re-signed variant landed instead).` };
-    const log = rc.logs.find((l) => l.address.toLowerCase() === e.factory.toLowerCase());
-    if (!log) throw new Error("No Deployed log from our factory in that transaction: only factory deploys can be confirmed.");
+    const emitter = (e.kind === "proxy_upgrade" ? e.proxy : e.factory)?.toLowerCase();
+    const log = rc.logs.find((l) => l.address.toLowerCase() === emitter);
+    if (!log) throw new Error(e.kind === "proxy_upgrade" ? "No Upgraded log from the proxy in that transaction (it reverted?)." : "No Deployed log from our factory in that transaction: only factory deploys can be confirmed.");
     const safe = await c.getBlock({ blockTag: "safe" });
     if (safe.number < rc.blockNumber) {
       return { status: "waiting_for_safe", nonce, blocks_to_go: Number(rc.blockNumber - safe.number), next: "Call keyfree_confirm again later; Safe on Base Sepolia takes ~20 min." };

@@ -2,7 +2,7 @@
 
 Run: `npm run attacks` (offline). 2026-10-29.
 
-**44 of 44 attacks refused offline, 1 more refused live by the NEAR protocol.**
+**53 of 53 attacks refused offline, 1 more refused live by the NEAR protocol.**
 
 Contract attacks run the real policy code on near-sdk's mocked chain; tool attacks run the built keyfree package. "Seen live" points to the testnet run.
 
@@ -29,6 +29,13 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | A17 | find an owner tool in MCP, or pass a private key to a tool | refused | no such tool; unknown argument rejected | tool: 1 test |  |
 | A18 | get another transaction broadcast than the one checked (calldata, target, nonce, chain or value changed) | refused | not the one that was checked | tool: 3 tests |  |
 | A19 | get a transaction signed by another key broadcast, or garbage | refused | not by the policy's address / does not parse | tool: 2 tests |  |
+| A20 | upgrade the treasury proxy to an implementation the council never allowed (one that pays someone else) | refused | proxy upgrade not on the allow list | `another_implementation_is_refused` |  |
+| A21 | use an allowed implementation on another proxy | refused | proxy upgrade not on the allow list | `another_proxy_is_refused` |  |
+| A22 | sign the same allowed upgrade a second time | refused | proxy upgrade not on the allow list (the allowance is used up) | `the_same_upgrade_cannot_be_signed_twice` |  |
+| A23 | roll the treasury back to its old version | refused | proxy upgrade not on the allow list | `going_back_to_the_old_version_needs_its_own_rule` |  |
+| A24 | allow an upgrade itself | refused | only owner | `the_agent_cannot_allow_an_upgrade` |  |
+| A25 | get a signed upgrade to another implementation broadcast | refused | not the one that was checked | tool: 1 test |  |
+| A26 | give the nonce of a proxy upgrade to a deploy | refused | nonce already used on this chain | `a_deploy_never_takes_the_nonce_of_a_proxy_upgrade` |  |
 
 ## A thief with one or two council keys
 
@@ -47,6 +54,7 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | K11 | one key retires the policy and takes its NEAR | refused | needs 2 of 3 approvals | `one_key_cannot_retire_the_policy` |  |
 | K12 | retire to an outside account | refused | the beneficiary must be a council member | `the_beneficiary_is_a_council_member` |  |
 | K13 | one key unpauses alone | refused | needs a second vote | `one_unpause_vote_is_not_enough` | v13 attacks |
+| K14 | stolen owner allows a treasury upgrade to its own implementation at once | refused | rule delay not over | `a_proxy_upgrade_waits_for_the_rules_delay` |  |
 
 ## A stranger with no role
 
@@ -57,6 +65,7 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | S3 | pause it | refused | only owner, guardian or reserve | `stranger_cannot_pause` | v13 attacks |
 | S4 | move a stuck nonce with a proof | refused | only agent or owner | `stranger_cannot_confirm_stuck` |  |
 | S5 | empty a retiring policy's state | refused | only owner, guardian or reserve | `stranger_cannot_sweep` |  |
+| S6 | request a proxy upgrade | refused | only agent or owner | `a_stranger_cannot_request_a_proxy_upgrade` |  |
 
 ## A broken or hostile MPC answer, or a lying chain
 

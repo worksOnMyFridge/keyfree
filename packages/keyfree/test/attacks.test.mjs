@@ -8,7 +8,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { Client } from "@modelcontextprotocol/client";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { checkSigned } from "../dist/core.js";
-import { FACTORY_ABI } from "../dist/evm.js";
+import { FACTORY_ABI, PROXY_ABI } from "../dist/evm.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const policy = privateKeyToAccount(generatePrivateKey()); // stands in for the policy's MPC address
@@ -42,6 +42,14 @@ test("tool: the right transaction signed by another key is not broadcast", async
   await assert.rejects(checkSigned(await other.signTransaction(want), want, policy.address), /not by the policy's address/);
 });
 
+test("tool: a signed proxy upgrade to another implementation is not broadcast", async () => {
+  const PROXY = "0x2222222222222222222222222222222222222222";
+  const up = (impl) => ({ ...want, to: PROXY, gas: 60000n, data: encodeFunctionData({ abi: PROXY_ABI, functionName: "upgradeTo", args: [impl] }) });
+  const allowed = up("0x3333333333333333333333333333333333333333");
+  await checkSigned(await policy.signTransaction(allowed), allowed, policy.address);
+  await assert.rejects(checkSigned(await policy.signTransaction(up("0x5555555555555555555555555555555555555555")), allowed, policy.address), /not the one that was checked/);
+});
+
 test("tool: garbage instead of a signed transaction is not broadcast", async () => {
   await assert.rejects(checkSigned("0x02deadbeef", want, policy.address), /does not parse|not the one/);
 });
@@ -55,8 +63,9 @@ test("mcp: the agent gets no owner tools, and a private_key argument is rejected
   }));
   try {
     const names = (await client.listTools()).tools.map((t) => t.name);
-    assert.equal(names.length, 7);
-    assert.ok(!names.some((n) => /rule|role|pause|upgrade|allow|retire|sweep/.test(n)), names.join(","));
+    // 9 request-side tools; keyfree_upgrade asks for a proxy upgrade the council allowed, it cannot allow one
+    assert.equal(names.length, 9);
+    assert.ok(!names.some((n) => /rule|role|pause|allow|propose|apply|cancel|retire|sweep/.test(n)), names.join(","));
     const r = await client.callTool({ name: "keyfree_code_hash", arguments: { init_code_hex: "0x6000", private_key: "0x1234" } });
     assert.equal(r.isError, true);
     assert.match(r.content.map((c) => c.text).join(" "), /private_key|Unrecognized/);

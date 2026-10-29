@@ -24,8 +24,8 @@ const say = (s) => console.error(s);
 
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
-assert.deepEqual(names, ["keyfree_code_hash", "keyfree_confirm", "keyfree_deploy", "keyfree_journal", "keyfree_preview", "keyfree_retry", "keyfree_status"]);
-assert.ok(!names.some((n) => /rule|role|pause|upgrade|allow/.test(n)), "no owner tools for the agent");
+assert.deepEqual(names, ["keyfree_code_hash", "keyfree_confirm", "keyfree_deploy", "keyfree_journal", "keyfree_preview", "keyfree_retry", "keyfree_status", "keyfree_upgrade", "keyfree_upgrade_preview"]);
+assert.ok(!names.some((n) => /rule|role|pause|allow|propose|apply|cancel/.test(n)), "no owner tools for the agent");
 say(`OK   ${names.length} agent tools, no owner tools`);
 
 const st = await call("keyfree_status", {});
