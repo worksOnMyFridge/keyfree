@@ -1,0 +1,38 @@
+--- 2026-10-25T06:23:37.283Z
+code updated https://testnet.nearblocks.io/txns/6pzT5whPDJSzZ9GyQ4NtXBw5dnftdqCRFrva59qyw1FX
+from 0x985df6af31660653886e3b6a242d8f0e5380faf4: 0.0001 ETH, nonce 0 (synced into the contract)
+{
+ "label": "plain CREATE",
+ "near_tx": "https://testnet.nearblocks.io/txns/7JFJawuh1ig1XcU8L84iAJWR42pN8FJRFJuF3t8EQeUF",
+ "signed_in_s": 6.5,
+ "base_tx": "https://sepolia.basescan.org/tx/0xcde882eb6010c6c3aa80bc665c575144e7de53d22dfadeaa466305a39a1af185",
+ "status": "success",
+ "from_is_keyless_address": true,
+ "nonce": 0,
+ "contract_promised_address": null,
+ "expected": "0x36c766abEa2E4e236E965046e41d58617F9D7b5a",
+ "receipt_address": "0x36c766abea2e4e236e965046e41d58617f9d7b5a",
+ "address_matches": true,
+ "code_is_runtime": true,
+ "call_returns": "42",
+ "gas_used": 55330,
+ "cost_eth": "0.00000033198"
+}
+{
+ "label": "CREATE2 via proxy",
+ "near_tx": "https://testnet.nearblocks.io/txns/8EavPjs3pk62fktSxRFeBYstTthu1zFrAJYgFtXrzK6j",
+ "signed_in_s": 6.6,
+ "base_tx": "https://sepolia.basescan.org/tx/0x336f748bc346238fe3bca1a8785085113cc8c1091efbe764946144b78ccedb76",
+ "status": "success",
+ "from_is_keyless_address": true,
+ "nonce": 1,
+ "contract_promised_address": "0xadb3b7b30257957a7ce914e2ec7f2d10bdda715c",
+ "expected": "0xAdb3B7B30257957a7CE914E2eC7f2d10BddA715C",
+ "receipt_address": null,
+ "address_matches": true,
+ "code_is_runtime": true,
+ "call_returns": "42",
+ "gas_used": 55935,
+ "cost_eth": "0.00000033561"
+}
+contract nonce now 2, Base nonce 2

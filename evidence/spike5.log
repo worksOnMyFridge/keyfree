@@ -1,0 +1,28 @@
+--- 2026-10-25T17:33:13.978Z near
+created policy.keyfree-lab.testnet https://testnet.nearblocks.io/txns/3Pdy7GvKQQbEDu2bUitxm4CJGA4TYXmmwFuM1yoH5zU7
+created agent.keyfree-lab.testnet https://testnet.nearblocks.io/txns/6irsRTUED5G6avoLJMys34SjSgZG12d5biuZd6PNJ3hf
+v3 deployed + init https://testnet.nearblocks.io/txns/91Lz8asjb7RuxwbLEHaSQA9NzrKZfQwu9aK43tsXwkVN
+address derived on-chain: 0x8e002c85f7e3c1e37b7108fcaa9e3fa5f9d5bd10
+rules set: factory init 0x33cc7bfaa4ff…, tiny init 0xfb9fb2e46931…
+--- 2026-10-25T17:43:07.796Z base
+ETH on 0x8e002c85f7e3c1e37b7108fcaa9e3fa5f9d5bd10: 0.0001
+OK   keyless deploy of KeyfreeFactory: signed in 8.1 s, nonce 0, gas 200366  https://testnet.nearblocks.io/txns/GHs88A9PWrreqwcJWWiHk1qiTVNuoEM3R5MupEd8bTZq  https://sepolia.basescan.org/tx/0x6dc3c1e4d23b3f8ad244abb5e8149115a66ebf11d92d1349efe32978fd8721f3
+OK   factory 0xe744243604e31d7be8b76e0c8bdff4ec5f560ffd serves only 0x8e002c85f7E3c1E37b7108FcaA9e3fA5f9d5BD10
+OK   stranger calls the factory -> Execution reverted with reason: only keyfree.
+OK   factory-call encoding == viem; OK   expected address 0x693344d03f64450b09e3a071720aa252fe00fd6b
+OK   keyless deploy THROUGH the factory: signed in 8.3 s, nonce 1, gas 58949  https://testnet.nearblocks.io/txns/8VJzg2xWnd2fMNn82bC7D6GRz3h9M8NsD1AJPD5SJxjg  https://sepolia.basescan.org/tx/0x9334ebfef002ccb72b030f76ced239724c61def23b0fc496c9f52427eb3cc6bb
+OK   Deployed(0x693344D03f64450b09e3a071720aA252fe00FD6B) at log 0, block 50141591; code + call(42) at the address the contract promised
+journal: {"status":"signed","tx_hash":"0x9334ebfef002ccb72b030f76ced239724c61def23b0fc496c9f52427eb3cc6bb","address":"0x693344d03f64450b09e3a071720aa252fe00fd6b","factory":"0xe744243604e31d7be8b76e0c8bdff4ec5f560ffd","code_hash":"fb9fb2e46931e8f1035a5e589b31d7d69ea44e15806b1c71dfee37cebbbf6b16","salt":"0xd65193273a95b04eb6734a4c42e4cbb9b1eb3a6a0d551caa258c6bd6a3623bf5"}
+--- 2026-10-25T17:47:30.865Z confirm 1 Safe wrong
+waiting: safe block 50141409, ours 50141591 (182 blocks to go)
+waiting: safe block 50141409, ours 50141591 (182 blocks to go)
+sending a FORGED log position (block number + 1): must NOT be confirmed
+log: keyfree: confirming chain 84532 nonce 1 tx 0x9334ebfef002ccb72b030f76ced239724c61def23b0fc496c9f52427eb3cc6bb expected 48abe25a3e1e614ca649bfb1fb7fb2f9f9e48e700bc334ae09ca0a0223096040
+log: keyfree: chain 84532 nonce 1 not confirmed (timeout or mismatch), can retry
+confirm (Safe) answered false in 126.7 s  https://testnet.nearblocks.io/txns/6VfjqShuByoBE5SHevwJPTjKw5cHmFmNLeihXEZXbm1t
+journal: {"status":"signed","tx_hash":"0x9334ebfef002ccb72b030f76ced239724c61def23b0fc496c9f52427eb3cc6bb","address":"0x693344d03f64450b09e3a071720aa252fe00fd6b","factory":"0xe744243604e31d7be8b76e0c8bdff4ec5f560ffd","code_hash":"fb9fb2e46931e8f1035a5e589b31d7d69ea44e15806b1c71dfee37cebbbf6b16","salt":"0xd65193273a95b04eb6734a4c42e4cbb9b1eb3a6a0d551caa258c6bd6a3623bf5"}
+--- 2026-10-25T17:47:44.264Z confirm 1 Safe
+log: keyfree: confirming chain 84532 nonce 1 tx 0x9334ebfef002ccb72b030f76ced239724c61def23b0fc496c9f52427eb3cc6bb expected 0532a8f181edbd7caa7b27c1341adcdbee3ff5ddc491d4c9899abe05fcaf7771
+log: keyfree: chain 84532 nonce 1 CONFIRMED by Read MPC
+confirm (Safe) answered true in 12.2 s  https://testnet.nearblocks.io/txns/6gecenX9R5aicmeKgrfAi4AvsitA9gbV69dF8rBNUfBQ
+journal: {"status":"confirmed","tx_hash":"0x9334ebfef002ccb72b030f76ced239724c61def23b0fc496c9f52427eb3cc6bb","address":"0x693344d03f64450b09e3a071720aa252fe00fd6b","factory":"0xe744243604e31d7be8b76e0c8bdff4ec5f560ffd","code_hash":"fb9fb2e46931e8f1035a5e589b31d7d69ea44e15806b1c71dfee37cebbbf6b16","salt":"0xd65193273a95b04eb6734a4c42e4cbb9b1eb3a6a0d551caa258c6bd6a3623bf5"}

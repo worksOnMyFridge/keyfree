@@ -1,0 +1,16 @@
+--- 2026-10-25T16:04:27.007Z
+v2 deployed + init in one tx https://testnet.nearblocks.io/txns/Ed26LHWHLVEb93oFvRRVj28jKb9XBdyBnvjpWHNcqB8o
+address derived ON-CHAIN by the contract: 0x985df6af31660653886e3b6a242d8f0e5380faf4
+rules: code fb9fb2e46931…, chain 84532 from nonce 2; ETH left 0.00009933240999966
+OK   stranger re-inits the contract -> Smart contract panicked: only the contract account
+OK   agent changes the rules -> Smart contract panicked: only owner
+FAIL stranger requests a deploy -> Account proba2.nearmancer-spike.testnet lacks balance 212972121926778700000000 yoctoNear for state
+OK   agent deploy #1 (key still exists): signed in 7.0 s, from 0x985df6af31660653886E3b6a242d8F0E5380FaF4, nonce 2, contract 0x15f4b27a060b6fd34ef152343fe4fbceb731c31e, code+call(42) true  https://testnet.nearblocks.io/txns/GSVV34yoEaNHCuMcddr9zwk1hQhNpas1pEGezwxPRBMq  https://sepolia.basescan.org/tx/0x320b65835c904d6085c3be751fa46fb8463e4a539d05d4c1674ac0f4ab7b677c
+keys before: ed25519:6ibt735VU89dtjGrzSbxCV4qT4h9inHmSo45gRCc1aYt
+deleted the only key https://testnet.nearblocks.io/txns/8G4fVFdwuVzTdoheznVdkuEW9A3bAQKEVVYqRDEFSZQA
+OK   keys after: 0
+OK   old key tries to redeploy the contract -> Access key ed25519:6ibt735VU89dtjGrzSbxCV4qT4h9inHmSo45gRCc1aYt does not exist on account keyfree.nearmancer-spike.testnet
+OK   agent deploy #2 via CREATE2 (no key on the account): signed in 8.0 s, from 0x985df6af31660653886E3b6a242d8F0E5380FaF4, nonce 3, contract 0x0b6706221F77d1DF4D6Fd5753f040A8785c4ef7a, code+call(42) true  https://testnet.nearblocks.io/txns/DB9n93NezFdzmUrbAPs92vEirStLNUUyPnHPd6xBtGXG  https://sepolia.basescan.org/tx/0x8fabaf851be58bc7444ba764a1c4856c49678a697e83981b7a65e3f775ef85dd
+contract nonce 4, Base nonce 4, open {"pending":null,"stuck":null}
+FAIL stranger requests a deploy -> Account proba2.nearmancer-spike.testnet lacks balance 112972121926778700000000 yoctoNear for state
+OK   stranger requests a deploy -> Smart contract panicked: only agent or owner

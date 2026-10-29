@@ -1,0 +1,8 @@
+# build output
+contract/target/
+*.wasm
+node_modules/
+# keys never go to git
+*_key.json
+*.key
+.env

@@ -1,0 +1,10 @@
+--- 2026-10-25T06:26:39.386Z 0x336f748bc346238fe3bca1a8785085113cc8c1091efbe764946144b78ccedb76 expected=-
+error after 108.0 s: Smart contract panicked: Request has timed out.
+--- 2026-10-25T06:28:06.014Z 0xe1b7a40aabe5ef13c1ea1faf1f4fac35206e4601b256c7342601d18c8cde15af expected=-
+answered in 65.7 s  https://testnet.nearblocks.io/txns/FsfWz2bUbC52cZvfS1Ym9Bqy75nMrVpFCA3MNPitW1N4
+{"payload_hash":"c801562f69319e94f5bdf9bedca2f9f56e835e8f28cd6a2ef3c20e06f2931551","signature":{"scheme":"Secp256k1","big_r":{"affine_point":"0339f2c8477332e5863bbea23fcfe5b7ed447464b7e3a42775e85ca8fa8c0b3217"},"s":{"scalar":"2150f99734b8d1e3ef9bbca1ec2fb87fce3e74b479e4e9e479d8ffeadd54d90f"},"recovery_id":0}}
+--- 2026-10-25T06:28:47.687Z 0xe1b7a40aabe5ef13c1ea1faf1f4fac35206e4601b256c7342601d18c8cde15af expected=c801562f69319e94f5bdf9bedca2f9f56e835e8f28cd6a2ef3c20e06f2931551
+answered in 7.2 s  https://testnet.nearblocks.io/txns/DdH7LCZcYHn3GP58JZxLXrSgBatogJ8dY9QNrDeZgDnT
+{"payload_hash":"c801562f69319e94f5bdf9bedca2f9f56e835e8f28cd6a2ef3c20e06f2931551","signature":{"scheme":"Secp256k1","big_r":{"affine_point":"039a12ac2fc00bc1647fbc5b1423e335a51f586860f35fbde8769c9f3b4c698aac"},"s":{"scalar":"615dbb218a79a6df0ac33fb192044c866e05f957ae5be222a20f7a54fbf47216"},"recovery_id":1}}
+--- 2026-10-25T06:30:41.118Z 0xe1b7a40aabe5ef13c1ea1faf1f4fac35206e4601b256c7342601d18c8cde15af expected=c801562f69319e94f5bdf9bedca2f9f56e835e8f28cd6a2ef3c20e06f2931550
+error after 113.1 s: Smart contract panicked: Request has timed out.

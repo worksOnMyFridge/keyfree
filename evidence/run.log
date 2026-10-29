@@ -1,0 +1,50 @@
+--- 2026-10-25T05:59:36.603Z
+OK   create keyfree.nearmancer-spike.testnet  8661 ms  gas 8.35 Tgas  https://testnet.nearblocks.io/txns/EV49rxzAxXan6X7YfXAEbRaWkkxkxcS1kwLUq3wj16kv
+OK   deploy  8350 ms  gas 14.56 Tgas  https://testnet.nearblocks.io/txns/ByVJu6a5dy9f4HRm769beWtEH2x4SvWUkXUkDjBQMMGf
+OK   init  7923 ms  gas 1.61 Tgas  https://testnet.nearblocks.io/txns/8ieEVBvSG56tVJhZsxHzZPvxpCnmqycKPy5diw1Eax3B
+OK   owner allows the init code hash  8409 ms  gas 1.93 Tgas  https://testnet.nearblocks.io/txns/6ov9bwQiTkFurJFAFLkXJYPWcMiTrChKBbUafHAK9cpK
+OK   owner allows chain 84532  7841 ms  gas 1.82 Tgas  https://testnet.nearblocks.io/txns/FxLKQLEwamYP9LWGCeaFcskSVUTRTHMsBCQ5tY5VVmGs
+OK   stranger changes the rules (must FAIL)  -> WebAssembly trap: An `unreachable` opcode was executed.
+OK   agent asks to deploy code not on the list (must FAIL)  -> WebAssembly trap: An `unreachable` opcode was executed.
+OK   agent asks for a chain not allowed (must FAIL)  -> WebAssembly trap: An `unreachable` opcode was executed.
+OK   agent sets a gas price over the cap (must FAIL)  -> WebAssembly trap: An `unreachable` opcode was executed.
+OK   stranger asks to deploy (must FAIL)  -> WebAssembly trap: An `unreachable` opcode was executed.
+encoding matches viem: true
+OK   agent requests deploy, contract asks MPC to sign  13422 ms  gas 13.60 Tgas  https://testnet.nearblocks.io/txns/CarMHM65KXKe9a1fV2i2pYuAA9HLZbqbwEBmizKz6miU
+{"recovered_from":"0x985df6af31660653886E3b6a242d8F0E5380FaF4","from_is_contract_address":true,"chain_id":84532,"nonce":0,"to":null,"value":"0","data_is_allowed_code":true,"low_s":true,"would_create":"0x36c766abEa2E4e236E965046e41d58617F9D7b5a","nonce_after":1,"seconds":13.4}
+--- 2026-10-25T06:02:20.470Z
+OK   stranger changes the rules (must FAIL)  -> Smart contract panicked: only owner
+OK   agent asks to deploy code not on the list (must FAIL)  -> Smart contract panicked: code not on the allow list
+OK   agent asks for a chain not allowed (must FAIL)  -> Smart contract panicked: panicked at src\lib.rs:142:53: chain not allowed
+OK   agent sets a gas price over the cap (must FAIL)  -> Smart contract panicked: gas price over the cap
+OK   stranger asks to deploy (must FAIL)  -> Smart contract panicked: only agent or owner
+encoding matches viem: true
+OK   agent requests deploy, contract asks MPC to sign  12503 ms  gas 13.31 Tgas  https://testnet.nearblocks.io/txns/4FrmaxqAb6zrRKnAxVJ6deyJJRE29g8zgd5uSo36qFrx
+{"recovered_from":"0x985df6af31660653886E3b6a242d8F0E5380FaF4","from_is_contract_address":true,"chain_id":84532,"nonce":1,"to":null,"value":"0","data_is_allowed_code":true,"low_s":true,"would_create":"0xA6A77eA20fd68821194f7839D95331BEC1aB3631","nonce_after":2,"seconds":12.5}
+--- 2026-10-25T06:03:15.506Z
+OK   stranger changes the rules (must FAIL)  -> Smart contract panicked: only owner
+OK   agent asks to deploy code not on the list (must FAIL)  -> Smart contract panicked: code not on the allow list
+OK   agent asks for a chain not allowed (must FAIL)  -> Smart contract panicked: panicked at src\lib.rs:142:53: chain not allowed
+FAIL agent sets a gas price over the cap (must FAIL)  -> Account nearmancer-spike.testnet lacks balance 148773404181114700000009 yoctoNear for state
+OK   stranger asks to deploy (must FAIL)  -> Smart contract panicked: only agent or owner
+encoding matches viem: true
+OK   agent requests deploy, contract asks MPC to sign  5779 ms  gas 13.26 Tgas  https://testnet.nearblocks.io/txns/4bHxMRaUhAuCNRMgLCXNmsGVDWdHkymSFkei6WNY3rY6
+{"recovered_from":"0x985df6af31660653886E3b6a242d8F0E5380FaF4","from_is_contract_address":true,"chain_id":84532,"nonce":2,"to":null,"value":"0","data_is_allowed_code":true,"low_s":true,"would_create":"0x15F4B27a060B6FD34EF152343fe4FbceB731C31E","nonce_after":3,"seconds":5.8}
+--- 2026-10-25T06:03:34.930Z
+OK   stranger changes the rules (must FAIL)  -> Smart contract panicked: only owner
+OK   agent asks to deploy code not on the list (must FAIL)  -> Smart contract panicked: code not on the allow list
+FAIL agent asks for a chain not allowed (must FAIL)  -> Account nearmancer-spike.testnet lacks balance 150194351341037000000009 yoctoNear for state
+OK   agent sets a gas price over the cap (must FAIL)  -> Smart contract panicked: gas price over the cap
+OK   stranger asks to deploy (must FAIL)  -> Smart contract panicked: only agent or owner
+encoding matches viem: true
+OK   agent requests deploy, contract asks MPC to sign  6908 ms  gas 13.31 Tgas  https://testnet.nearblocks.io/txns/81tsDgQHsnrXw6KrhEoUproXGmgQ5nsqjCTouZ78mse4
+{"recovered_from":"0x985df6af31660653886E3b6a242d8F0E5380FaF4","from_is_contract_address":true,"chain_id":84532,"nonce":3,"to":null,"value":"0","data_is_allowed_code":true,"low_s":true,"would_create":"0x8D33662a7f5310B42895f73ec312cB49f3f1D3d7","nonce_after":4,"seconds":6.9}
+--- 2026-10-25T06:03:53.244Z
+OK   stranger changes the rules (must FAIL)  -> Smart contract panicked: only owner
+OK   agent asks to deploy code not on the list (must FAIL)  -> Smart contract panicked: code not on the allow list
+OK   agent asks for a chain not allowed (must FAIL)  -> Smart contract panicked: panicked at src\lib.rs:142:53: chain not allowed
+FAIL agent sets a gas price over the cap (must FAIL)  -> Account nearmancer-spike.testnet lacks balance 151976571246422200000009 yoctoNear for state
+OK   stranger asks to deploy (must FAIL)  -> Smart contract panicked: only agent or owner
+encoding matches viem: true
+OK   agent requests deploy, contract asks MPC to sign  6732 ms  gas 13.26 Tgas  https://testnet.nearblocks.io/txns/579nXVjc2tKgmyAG95sikigaqC24WR9K1aKERdgSikXb
+{"recovered_from":"0x985df6af31660653886E3b6a242d8F0E5380FaF4","from_is_contract_address":true,"chain_id":84532,"nonce":4,"to":null,"value":"0","data_is_allowed_code":true,"low_s":true,"would_create":"0x9fBB8e42d07e65e47c1C439D5B493429c934C3c0","nonce_after":5,"seconds":6.7}

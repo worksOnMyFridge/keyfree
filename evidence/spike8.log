@@ -1,0 +1,4 @@
+--- resign 2026-10-25T18:02:39.021Z
+before: contract next 7, Base 6
+OK   resign nonce 6 with real fees (same nonce, salt, code): landed success, call(42) at 0xaab46b7Efe27b7138884F186036514DAd0950333  https://sepolia.basescan.org/tx/0xe9dbe0c17ff18cb4acf9c811bedfc8f48ab1411f320c8a92d4d1fe1ba93d0ac4
+after: contract next 7, Base 7, ETH left 0.000079238407395852

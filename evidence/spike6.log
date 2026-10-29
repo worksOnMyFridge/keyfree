@@ -1,0 +1,15 @@
+--- 2026-10-25T17:50:04.353Z
+v4a deployed + init https://testnet.nearblocks.io/txns/CiKbH6CCsZnwRHuJCo8315FyzCj6UMq5nT4NB2r6G8kS; sha256 5af338c00369…
+same ETH address 0x8e002c85f7e3c1e37b7108fcaa9e3fa5f9d5bd10; rules and factory 0xe744243604e31d7be8b76e0c8bdff4ec5f560ffd set
+key deleted https://testnet.nearblocks.io/txns/F6VSdrjbCRctzqzvv2j131r3ji5ESv6zVCZVeX1dYbbs; keys left: 0
+OK   apply after the guardian cancelled -> Smart contract panicked: no upgrade proposed
+OK   apply before the delay is over -> Smart contract panicked: upgrade delay not over
+OK   agent proposes an upgrade -> Smart contract panicked: only owner
+OK   apply with code that was not proposed -> Smart contract panicked: code does not match the proposed hash
+log: keyfree: applying upgrade e4475d5e210e4ca0d24e5931c53580094cdeee173a03e421415e3eb4d6f4c3fc
+log: keyfree: migrated to version 2
+OK   upgraded WITHOUT a key: build b, version 2, account code_hash 782oMo8f… -> GN755rMc…  https://testnet.nearblocks.io/txns/3Rzp2PtKBU8c4S969CRXW2QL5Xov5cDoPGrGnzcSGioc
+keys on the account still: 0; address still 0x8e002c85f7e3c1e37b7108fcaa9e3fa5f9d5bd10
+OK   agent deploys while paused -> Smart contract panicked: paused
+OK   guardian unpauses -> Smart contract panicked: only owner
+OK   deploy after the keyless upgrade, same address, through the factory  https://sepolia.basescan.org/tx/0x4ab553b90598f898604638ea38d10eb9047aa18d45aa773eb74227326941e049
