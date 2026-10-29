@@ -5,6 +5,7 @@
 //   accounts   create policy (temporary key), agent (function-call key only), guardian, reserve, guardian2
 //   install    deploy v13 "a" + new + delete the policy key in ONE transaction -> 0 keys; derive the ETH address;
 //              propose the rules (factory, test codes, Base Sepolia, caps), wait rules_delay_sec, apply them
+//   agent <id> rotate the agent: new account with a function-call key, owner proposal, delay, apply
 //   fund       wait until the derived ETH address has Base Sepolia ETH
 //   factory    keyless deploy of KeyfreeFactory, then the SetFactory rule through the delay
 //   deploy     keyless deploys through the factory: 22 B, 1 KB, 24 KB, 48 KB init code; bytes == viem
@@ -164,8 +165,10 @@ try {
     };
     // The policy gets a temporary key only to install itself; install deletes it in the same transaction.
     await make("policy", P, "9", (pk) => actions.addFullAccessKey(pk));
-    // The agent never has a full key: only these methods on the policy, gas allowance 0.25 NEAR (R4).
-    await make("agent", CFG.agent, "0.3", (pk) => actions.addFunctionCallAccessKey(pk, P, AGENT_METHODS, BigInt(parseNearAmount("0.25"))));
+    // The agent never has a full key: only these methods on the policy (R4). No allowance: NEAR charges the
+    // full prepaid gas against it on every call (250 Tgas ~ 0.25 NEAR), so a small allowance blocks the
+    // first request (seen on testnet 29.10); the account's own balance is the real cap.
+    await make("agent", CFG.agent, "2", (pk) => actions.addFunctionCallAccessKey(pk, P, AGENT_METHODS));
     for (const r of ["guardian", "reserve", "guardian2"]) if (CFG.signers[r] === "local") await make(r, ROLE_ID[r], "0.3", (pk) => actions.addFullAccessKey(pk));
     const ak = await keysOf(CFG.agent);
     check(ak.length === 1 && ak[0].access_key.permission !== "FullAccess", `agent ${CFG.agent} holds only a function-call key: ${JSON.stringify(ak[0]?.access_key.permission?.FunctionCall?.method_names)}`);
@@ -197,6 +200,23 @@ try {
     ]);
     const r = await view(P, "get_rules");
     check(r.allowed_code.length === CASES.length + 1 && r.max_gas_limit === String(CFG.max_gas_limit), `rules live: ${r.allowed_code.length} codes, gas cap ${r.max_gas_limit}, chain ${CHAIN} from nonce ${nonce}`);
+  } else if (stage === "agent") {
+    // Rotate the agent: a new account with a function-call key, then the owner's proposal through the delay.
+    const id = process.argv[3];
+    if (!id) throw new Error("usage: agent <new-agent-account>");
+    if (fs.existsSync(keyFile("agent")) && !(await exists(id))) fs.renameSync(keyFile("agent"), here(`agent_${Date.now()}_old_key.json`));
+    if (!(await exists(id))) {
+      const kp = KeyPair.fromRandom("ed25519");
+      fs.writeFileSync(keyFile("agent"), JSON.stringify({ private_key: kp.toString() }));
+      const o = await signer("owner").acc.signAndSendTransaction({ receiverId: id, actions: [actions.createAccount(), actions.transfer(BigInt(parseNearAmount("2"))),
+        actions.addFunctionCallAccessKey(kp.getPublicKey(), P, AGENT_METHODS)] });
+      say(`  created ${id} (2 NEAR, function-call key, no allowance) ${explorer(o.transaction.hash)}`);
+    }
+    await act("owner", "propose_role", { role: "Agent", account: id });
+    await refused("apply the new agent before the delay", () => act("owner", "apply_role", { proposer: CFG.lab }), "role change delay not over");
+    await untilTime((await view(P, "get_roles")).role_changes[0].ready_at, "the agent delay");
+    await act("owner", "apply_role", { proposer: CFG.lab });
+    check((await view(P, "get_roles")).agent === id, `agent is now ${id} (set CFG.agent to it in v13/config.json)`);
   } else if (stage === "fund") {
     say(`send Base Sepolia ETH to ${state.address} (faucet); 0.01 ETH is plenty`);
     for (;;) { const b = await base.getBalance({ address: state.address }); if (b > 0n) { say(`  balance ${formatEther(b)} ETH`); break; } await wait(15); }
@@ -210,8 +230,11 @@ try {
     check(k.toLowerCase() === state.address, `factory ${state.factory} serves only ${k}`);
     await rules([{ SetFactory: { chain_id: CHAIN, factory_hex: state.factory } }]);
   } else if (stage === "deploy") {
-    state.deploys = [];
-    for (const c of CASES) {
+    // optional argv[3]: case numbers to run, e.g. "0,1,2" (the address must hold gas_limit x fee for each)
+    const pick = process.argv[3] ? process.argv[3].split(",").map(Number) : CASES.map((_, i) => i);
+    state.deploys = state.deploys || [];
+    for (const c of CASES.filter((_, i) => pick.includes(i))) {
+      say(`  balance ${formatEther(await base.getBalance({ address: state.address }))} ETH before ${c.name}`);
       const salt = keccak256(toHex(`keyfree-v13-${c.name}-${Date.now()}`));
       // code deposit is 200 gas per runtime byte; the rest covers CREATE2, the init run and the 1/64 the factory keeps
       const r = await agentDeploy(c.name, c.init, { salt, gasExtra: 200 * c.runtime + 250_000 });

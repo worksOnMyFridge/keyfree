@@ -30,3 +30,50 @@ waiting 65 s for the rules delay
   log: keyfree: rule 6 applied: SetLimits { max_gas_limit: 10000000, max_fee_cap: 50000000000 }
 applied rules 0, 1, 2, 3, 4, 5, 6
 OK   rules live: 5 codes, gas cap 10000000, chain 84532 from nonce 0
+--- 2026-10-29T18:00:48.650Z fund (0 ok, 0 fail)
+send Base Sepolia ETH to 0x43e3cb8d471680307f0c232e5ac190828681fcb0 (faucet); 0.01 ETH is plenty
+  balance 0.0001 ETH
+--- 2026-10-29T18:01:36.465Z factory (1 ok, 1 fail)
+OK   keyless deploy of KeyfreeFactory: unsigned tx built by the contract == viem (863 bytes, nonce 0)
+FAIL stage factory stopped: Not enough allowance for access key ed25519:429aF1qtVHuih2Xfe2LU5JhPv22L9sefRqGcJA9ioN91 on account agent13.keyfree-lab.testnet (allowance: 250000000000000000000000, cost: 250931760376425500000000)
+--- 2026-10-29T18:05:52.191Z agent agent13b.keyfree-lab.testnet (2 ok, 0 fail)
+  created agent13b.keyfree-lab.testnet (2 NEAR, function-call key, no allowance) https://testnet.nearblocks.io/txns/55jXNrE1LFb7Qoc4ziUAYm55uu3XA5PpbC3KMWYfPcwS
+  log: keyfree: keyfree-lab.testnet proposes Agent = agent13b.keyfree-lab.testnet, ready at Some(1793297144)
+OK   apply the new agent before the delay -> Smart contract panicked: role change delay not over
+waiting 182 s for the agent delay
+  log: keyfree: Agent is now agent13b.keyfree-lab.testnet
+OK   agent is now agent13b.keyfree-lab.testnet (set CFG.agent to it in v13/config.json)
+--- 2026-10-29T18:08:05.737Z factory (4 ok, 0 fail)
+OK   keyless deploy of KeyfreeFactory: unsigned tx built by the contract == viem (863 bytes, nonce 0)
+  log: keyfree: signing chain 84532 nonce 0 code 28310e4dbd4af0016d2c91fbac7e8c181dc9fd764b1970cfbd2276a043b24253 expected None hash 6ab556f4c3ef20af33ffa7fc815d8fe6771b72ea587a39d4e30c8c7aa43b6230
+  log: keyfree: signed chain 84532 nonce 0 tx 0x054e1afdd06002b37aa95753ec2f575b5d18c8c134e5872e448c0533da8801a2
+OK   keyless deploy of KeyfreeFactory: signed in 8.2 s, gas 200378 of 665362  https://testnet.nearblocks.io/txns/FDvo9LP4Z6vPry6UiMcC7LzVFvodicc277qJgMnXvbb3  https://sepolia.basescan.org/tx/0x054e1afdd06002b37aa95753ec2f575b5d18c8c134e5872e448c0533da8801a2
+OK   factory 0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f serves only 0x43e3cB8d471680307f0c232e5aC190828681fcB0
+  log: keyfree: rule 7 proposed: SetFactory { chain_id: 84532, factory_hex: "0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f" }, ready at unix 1793297275
+proposed rules 7: SetFactory
+OK   apply a rule before the delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 7 applied: SetFactory { chain_id: 84532, factory_hex: "0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f" }
+applied rules 7
+--- 2026-10-29T18:09:25.237Z deploy 0,1,2 (12 ok, 0 fail)
+  balance 0.000098797709591426 ETH before tiny 22 B
+OK   tiny 22 B: unsigned tx built by the contract == viem (177 bytes, nonce 1)
+OK   tiny 22 B: promised address 0xdaf2abe60b1797e8ae8e84fcba380a44a53b7b83 == viem CREATE2
+  log: keyfree: signing chain 84532 nonce 1 code fb9fb2e46931e8f1035a5e589b31d7d69ea44e15806b1c71dfee37cebbbf6b16 expected Some("0xdaf2abe60b1797e8ae8e84fcba380a44a53b7b83") hash 06e5c6953e91fec789d168799d9e440fb6c78fda24ed70a92e95ca42a648d455
+  log: keyfree: signed chain 84532 nonce 1 tx 0x99dd5599a516f8903d95ed7eeb00d17d5a16a2dc0af8737195a6f57e81d0ab95
+OK   tiny 22 B: signed in 7.7 s, gas 58949 of 276000  https://testnet.nearblocks.io/txns/BMihWFDJzcw7CFHUcmwkkW32kwmvAfUshh5jnAYzFbyi  https://sepolia.basescan.org/tx/0x99dd5599a516f8903d95ed7eeb00d17d5a16a2dc0af8737195a6f57e81d0ab95
+OK   tiny 22 B: Deployed(0xdaf2AbE60b1797E8ae8E84FCbA380A44A53b7B83), 10 bytes of runtime at the promised address
+  balance 0.000098444011958577 ETH before 1 KB
+OK   1 KB: unsigned tx built by the contract == viem (1171 bytes, nonce 2)
+OK   1 KB: promised address 0xbc22147bd06a862e7c1be8b6ad85858a63458655 == viem CREATE2
+  log: keyfree: signing chain 84532 nonce 2 code 0136eaca2b2dc0eb3e6651312a43610ecff9249aa5c592d8973914e2c1969e6f expected Some("0xbc22147bd06a862e7c1be8b6ad85858a63458655") hash 7d6a28e72c200b63579e298a815a996a27d08317bc4655443e57bee81728768c
+  log: keyfree: signed chain 84532 nonce 2 tx 0x30e807ce8c5691583cba8b0a45d991c3c7a74b89ecdcbfd55d9067f5258f0f5c
+OK   1 KB: signed in 7.2 s, gas 273788 of 513590  https://testnet.nearblocks.io/txns/8k2XU3w4GEDye9Adps1gpKKHyRUGZV3gVWrw214SqRb  https://sepolia.basescan.org/tx/0x30e807ce8c5691583cba8b0a45d991c3c7a74b89ecdcbfd55d9067f5258f0f5c
+OK   1 KB: Deployed(0xBC22147bD06a862e7c1Be8b6aD85858A63458655), 1000 bytes of runtime at the promised address
+  balance 0.000096801273453716 ETH before 24 KB
+OK   24 KB: unsigned tx built by the contract == viem (24179 bytes, nonce 3)
+OK   24 KB: promised address 0x1ecf6441e7d21cc8a3e13e23141267dca923bd63 == viem CREATE2
+  log: keyfree: signing chain 84532 nonce 3 code dbbc39e99a1f5741eef1d546aebae7825e680867a234fcc5ac52aba11cc05237 expected Some("0x1ecf6441e7d21cc8a3e13e23141267dca923bd63") hash 418c427da7b38b4bdde28141ad8f61486fb4b3576185ec891bc8a0b1ee3dfb93
+  log: keyfree: signed chain 84532 nonce 3 tx 0x97e35ec2b5e08fb8c66c728578105245b90885996595aedc0c98bee63f52547a
+OK   24 KB: signed in 8.5 s, gas 5269282 of 6031000  https://testnet.nearblocks.io/txns/8n6k6y3AExmoPg2sRHcvKkX45UwBdNMHNMEaJpAPL3nz  https://sepolia.basescan.org/tx/0x97e35ec2b5e08fb8c66c728578105245b90885996595aedc0c98bee63f52547a
+OK   24 KB: Deployed(0x1ECf6441E7D21Cc8a3e13E23141267DcA923bd63), 24000 bytes of runtime at the promised address
