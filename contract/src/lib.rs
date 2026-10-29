@@ -21,6 +21,11 @@
 // v6: a signed tx the chain refuses (gas below the intrinsic minimum, fee too low) would leave a nonce
 // gap forever. The contract now refuses gas limits below the intrinsic minimum (EIP-2028/3860/7623), and
 // resign() re-signs a signed factory deploy with the SAME nonce and content, only gas/fees change.
+// v7 after the second audit (security_audit_v2_2026-10-25.md, Н3-Н5): next_nonce never moves back; a
+// failed or released re-sign opens nothing (the signed line stays as it was); a new request never takes a
+// nonce that already has a journal line; one (salt, code) pair binds to one nonce per chain, so a Deployed
+// log can prove only its own nonce; confirm_stuck is for the agent or owner and needs Safe or Finalized.
+// State layout changed (used_salts): deploy fresh, no migrate from v6.
 use near_sdk::serde_json::{json, Value};
 use near_sdk::store::{IterableSet, LookupMap};
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
@@ -113,6 +118,8 @@ pub struct Keyfree {
     proposed: Option<(String, u64)>,
     paused: bool,
     version: u32,
+    // keccak(chain ‖ salt ‖ code hash) -> the nonce that salted deploy is bound to.
+    used_salts: LookupMap<[u8; 32], u64>,
 }
 
 #[near]
@@ -139,6 +146,7 @@ impl Keyfree {
             proposed: None,
             paused: false,
             version: 1,
+            used_salts: LookupMap::new(b"s3".to_vec()),
         }
     }
 
@@ -258,6 +266,7 @@ impl Keyfree {
         let mut code_hash = [0u8; 32];
         code_hash.copy_from_slice(&hex::decode(&p.code_hash).unwrap_or_else(|_| vec![0; 32]));
         self.journal.insert(key(p.chain_id, p.nonce), Entry { code_hash, salt, factory, addr, tx_hash: [0u8; 32], status: REQUESTED });
+        if let Some(s) = &p.salt { self.used_salts.insert(salt_key(p.chain_id, s, &code_hash), p.nonce); }
         self.sign(p)
     }
 
@@ -296,8 +305,20 @@ impl Keyfree {
         self.only_agent_or_owner();
         let p = self.pending.as_ref().expect("nothing pending");
         require!(env::block_height() > p.since_block + RELEASE_AFTER_BLOCKS, "still waiting for the MPC");
-        self.stuck = self.pending.take();
-        env::log_str("keyfree: pending request released, only the same deploy can be re-signed");
+        let p = self.pending.take().unwrap();
+        self.park(p, "released after the MPC timeout");
+    }
+
+    // A request that got no signature: a new deploy stays bound to its nonce (`stuck`); a re-sign of an
+    // already signed line opens nothing, because that line keeps its nonce and content anyway.
+    fn park(&mut self, p: Pending, why: &str) {
+        let resign = self.journal.get(&key(p.chain_id, p.nonce)).map(|e| e.status) == Some(SIGNED);
+        if resign {
+            env::log_str(&format!("keyfree: re-sign of nonce {} {why}; the signed deploy stays as it was", p.nonce));
+        } else {
+            env::log_str(&format!("keyfree: nonce {} {why}; it stays bound to this deploy", p.nonce));
+            self.stuck = Some(p);
+        }
     }
 
     #[private]
@@ -322,8 +343,7 @@ impl Keyfree {
                 Some(raw_hex)
             }
             Err(reason) => {
-                env::log_str(&format!("keyfree: not signed ({reason}); nonce {} stays bound to this deploy", p.nonce));
-                self.stuck = Some(p);
+                self.park(p, &format!("not signed ({reason})"));
                 None
             }
         }
@@ -341,9 +361,12 @@ impl Keyfree {
     }
 
     // A stuck request whose late signature landed anyway: the agent points at the tx, the MPC must find
-    // our Deployed log in it. Then the nonce is spent on exactly this content and can move on.
+    // our Deployed log in it. Then the nonce is spent on exactly this content and can move on. This moves
+    // the nonce, so only the agent or owner may ask, and a Latest block (may still vanish) is not enough.
     #[payable]
     pub fn confirm_stuck(&mut self, tx_hash: String, log: LogIn, finality: String) -> Promise {
+        self.only_agent_or_owner();
+        require!(finality == "Safe" || finality == "Finalized", "a stuck request needs Safe or Finalized");
         let p = self.stuck.clone().unwrap_or_else(|| env::panic_str("nothing stuck"));
         let e = self.journal.get(&key(p.chain_id, p.nonce)).cloned().unwrap_or_else(|| env::panic_str("no journal line"));
         let tx: [u8; 32] = hex::decode(tx_hash.trim_start_matches("0x")).ok().and_then(|b| b.try_into().ok()).unwrap_or_else(|| env::panic_str("bad tx hash"));
@@ -358,7 +381,8 @@ impl Keyfree {
         let ok = res.is_ok() && still;
         if ok {
             self.stuck = None;
-            self.next_nonce.insert(chain_id, nonce + 1);
+            let next = self.next_nonce.get(&chain_id).copied().unwrap_or(0).max(nonce + 1);
+            self.next_nonce.insert(chain_id, next);
             if let Some(mut e) = self.journal.get(&key(chain_id, nonce)).cloned() {
                 if let Some(t) = hex::decode(&tx_hash).ok().and_then(|b| <[u8; 32]>::try_from(b).ok()) { e.tx_hash = t; }
                 e.status = CONFIRMED;
@@ -452,6 +476,8 @@ impl Keyfree {
 
     fn check(&self, chain_id: u64, init_code_hex: &str, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128, salt_hex: Option<String>, via_factory: bool) -> Pending {
         let nonce = *self.next_nonce.get(&chain_id).unwrap_or_else(|| env::panic_str("chain not allowed"));
+        // A journal line means this nonce was already given to a deploy: never sign another content on it.
+        require!(self.journal.get(&key(chain_id, nonce)).is_none(), "nonce already used on this chain: re-sync the nonce");
         let init_code = hex::decode(init_code_hex.trim_start_matches("0x")).unwrap_or_else(|_| env::panic_str("init code must be hex"));
         require!(init_code.len() <= MAX_INIT_CODE, "init code too large");
         let code_hash = hex::encode(env::keccak256_array(&init_code));
@@ -463,6 +489,13 @@ impl Keyfree {
             require!(b.len() == 32, "salt must be 32 bytes");
             b
         });
+        // The Deployed log has no nonce in it, so a (salt, code) pair must never be given a second nonce:
+        // otherwise the log of the first deploy could "prove" the second one (Н4).
+        if let Some(s) = &salt {
+            let mut h = [0u8; 32];
+            h.copy_from_slice(&hex::decode(&code_hash).unwrap_or_else(|_| vec![0; 32]));
+            require!(!self.used_salts.contains_key(&salt_key(chain_id, s, &h)), "salt and code already used on this chain");
+        }
         let factory = if via_factory {
             require!(salt.is_some(), "factory deploys need a salt");
             Some(self.factories.get(&chain_id).cloned().unwrap_or_else(|| env::panic_str("no factory on this chain")))
@@ -546,6 +579,10 @@ fn word(n: u64) -> [u8; 32] {
 }
 
 fn key(chain_id: u64, nonce: u64) -> String { format!("{chain_id}:{nonce}") }
+
+fn salt_key(chain_id: u64, salt: &[u8], code_hash: &[u8; 32]) -> [u8; 32] {
+    env::keccak256_array(&[&chain_id.to_le_bytes()[..], salt, code_hash].concat())
+}
 
 // Read MPC names and borsh variant indexes (near/mpc ForeignChainRpcRequest). Testnet MPC reads the test networks.
 fn chain_variant(chain_id: u64) -> Option<(&'static str, u8)> {

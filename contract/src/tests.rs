@@ -320,3 +320,125 @@ fn resign_refuses_other_code() {
     ctx("agent.testnet", 20);
     let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
 }
+
+// v7: nonce accounting after the second audit (Н3 nonce back, Н4 foreign proof, Н5 Latest).
+const SALT: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+
+fn signed_line(c: &mut Keyfree, nonce: u64, status: u8) {
+    let mut code_hash = [0u8; 32];
+    code_hash.copy_from_slice(&env::keccak256_array(&hex::decode(INIT).unwrap()));
+    c.journal.insert(key(84532, nonce), Entry { code_hash, salt: [7; 32], factory: [9; 20], addr: [5; 20], tx_hash: [1; 32], status });
+}
+
+fn log_in() -> LogIn { LogIn { log_index: 0, transaction_index: 0, block_hash: "cd".repeat(32), block_number: 1 } }
+
+#[test]
+fn proof_of_an_old_stuck_nonce_never_moves_the_nonce_back() {
+    let mut c = contract();
+    c.pending = None;
+    c.stuck = Some(Pending { nonce: 2, ..pending() });
+    signed_line(&mut c, 2, REQUESTED);
+    ctx("keyfree.testnet", 30);
+    assert!(c.on_stuck_confirmed(84532, 2, "ab".repeat(32), Ok(json!({}))));
+    assert_eq!(c.get_next_nonce(84532), Some(4));
+}
+
+#[test]
+fn failed_resign_leaves_the_signed_deploy_as_it_was() {
+    let mut c = contract();
+    c.pending = None;
+    signed_line(&mut c, 2, SIGNED);
+    ctx("agent.testnet", 20);
+    let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
+    ctx("keyfree.testnet", 21);
+    assert_eq!(c.on_signed(Err(PromiseError::Failed)), None);
+    assert!(c.pending.is_none() && c.stuck.is_none(), "a failed re-sign opens nothing");
+    let e = c.journal.get(&key(84532, 2)).unwrap();
+    assert_eq!((e.status, e.tx_hash), (SIGNED, [1; 32]));
+}
+
+#[test]
+fn released_resign_does_not_become_stuck() {
+    let mut c = contract();
+    c.pending = None;
+    signed_line(&mut c, 2, SIGNED);
+    ctx("agent.testnet", 20);
+    let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
+    ctx("agent.testnet", 20 + RELEASE_AFTER_BLOCKS + 1);
+    c.release();
+    assert!(c.pending.is_none() && c.stuck.is_none());
+}
+
+#[test]
+#[should_panic(expected = "nonce already used on this chain")]
+fn new_request_never_overwrites_a_used_nonce() {
+    let mut c = contract();
+    c.pending = None;
+    signed_line(&mut c, 4, CONFIRMED);
+    ctx("agent.testnet", 20);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "salt and code already used on this chain")]
+fn same_salt_and_code_cannot_take_a_second_nonce() {
+    let mut c = contract();
+    c.pending = None;
+    ctx("owner.testnet", 20);
+    c.set_factory(84532, "09".repeat(20));
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
+    // pretend nonce 4 went through, then a bot repeats the same deploy
+    c.pending = None;
+    c.next_nonce.insert(84532, 5);
+    ctx("agent.testnet", 22);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
+}
+
+#[test]
+fn same_salt_and_code_is_fine_on_another_chain() {
+    let mut c = contract();
+    c.pending = None;
+    c.next_nonce.insert(421614, 4);
+    ctx("owner.testnet", 20);
+    c.set_factory(84532, "09".repeat(20));
+    c.set_factory(421614, "09".repeat(20));
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
+    c.pending = None;
+    ctx("agent.testnet", 22);
+    let _ = c.request_deploy(421614, INIT.into(), 200_000, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
+    assert_eq!(c.pending.as_ref().map(|p| p.chain_id), Some(421614));
+}
+
+#[test]
+#[should_panic(expected = "only agent or owner")]
+fn stranger_cannot_confirm_stuck() {
+    let mut c = contract();
+    c.pending = None;
+    c.stuck = Some(Pending { salt: Some(vec![7; 32]), factory: Some(vec![9; 20]), ..pending() });
+    signed_line(&mut c, 4, REQUESTED);
+    ctx("stranger.testnet", 12);
+    let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Safe".into());
+}
+
+#[test]
+#[should_panic(expected = "a stuck request needs Safe or Finalized")]
+fn confirm_stuck_refuses_latest() {
+    let mut c = contract();
+    c.pending = None;
+    c.stuck = Some(Pending { salt: Some(vec![7; 32]), factory: Some(vec![9; 20]), ..pending() });
+    signed_line(&mut c, 4, REQUESTED);
+    ctx("agent.testnet", 12);
+    let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Latest".into());
+}
+
+#[test]
+fn confirm_stuck_with_safe_goes_to_read_mpc() {
+    let mut c = contract();
+    c.pending = None;
+    c.stuck = Some(Pending { salt: Some(vec![7; 32]), factory: Some(vec![9; 20]), ..pending() });
+    signed_line(&mut c, 4, REQUESTED);
+    ctx("agent.testnet", 12);
+    let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Safe".into());
+}
