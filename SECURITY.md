@@ -64,6 +64,10 @@ only as safe as that place.
   allowed.
 - **Deploys only.** The policy signs contract creations (plain or through its own CREATE2 factory) with value
   0. It does not sign calls or transfers.
+- **Money after the deploy.** Keyfree fixes who a contract pays at the moment it is deployed: an owner or a
+  recipient passed to the constructor is part of the allowed hash. After that the contract obeys its own
+  code and its owner. If the vault's owner key is stolen, or the vault has an admin who can change the
+  owner, Keyfree does not help; allow only code whose money paths you have read.
 - Testnets only so far; Arbitrum not run yet; see "Not claimed" in CLAIMS.md.
 
 ## Reporting

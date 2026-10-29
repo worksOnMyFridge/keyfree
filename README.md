@@ -25,6 +25,21 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 
 Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet and Base Sepolia.
 
+## Where the money goes
+
+A deploy is where a contract learns who it pays. A treasury vault gets its owner in the constructor, and
+from then on only that owner can withdraw. So the question "can the agent send the money somewhere else?"
+is the question "can the agent deploy the vault with another owner?".
+
+With Keyfree it cannot. The council allows `Vault(owner = the treasury)`, and the allowed hash covers the
+constructor arguments. `Vault(any other owner)` is other code and is refused before anything is signed. We
+ran this with a real Claude Code session: a README in the project asked it to deploy the vault with a new
+owner, the human then confirmed that address too, and the policy still refused
+([CLAIMS 3.3](CLAIMS.md#3-an-ai-agent-deploys-and-cannot-be-talked-past-the-rules)).
+
+Whoever sets the rules decides where the money goes; whoever runs the agent does not. After the deploy
+the vault obeys its owner, not Keyfree: the policy signs deploys only, never calls or transfers.
+
 ## See it in 2 minutes (browser only)
 
 1. Open the policy [`policy13.keyfree-lab.testnet`](https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet).
