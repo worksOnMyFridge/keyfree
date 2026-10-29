@@ -1,0 +1,32 @@
+--- 2026-10-29T17:53:32.724Z accounts (1 ok, 0 fail)
+  created policy13.keyfree-lab.testnet (9 NEAR) https://testnet.nearblocks.io/txns/FhCEbyHxyDEvJvGE5xCQgEt5VFfnYNU4wyojBrXpmWBN
+  created agent13.keyfree-lab.testnet (0.3 NEAR) https://testnet.nearblocks.io/txns/93VsEBnqog3Twj4Kk3KkQo4Abp8yHWGtH8C22ha6TWEi
+  created guard13.keyfree-lab.testnet (0.3 NEAR) https://testnet.nearblocks.io/txns/7aYFGa88nfyGmGK8gszxomvVyD8DEztPq1vHP82KCt8C
+  created reserve13.keyfree-lab.testnet (0.3 NEAR) https://testnet.nearblocks.io/txns/3LxA6EbWWtPJgQzYfk4mMvmZjMYFK23d9S4nteoCcY1Z
+  created guard13b.keyfree-lab.testnet (0.3 NEAR) https://testnet.nearblocks.io/txns/BHkevenMvoKCh8NCtrrNPWPzPjg41nmCuryqR812sYfS
+OK   agent agent13.keyfree-lab.testnet holds only a function-call key: ["request_deploy","resign","retry","release","confirm","confirm_stuck"]
+--- 2026-10-29T17:57:04.504Z install (5 ok, 0 fail)
+v13 "a" (sha256 8b35768cf12234fa...) deployed + init + key deleted in one transaction https://testnet.nearblocks.io/txns/7iawPybUxDjWqQFXCayAFxecGLLbeiMGP8bczy9sMVbd
+OK   policy policy13.keyfree-lab.testnet has 0 keys (R1)
+OK   get_status: build a, version 1, upgrade delay 180 s
+  log: keyfree: derived address 0x43e3cb8d471680307f0c232e5ac190828681fcb0
+OK   ETH address derived on-chain from the MPC: 0x43e3cb8d471680307f0c232e5ac190828681fcb0
+  log: keyfree: rule 0 proposed: AllowCode { code_hash: "28310e4dbd4af0016d2c91fbac7e8c181dc9fd764b1970cfbd2276a043b24253" }, ready at unix 1793296587
+  log: keyfree: rule 1 proposed: AllowCode { code_hash: "fb9fb2e46931e8f1035a5e589b31d7d69ea44e15806b1c71dfee37cebbbf6b16" }, ready at unix 1793296590
+  log: keyfree: rule 2 proposed: AllowCode { code_hash: "0136eaca2b2dc0eb3e6651312a43610ecff9249aa5c592d8973914e2c1969e6f" }, ready at unix 1793296592
+  log: keyfree: rule 3 proposed: AllowCode { code_hash: "dbbc39e99a1f5741eef1d546aebae7825e680867a234fcc5ac52aba11cc05237" }, ready at unix 1793296594
+  log: keyfree: rule 4 proposed: AllowCode { code_hash: "c20756d04b1d44a1f4b8ff2d7988b682b36905e7fc9ef6e884e7cd8c8f5b78d7" }, ready at unix 1793296596
+  log: keyfree: rule 5 proposed: AllowChain { chain_id: 84532, next_nonce: 0, min_fee_per_gas: 1000000 }, ready at unix 1793296598
+  log: keyfree: rule 6 proposed: SetLimits { max_gas_limit: 10000000, max_fee_cap: 50000000000 }, ready at unix 1793296600
+proposed rules 0, 1, 2, 3, 4, 5, 6: AllowCode, AllowCode, AllowCode, AllowCode, AllowCode, AllowChain, SetLimits
+OK   apply a rule before the delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 0 applied: AllowCode { code_hash: "28310e4dbd4af0016d2c91fbac7e8c181dc9fd764b1970cfbd2276a043b24253" }
+  log: keyfree: rule 1 applied: AllowCode { code_hash: "fb9fb2e46931e8f1035a5e589b31d7d69ea44e15806b1c71dfee37cebbbf6b16" }
+  log: keyfree: rule 2 applied: AllowCode { code_hash: "0136eaca2b2dc0eb3e6651312a43610ecff9249aa5c592d8973914e2c1969e6f" }
+  log: keyfree: rule 3 applied: AllowCode { code_hash: "dbbc39e99a1f5741eef1d546aebae7825e680867a234fcc5ac52aba11cc05237" }
+  log: keyfree: rule 4 applied: AllowCode { code_hash: "c20756d04b1d44a1f4b8ff2d7988b682b36905e7fc9ef6e884e7cd8c8f5b78d7" }
+  log: keyfree: rule 5 applied: AllowChain { chain_id: 84532, next_nonce: 0, min_fee_per_gas: 1000000 }
+  log: keyfree: rule 6 applied: SetLimits { max_gas_limit: 10000000, max_fee_cap: 50000000000 }
+applied rules 0, 1, 2, 3, 4, 5, 6
+OK   rules live: 5 codes, gas cap 10000000, chain 84532 from nonce 0
