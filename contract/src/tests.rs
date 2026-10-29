@@ -33,7 +33,7 @@ fn pending() -> Pending {
 
 fn contract() -> Keyfree {
     ctx("keyfree.testnet", 10);
-    let mut c = Keyfree::new("owner.testnet".parse().unwrap(), "agent.testnet".parse().unwrap(), "guardian.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "keyfree-1".into(), 3600);
+    let mut c = Keyfree::new("owner.testnet".parse().unwrap(), "agent.testnet".parse().unwrap(), "guardian.testnet".parse().unwrap(), "reserve.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "keyfree-1".into(), 3600);
     c.eth_address = Some(ADDR.into());
     c.allowed_code.insert(pending().code_hash);
     c.next_nonce.insert(84532, 4);
@@ -151,7 +151,14 @@ fn stranger_cannot_release() {
 #[should_panic(expected = "only the contract account")]
 fn stranger_cannot_reinit() {
     ctx("stranger.testnet", 10);
-    Keyfree::new("x.testnet".parse().unwrap(), "y.testnet".parse().unwrap(), "g.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "p".into(), 0);
+    Keyfree::new("x.testnet".parse().unwrap(), "y.testnet".parse().unwrap(), "g.testnet".parse().unwrap(), "r.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "p".into(), 0);
+}
+
+#[test]
+#[should_panic(expected = "must be different accounts")]
+fn roles_must_be_different_accounts_at_init() {
+    ctx("keyfree.testnet", 10);
+    Keyfree::new("x.testnet".parse().unwrap(), "y.testnet".parse().unwrap(), "g.testnet".parse().unwrap(), "x.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "p".into(), 0);
 }
 
 #[test]
@@ -441,4 +448,186 @@ fn confirm_stuck_with_safe_goes_to_read_mpc() {
     signed_line(&mut c, 4, REQUESTED);
     ctx("agent.testnet", 12);
     let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Safe".into());
+}
+
+// v8: roles (spec R2, R3, R3a, R5; audit v2 Н1). Delay in contract() is 3600 s.
+fn acc(s: &str) -> AccountId { s.parse().unwrap() }
+
+fn idle() -> Keyfree {
+    let mut c = contract();
+    c.pending = None;
+    c
+}
+
+#[test]
+fn stolen_guardian_cannot_freeze_the_contract_forever() {
+    let mut c = idle();
+    // the thief holds the guardian key: pause, kill every upgrade, try to block its own replacement
+    ctx_at("guardian.testnet", 20, 1_000, vec![]);
+    c.pause();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("reserve.testnet", 22, 1_010, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("guardian.testnet", 23, 1_020, vec![]);
+    c.cancel_role(acc("owner.testnet"));
+    assert_eq!(c.role_changes.len(), 1, "one cancel is not enough");
+    ctx_at("reserve.testnet", 24, 1_010 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    assert_eq!(c.guardian, acc("guardian2.testnet"));
+    // owner + reserve unpause; the old guardian is out
+    ctx_at("owner.testnet", 25, 5_000, vec![]);
+    c.unpause();
+    ctx_at("reserve.testnet", 26, 5_000, vec![]);
+    c.unpause();
+    assert!(!c.paused);
+}
+
+#[test]
+#[should_panic(expected = "only owner, guardian or reserve")]
+fn replaced_guardian_cannot_pause_again() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("reserve.testnet", 22, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("owner.testnet", 23, 4_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    ctx_at("guardian.testnet", 24, 4_700, vec![]);
+    c.pause();
+}
+
+#[test]
+#[should_panic(expected = "needs 2 of 3 approvals")]
+fn one_key_cannot_change_roles() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("thief.testnet"));
+    ctx_at("owner.testnet", 22, 100_000, vec![]);
+    c.apply_role(acc("owner.testnet"));
+}
+
+#[test]
+#[should_panic(expected = "role change delay not over")]
+fn owner_and_guardian_together_cannot_skip_the_delay() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Reserve, acc("reserve2.testnet"));
+    ctx_at("guardian.testnet", 22, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("guardian.testnet", 23, 1_000 + 3_599, vec![]);
+    c.apply_role(acc("owner.testnet"));
+}
+
+#[test]
+fn delay_starts_at_the_second_approval() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Reserve, acc("reserve2.testnet"));
+    ctx_at("guardian.testnet", 22, 9_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    assert_eq!(c.role_changes[0].ready_at, Some(9_000 + 3_600));
+}
+
+#[test]
+fn two_of_three_cancel_a_role_change() {
+    let mut c = idle();
+    // a stolen guardian proposes to put the thief in as reserve; owner and reserve kill it
+    ctx_at("guardian.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Reserve, acc("thief.testnet"));
+    ctx_at("owner.testnet", 22, 1_000, vec![]);
+    c.cancel_role(acc("guardian.testnet"));
+    assert_eq!(c.role_changes.len(), 1);
+    ctx_at("reserve.testnet", 23, 1_000, vec![]);
+    c.cancel_role(acc("guardian.testnet"));
+    assert!(c.role_changes.is_empty());
+}
+
+#[test]
+#[should_panic(expected = "only agent or owner")]
+fn any_council_member_revokes_the_agent_at_once() {
+    let mut c = idle();
+    ctx("reserve.testnet", 20);
+    c.revoke_agent();
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "no such role change")]
+fn new_agent_is_cancelled_by_one_council_member() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Agent, acc("agent2.testnet"));
+    ctx_at("guardian.testnet", 22, 1_100, vec![]);
+    c.cancel_role(acc("owner.testnet"));
+    ctx_at("owner.testnet", 23, 1_000 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+}
+
+#[test]
+fn new_agent_works_after_the_delay_and_the_old_one_does_not() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Agent, acc("agent2.testnet"));
+    ctx_at("owner.testnet", 22, 1_000 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    assert_eq!(c.agent, Some(acc("agent2.testnet")));
+    ctx("agent2.testnet", 23);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    assert!(c.pending.is_some());
+}
+
+#[test]
+#[should_panic(expected = "only owner proposes a new agent")]
+fn guardian_cannot_appoint_an_agent() {
+    let mut c = idle();
+    ctx("guardian.testnet", 20);
+    c.propose_role(Role::Agent, acc("agent2.testnet"));
+}
+
+#[test]
+#[should_panic(expected = "only owner, guardian or reserve")]
+fn agent_cannot_touch_roles() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    c.propose_role(Role::Owner, acc("agent.testnet"));
+}
+
+#[test]
+#[should_panic(expected = "account already holds another role")]
+fn one_account_cannot_hold_two_roles() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.propose_role(Role::Guardian, acc("reserve.testnet"));
+}
+
+#[test]
+fn one_unpause_vote_is_not_enough() {
+    let mut c = idle();
+    ctx("guardian.testnet", 20);
+    c.pause();
+    ctx("owner.testnet", 21);
+    c.unpause();
+    c.unpause(); // the same member twice still counts once
+    assert!(c.paused);
+    ctx("reserve.testnet", 22);
+    c.unpause();
+    assert!(!c.paused);
+}
+
+#[test]
+#[should_panic(expected = "only owner, guardian or reserve")]
+fn stranger_cannot_pause() {
+    let mut c = idle();
+    ctx("stranger.testnet", 20);
+    c.pause();
+}
+
+#[test]
+fn reserve_can_cancel_an_upgrade() {
+    let mut c = proposed();
+    ctx_at("reserve.testnet", 21, 1_100, vec![]);
+    c.cancel_upgrade();
+    assert!(c.proposed.is_none());
 }

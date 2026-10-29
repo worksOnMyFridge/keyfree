@@ -26,6 +26,12 @@
 // nonce that already has a journal line; one (salt, code) pair binds to one nonce per chain, so a Deployed
 // log can prove only its own nonce; confirm_stuck is for the agent or owner and needs Safe or Finalized.
 // State layout changed (used_salts): deploy fresh, no migrate from v6.
+// v8 roles (spec R2, R3, R3a, R5; audit v2 Н1): owner, guardian and reserve form a council of three,
+// plus an agent. Brakes are immediate and need one council member: pause, revoke the agent. Everything
+// that widens rights waits the full delay and cannot be shortened, even by two members together:
+// a new owner/guardian/reserve needs 2 of 3 approvals (cancel too: 2 of 3, so a stolen guardian cannot
+// block its own replacement); a new agent is proposed by the owner and any council member may cancel it.
+// Unpause needs 2 of 3 votes. All four roles are different accounts.
 use near_sdk::serde_json::{json, Value};
 use near_sdk::store::{IterableSet, LookupMap};
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
@@ -97,11 +103,28 @@ pub struct LogIn {
     pub block_number: u64,
 }
 
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Role { Owner, Guardian, Reserve, Agent }
+
+// One open change per proposer (so at most three, and a stolen key cannot fill the slots of others).
+#[near(serializers = [borsh, json])]
+#[derive(Clone, PartialEq, Debug)]
+pub struct RoleChange {
+    pub role: Role,
+    pub account: AccountId,
+    pub proposer: AccountId,
+    pub approvals: Vec<AccountId>,
+    pub cancels: Vec<AccountId>,
+    // Set when enough approvals are in: the delay starts only then.
+    pub ready_at: Option<u64>,
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Keyfree {
     owner: AccountId,
-    agent: AccountId,
+    agent: Option<AccountId>,
     mpc: AccountId,
     path: String,
     eth_address: Option<String>,
@@ -114,12 +137,16 @@ pub struct Keyfree {
     factories: LookupMap<u64, Vec<u8>>,
     journal: LookupMap<String, Entry>,
     guardian: AccountId,
+    // Also the delay for role changes.
     upgrade_delay_sec: u64,
     proposed: Option<(String, u64)>,
     paused: bool,
     version: u32,
     // keccak(chain ‖ salt ‖ code hash) -> the nonce that salted deploy is bound to.
     used_salts: LookupMap<[u8; 32], u64>,
+    reserve: AccountId,
+    role_changes: Vec<RoleChange>,
+    unpause_votes: Vec<AccountId>,
 }
 
 #[near]
@@ -127,11 +154,14 @@ impl Keyfree {
     // ignore_state lets the spike account start over; only the account itself may call it, and once
     // its keys are deleted nobody can.
     #[init(ignore_state)]
-    pub fn new(owner: AccountId, agent: AccountId, guardian: AccountId, mpc: AccountId, path: String, upgrade_delay_sec: u64) -> Self {
+    pub fn new(owner: AccountId, agent: AccountId, guardian: AccountId, reserve: AccountId, mpc: AccountId, path: String, upgrade_delay_sec: u64) -> Self {
         require!(env::predecessor_account_id() == env::current_account_id(), "only the contract account");
-        require!(owner != agent, "owner and agent must be different accounts");
+        let all = [&owner, &agent, &guardian, &reserve];
+        for i in 0..all.len() {
+            for j in i + 1..all.len() { require!(all[i] != all[j], "owner, agent, guardian and reserve must be different accounts"); }
+        }
         Self {
-            owner, agent, mpc, path,
+            owner, agent: Some(agent), mpc, path,
             eth_address: None,
             allowed_code: IterableSet::new(b"c3".to_vec()),
             next_nonce: LookupMap::new(b"n3".to_vec()),
@@ -147,7 +177,78 @@ impl Keyfree {
             paused: false,
             version: 1,
             used_salts: LookupMap::new(b"s3".to_vec()),
+            reserve,
+            role_changes: vec![],
+            unpause_votes: vec![],
         }
+    }
+
+    // Roles. 1) a council member proposes (the owner alone for a new agent); replaces their own open one.
+    pub fn propose_role(&mut self, role: Role, account: AccountId) {
+        let me = self.only_council();
+        if role == Role::Agent { require!(me == self.owner, "only owner proposes a new agent"); }
+        self.require_free(role, &account);
+        self.role_changes.retain(|c| c.proposer != me);
+        let ready_at = (need(role) == 1).then(|| now() + self.upgrade_delay_sec);
+        env::log_str(&format!("keyfree: {me} proposes {role:?} = {account}, ready at {ready_at:?}"));
+        self.role_changes.push(RoleChange { role, account, proposer: me.clone(), approvals: vec![me], cancels: vec![], ready_at });
+    }
+
+    // 2) a second council member approves; the full delay starts now.
+    pub fn approve_role(&mut self, proposer: AccountId) {
+        let me = self.only_council();
+        let delay = self.upgrade_delay_sec;
+        let c = self.role_changes.iter_mut().find(|c| c.proposer == proposer).unwrap_or_else(|| env::panic_str("no such role change"));
+        require!(c.role != Role::Agent, "a new agent needs no approval");
+        require!(!c.approvals.contains(&me), "already approved");
+        c.approvals.push(me);
+        if c.ready_at.is_none() { c.ready_at = Some(now() + delay); }
+        env::log_str(&format!("keyfree: {:?} = {} approved 2 of 3, ready at {:?}", c.role, c.account, c.ready_at));
+    }
+
+    // During the delay: the proposer may withdraw; a new agent is stopped by any council member;
+    // an owner/guardian/reserve change only by 2 of 3, so one stolen key cannot keep its role.
+    pub fn cancel_role(&mut self, proposer: AccountId) {
+        let me = self.only_council();
+        let i = self.role_changes.iter().position(|c| c.proposer == proposer).unwrap_or_else(|| env::panic_str("no such role change"));
+        let c = &mut self.role_changes[i];
+        if !c.cancels.contains(&me) { c.cancels.push(me.clone()); }
+        let gone = me == proposer || c.role == Role::Agent || c.cancels.len() >= 2;
+        env::log_str(&format!("keyfree: {me} cancels {:?} = {}{}", c.role, c.account, if gone { ", cancelled" } else { ", needs a second cancel" }));
+        if gone { self.role_changes.remove(i); }
+    }
+
+    // 3) after the delay a council member applies it. Approvals are recounted against the current council.
+    pub fn apply_role(&mut self, proposer: AccountId) {
+        self.only_council();
+        let c = self.role_changes.iter().find(|c| c.proposer == proposer).cloned().unwrap_or_else(|| env::panic_str("no such role change"));
+        let ready_at = c.ready_at.unwrap_or_else(|| env::panic_str("needs 2 of 3 approvals"));
+        require!(now() >= ready_at, "role change delay not over");
+        if c.role == Role::Agent { require!(c.proposer == self.owner, "the proposer is no longer the owner"); }
+        require!(c.approvals.iter().filter(|a| self.is_council(a)).count() >= need(c.role), "needs 2 of 3 approvals");
+        self.require_free(c.role, &c.account);
+        match c.role {
+            Role::Owner => self.owner = c.account.clone(),
+            Role::Guardian => self.guardian = c.account.clone(),
+            Role::Reserve => self.reserve = c.account.clone(),
+            Role::Agent => self.agent = Some(c.account.clone()),
+        }
+        // Approvals and votes were given by the old council: start over.
+        self.role_changes.clear();
+        self.unpause_votes.clear();
+        env::log_str(&format!("keyfree: {:?} is now {}", c.role, c.account));
+    }
+
+    // Brake: any council member removes the agent at once.
+    pub fn revoke_agent(&mut self) {
+        let me = self.only_council();
+        self.agent = None;
+        env::log_str(&format!("keyfree: agent revoked by {me}"));
+    }
+
+    pub fn get_roles(&self) -> Value {
+        json!({ "owner": self.owner, "guardian": self.guardian, "reserve": self.reserve, "agent": self.agent,
+            "role_changes": self.role_changes, "unpause_votes": self.unpause_votes })
     }
 
     // Maintenance without keys. 1) owner publishes the sha256 of the new code;
@@ -160,7 +261,7 @@ impl Keyfree {
 
     // 2) during the delay the guardian (or the owner) may cancel;
     pub fn cancel_upgrade(&mut self) {
-        require!(env::predecessor_account_id() == self.guardian || env::predecessor_account_id() == self.owner, "only guardian or owner");
+        self.only_council();
         self.proposed = None;
         env::log_str("keyfree: upgrade cancelled");
     }
@@ -191,17 +292,28 @@ impl Keyfree {
         s
     }
 
+    // Pause is a brake: one council member, at once. Unpause needs 2 of 3 votes.
     pub fn pause(&mut self) {
-        require!(env::predecessor_account_id() == self.guardian || env::predecessor_account_id() == self.owner, "only guardian or owner");
+        let me = self.only_council();
         self.paused = true;
+        self.unpause_votes.clear();
+        env::log_str(&format!("keyfree: paused by {me}"));
     }
     pub fn unpause(&mut self) {
-        self.only_owner();
-        self.paused = false;
+        let me = self.only_council();
+        require!(self.paused, "not paused");
+        if !self.unpause_votes.contains(&me) { self.unpause_votes.push(me); }
+        if self.unpause_votes.len() >= 2 {
+            self.paused = false;
+            self.unpause_votes.clear();
+            env::log_str("keyfree: unpaused by 2 of 3");
+        } else {
+            env::log_str("keyfree: unpause needs a second vote");
+        }
     }
 
     pub fn get_status(&self) -> Value {
-        json!({ "build": option_env!("KF_BUILD").unwrap_or("dev"), "version": self.version, "paused": self.paused, "proposed": self.proposed, "upgrade_delay_sec": self.upgrade_delay_sec, "guardian": self.guardian })
+        json!({ "build": option_env!("KF_BUILD").unwrap_or("dev"), "version": self.version, "paused": self.paused, "proposed": self.proposed, "upgrade_delay_sec": self.upgrade_delay_sec, "guardian": self.guardian, "reserve": self.reserve })
     }
 
     // Ask the MPC which secp256k1 key belongs to (this contract, path) and keep its ETH address.
@@ -471,7 +583,23 @@ impl Keyfree {
         require!(env::predecessor_account_id() == self.owner, "only owner");
     }
     fn only_agent_or_owner(&self) {
-        require!(env::predecessor_account_id() == self.agent || env::predecessor_account_id() == self.owner, "only agent or owner");
+        let p = env::predecessor_account_id();
+        require!(Some(&p) == self.agent.as_ref() || p == self.owner, "only agent or owner");
+    }
+    fn is_council(&self, a: &AccountId) -> bool {
+        *a == self.owner || *a == self.guardian || *a == self.reserve
+    }
+    fn only_council(&self) -> AccountId {
+        let p = env::predecessor_account_id();
+        require!(self.is_council(&p), "only owner, guardian or reserve");
+        p
+    }
+    // The new holder of `role` must not hold any other role (R5).
+    fn require_free(&self, role: Role, account: &AccountId) {
+        let held = [(Role::Owner, Some(&self.owner)), (Role::Guardian, Some(&self.guardian)), (Role::Reserve, Some(&self.reserve)), (Role::Agent, self.agent.as_ref())];
+        for (r, a) in held {
+            if r != role && a == Some(account) { env::panic_str("account already holds another role"); }
+        }
     }
 
     fn check(&self, chain_id: u64, init_code_hex: &str, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128, salt_hex: Option<String>, via_factory: bool) -> Pending {
@@ -579,6 +707,11 @@ fn word(n: u64) -> [u8; 32] {
 }
 
 fn key(chain_id: u64, nonce: u64) -> String { format!("{chain_id}:{nonce}") }
+
+fn now() -> u64 { env::block_timestamp() / 1_000_000_000 }
+
+// Approvals a role change needs: a new agent is the owner's call (cancellable), the council needs 2 of 3.
+fn need(role: Role) -> usize { if role == Role::Agent { 1 } else { 2 } }
 
 fn salt_key(chain_id: u64, salt: &[u8], code_hash: &[u8; 32]) -> [u8; 32] {
     env::keccak256_array(&[&chain_id.to_le_bytes()[..], salt, code_hash].concat())
