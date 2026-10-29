@@ -36,7 +36,7 @@ fn pending() -> Pending {
 
 fn contract() -> Keyfree {
     ctx("keyfree.testnet", 10);
-    let mut c = Keyfree::new("owner.testnet".parse().unwrap(), "agent.testnet".parse().unwrap(), "guardian.testnet".parse().unwrap(), "reserve.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "keyfree-1".into(), 3600);
+    let mut c = Keyfree::new("owner.testnet".parse().unwrap(), "agent.testnet".parse().unwrap(), "guardian.testnet".parse().unwrap(), "reserve.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "keyfree-1".into(), 3600, 1800);
     c.eth_address = Some(ADDR.into());
     c.allowed_code.insert(pending().code_hash);
     c.next_nonce.insert(84532, 4);
@@ -154,14 +154,14 @@ fn stranger_cannot_release() {
 #[should_panic(expected = "only the contract account")]
 fn stranger_cannot_reinit() {
     ctx("stranger.testnet", 10);
-    Keyfree::new("x.testnet".parse().unwrap(), "y.testnet".parse().unwrap(), "g.testnet".parse().unwrap(), "r.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "p".into(), 0);
+    Keyfree::new("x.testnet".parse().unwrap(), "y.testnet".parse().unwrap(), "g.testnet".parse().unwrap(), "r.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "p".into(), 0, 0);
 }
 
 #[test]
 #[should_panic(expected = "must be different accounts")]
 fn roles_must_be_different_accounts_at_init() {
     ctx("keyfree.testnet", 10);
-    Keyfree::new("x.testnet".parse().unwrap(), "y.testnet".parse().unwrap(), "g.testnet".parse().unwrap(), "x.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "p".into(), 0);
+    Keyfree::new("x.testnet".parse().unwrap(), "y.testnet".parse().unwrap(), "g.testnet".parse().unwrap(), "x.testnet".parse().unwrap(), "mpc.testnet".parse().unwrap(), "p".into(), 0, 0);
 }
 
 #[test]
@@ -454,7 +454,7 @@ fn same_salt_and_code_cannot_take_a_second_nonce() {
     let mut c = contract();
     c.pending = None;
     ctx("owner.testnet", 20);
-    c.set_factory(84532, "09".repeat(20));
+    c.apply_rule_change(&RuleChange::SetFactory { chain_id: 84532, factory_hex: "09".repeat(20) });
     ctx("agent.testnet", 21);
     let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
     // pretend nonce 4 went through, then a bot repeats the same deploy
@@ -470,8 +470,8 @@ fn same_salt_and_code_is_fine_on_another_chain() {
     c.pending = None;
     c.next_nonce.insert(421614, 4);
     ctx("owner.testnet", 20);
-    c.set_factory(84532, "09".repeat(20));
-    c.set_factory(421614, "09".repeat(20));
+    c.apply_rule_change(&RuleChange::SetFactory { chain_id: 84532, factory_hex: "09".repeat(20) });
+    c.apply_rule_change(&RuleChange::SetFactory { chain_id: 421614, factory_hex: "09".repeat(20) });
     ctx("agent.testnet", 21);
     let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
     c.pending = None;
@@ -722,7 +722,7 @@ fn owner_cannot_move_the_nonce_down_by_hand() {
     let mut c = idle();
     signed_line(&mut c, 3, SIGNED);
     ctx("owner.testnet", 20);
-    c.allow_chain(84532, 3, 1_000_000);
+    c.propose_rule(RuleChange::AllowChain { chain_id: 84532, next_nonce: 3, min_fee_per_gas: 1_000_000 });
 }
 
 #[test]
@@ -730,9 +730,9 @@ fn owner_cannot_move_the_nonce_down_by_hand() {
 fn a_chain_is_opened_only_once() {
     let mut c = idle();
     ctx("owner.testnet", 20);
-    c.allow_chain(421614, 0, 1_000_000);
+    c.apply_rule_change(&RuleChange::AllowChain { chain_id: 421614, next_nonce: 0, min_fee_per_gas: 1_000_000 });
     assert_eq!(c.get_next_nonce(421614), Some(0));
-    c.allow_chain(421614, 5, 1_000_000);
+    c.propose_rule(RuleChange::AllowChain { chain_id: 421614, next_nonce: 5, min_fee_per_gas: 1_000_000 });
 }
 
 #[test]
@@ -740,7 +740,7 @@ fn a_chain_is_opened_only_once() {
 fn a_chain_needs_a_fee_floor() {
     let mut c = idle();
     ctx("owner.testnet", 20);
-    c.allow_chain(421614, 0, 0);
+    c.propose_rule(RuleChange::AllowChain { chain_id: 421614, next_nonce: 0, min_fee_per_gas: 0 });
 }
 
 #[test]
@@ -863,4 +863,161 @@ fn golden_payload_hash_of_the_forged_log_position() {
     let (e, tx, bh) = spike5_entry();
     let log = LogIn { log_index: 0, transaction_index: 2, block_hash: String::new(), block_number: 50141592 };
     assert_eq!(hex::encode(env::sha256_array(&deployed_payload(6, &e, &tx, &log, &bh, 1))), "48abe25a3e1e614ca649bfb1fb7fb2f9f9e48e700bc334ae09ca0a0223096040");
+}
+
+// v11: rules (spec R6, R3a). Widening waits rules_delay_sec (1800 s in contract()) and can be cancelled;
+// narrowing is one council member, at once.
+fn code_rule() -> RuleChange { RuleChange::AllowCode { code_hash: "ab".repeat(32) } }
+
+#[test]
+#[should_panic(expected = "rule delay not over")]
+fn new_code_waits_for_the_rules_delay() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(code_rule());
+    ctx_at("guardian.testnet", 21, 1_000 + 1_799, vec![]);
+    c.apply_rule(id);
+}
+
+#[test]
+fn new_code_is_allowed_after_the_delay() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(code_rule());
+    assert!(!c.allowed_code.contains(&"ab".repeat(32)), "nothing changes at proposal time");
+    ctx_at("reserve.testnet", 21, 1_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    assert!(c.allowed_code.contains(&"ab".repeat(32)));
+    assert!(c.rule_proposals.is_empty());
+}
+
+#[test]
+#[should_panic(expected = "no such rule proposal")]
+fn any_council_member_cancels_a_rule() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(code_rule());
+    ctx_at("guardian.testnet", 21, 1_100, vec![]);
+    c.cancel_rule(id);
+    ctx_at("owner.testnet", 22, 1_000 + 1_800, vec![]);
+    c.apply_rule(id);
+}
+
+#[test]
+#[should_panic(expected = "only owner")]
+fn agent_cannot_propose_rules() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    c.propose_rule(code_rule());
+}
+
+#[test]
+#[should_panic(expected = "only owner")]
+fn guardian_cannot_propose_rules() {
+    let mut c = idle();
+    ctx("guardian.testnet", 20);
+    c.propose_rule(code_rule());
+}
+
+#[test]
+#[should_panic(expected = "code not on the allow list")]
+fn removing_code_is_immediate() {
+    let mut c = idle();
+    ctx("reserve.testnet", 20);
+    c.remove_code(pending().code_hash);
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "only owner, guardian or reserve")]
+fn stranger_cannot_narrow_rules() {
+    let mut c = idle();
+    ctx("stranger.testnet", 20);
+    c.disable_chain(84532);
+}
+
+#[test]
+#[should_panic(expected = "chain is disabled")]
+fn disabled_chain_refuses_new_deploys() {
+    let mut c = idle();
+    ctx("guardian.testnet", 20);
+    c.disable_chain(84532);
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "chain already allowed")]
+fn disabling_a_chain_cannot_be_used_to_reset_its_nonce() {
+    let mut c = idle();
+    ctx("guardian.testnet", 20);
+    c.disable_chain(84532);
+    assert_eq!(c.get_next_nonce(84532), Some(4), "the nonce stays");
+    ctx("owner.testnet", 21);
+    c.propose_rule(RuleChange::AllowChain { chain_id: 84532, next_nonce: 0, min_fee_per_gas: 1 });
+}
+
+#[test]
+fn a_disabled_chain_comes_back_only_after_the_delay() {
+    let mut c = idle();
+    ctx_at("guardian.testnet", 20, 1_000, vec![]);
+    c.disable_chain(84532);
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    let id = c.propose_rule(RuleChange::EnableChain { chain_id: 84532 });
+    ctx_at("owner.testnet", 22, 1_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    ctx_at("agent.testnet", 23, 3_000, vec![]);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    assert_eq!(c.pending.as_ref().map(|p| p.nonce), Some(4), "same nonce as before");
+}
+
+#[test]
+#[should_panic(expected = "raising a cap is a rule proposal")]
+fn caps_cannot_be_raised_at_once() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.lower_limits(6_000_000, 50_000_000_000);
+}
+
+#[test]
+fn caps_are_lowered_at_once_and_raised_by_proposal() {
+    let mut c = idle();
+    ctx_at("guardian.testnet", 20, 1_000, vec![]);
+    c.lower_limits(1_000_000, 20_000_000_000);
+    assert_eq!((c.max_gas_limit, c.max_fee_cap), (1_000_000, 20_000_000_000));
+    // a 24 KB runtime needs about 4.9 M gas for the code deposit alone (audit v2 Н10)
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    let id = c.propose_rule(RuleChange::SetLimits { max_gas_limit: 6_000_000, max_fee_cap: 50_000_000_000 });
+    ctx_at("owner.testnet", 22, 1_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    assert_eq!(c.max_gas_limit, 6_000_000);
+}
+
+#[test]
+#[should_panic(expected = "too many open rule proposals")]
+fn a_stolen_owner_key_cannot_fill_the_state_with_proposals() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    for _ in 0..9 { c.propose_rule(code_rule()); }
+}
+
+#[test]
+#[should_panic(expected = "chain already allowed")]
+fn apply_checks_the_rule_again() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let a = c.propose_rule(RuleChange::AllowChain { chain_id: 421614, next_nonce: 0, min_fee_per_gas: 1 });
+    let b = c.propose_rule(RuleChange::AllowChain { chain_id: 421614, next_nonce: 7, min_fee_per_gas: 1 });
+    ctx_at("owner.testnet", 21, 1_000 + 1_800, vec![]);
+    c.apply_rule(a);
+    c.apply_rule(b);
+}
+
+#[test]
+#[should_panic(expected = "factory must be a 20-byte address")]
+fn a_bad_factory_is_refused_at_proposal() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.propose_rule(RuleChange::SetFactory { chain_id: 84532, factory_hex: "0x1234".into() });
 }

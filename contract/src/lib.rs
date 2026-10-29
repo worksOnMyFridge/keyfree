@@ -41,9 +41,13 @@
 // then, anyone can read the bytes and check their sha256 against a build of the published commit, and
 // apply_upgrade deploys exactly the stored bytes. A Global Contract would also publish the code, but it
 // burns its storage NEAR for good; state storage is only staked.
+// v11 rules (spec R6, R3a): widening a rule (code on the allow list, a new or re-enabled chain, a factory,
+// higher caps) is an owner proposal that waits rules_delay_sec and any council member may cancel; narrowing
+// (remove code, disable a chain, remove a factory, lower caps) is a brake: one council member, at once.
+// A disabled chain keeps its nonce, so turning it back on can never reset the nonce (Н8).
 use near_sdk::serde_json::{json, Value};
 use near_sdk::json_types::Base64VecU8;
-use near_sdk::store::{IterableSet, LazyOption, LookupMap};
+use near_sdk::store::{IterableSet, LazyOption, LookupMap, LookupSet};
 use near_sdk::{env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseError};
 use omni_transaction::evm::types::Signature;
 use omni_transaction::evm::EVMTransaction;
@@ -52,6 +56,8 @@ const SECP_N: [u8; 32] = hex_lit("fffffffffffffffffffffffffffffffebaaedce6af48a0
 const SECP_HALF_N: [u8; 32] = hex_lit("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0");
 // EIP-3860 limit on init code; also keeps the callback inside its gas budget.
 const MAX_INIT_CODE: usize = 49_152;
+// Open rule proposals at once (bounds the state a stolen owner key can fill).
+const MAX_RULE_PROPOSALS: usize = 8;
 // MPC yield timeout is 200 blocks; after this many blocks a pending request may be released.
 const RELEASE_AFTER_BLOCKS: u64 = 250;
 // Journal entry status.
@@ -128,6 +134,25 @@ pub struct RoleChange {
     pub ready_at: Option<u64>,
 }
 
+// A rule change that widens what the agent may do. Narrowing has its own immediate methods.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, PartialEq, Debug)]
+pub enum RuleChange {
+    AllowCode { code_hash: String },
+    AllowChain { chain_id: u64, next_nonce: u64, min_fee_per_gas: u128 },
+    EnableChain { chain_id: u64 },
+    SetFactory { chain_id: u64, factory_hex: String },
+    SetLimits { max_gas_limit: u128, max_fee_cap: u128 },
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone, PartialEq, Debug)]
+pub struct RuleProposal {
+    pub id: u32,
+    pub change: RuleChange,
+    pub ready_at: u64,
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Keyfree {
@@ -159,6 +184,10 @@ pub struct Keyfree {
     unpause_votes: Vec<AccountId>,
     // The proposed wasm, kept apart from the main state so ordinary calls never load it.
     proposed_code: LazyOption<Vec<u8>>,
+    rules_delay_sec: u64,
+    rule_proposals: Vec<RuleProposal>,
+    next_rule_id: u32,
+    disabled_chains: LookupSet<u64>,
 }
 
 #[near]
@@ -166,7 +195,7 @@ impl Keyfree {
     // ignore_state lets the spike account start over; only the account itself may call it, and once
     // its keys are deleted nobody can.
     #[init(ignore_state)]
-    pub fn new(owner: AccountId, agent: AccountId, guardian: AccountId, reserve: AccountId, mpc: AccountId, path: String, upgrade_delay_sec: u64) -> Self {
+    pub fn new(owner: AccountId, agent: AccountId, guardian: AccountId, reserve: AccountId, mpc: AccountId, path: String, upgrade_delay_sec: u64, rules_delay_sec: u64) -> Self {
         require!(env::predecessor_account_id() == env::current_account_id(), "only the contract account");
         let all = [&owner, &agent, &guardian, &reserve];
         for i in 0..all.len() {
@@ -194,6 +223,10 @@ impl Keyfree {
             role_changes: vec![],
             unpause_votes: vec![],
             proposed_code: LazyOption::new(b"u3".to_vec(), None),
+            rules_delay_sec,
+            rule_proposals: vec![],
+            next_rule_id: 0,
+            disabled_chains: LookupSet::new(b"d3".to_vec()),
         }
     }
 
@@ -366,27 +399,66 @@ impl Keyfree {
         addr
     }
 
-    // Owner rules. The real project puts a delay and a guardian veto on these (A5/A6).
-    pub fn allow_code(&mut self, code_hash: String) {
+    // Rules (A5/A6, R6). Widening: 1) the owner proposes, the rules delay runs;
+    pub fn propose_rule(&mut self, change: RuleChange) -> u32 {
         self.only_owner();
-        self.allowed_code.insert(code_hash.to_lowercase());
-    }
-    // Opens a new chain once: its current nonce (the address's nonce there) and its fee floor. After that the
-    // nonce moves only by signing, resign or proof, never by hand (two contents on one nonce, Н8).
-    pub fn allow_chain(&mut self, chain_id: u64, next_nonce: u64, min_fee_per_gas: u128) {
-        self.only_owner();
-        require!(self.next_nonce.get(&chain_id).is_none(), "chain already allowed: its nonce moves only by signing");
-        require!(min_fee_per_gas > 0, "a chain needs a fee floor above 0");
-        self.next_nonce.insert(chain_id, next_nonce);
-        self.fee_floor.insert(chain_id, min_fee_per_gas);
+        self.validate_rule(&change);
+        require!(self.rule_proposals.len() < MAX_RULE_PROPOSALS, "too many open rule proposals");
+        let id = self.next_rule_id;
+        self.next_rule_id += 1;
+        let ready_at = now() + self.rules_delay_sec;
+        env::log_str(&format!("keyfree: rule {id} proposed: {change:?}, ready at unix {ready_at}"));
+        self.rule_proposals.push(RuleProposal { id, change, ready_at });
+        id
     }
 
-    // The owner's factory on a chain (deployed keyless through this contract first).
-    pub fn set_factory(&mut self, chain_id: u64, factory_hex: String) {
-        self.only_owner();
-        let f = hex::decode(factory_hex.trim_start_matches("0x")).unwrap_or_default();
-        require!(f.len() == 20, "factory must be a 20-byte address");
-        self.factories.insert(chain_id, f);
+    // 2) during the delay any council member may cancel it;
+    pub fn cancel_rule(&mut self, id: u32) {
+        let me = self.only_council();
+        let i = self.rule_proposals.iter().position(|r| r.id == id).unwrap_or_else(|| env::panic_str("no such rule proposal"));
+        self.rule_proposals.remove(i);
+        env::log_str(&format!("keyfree: rule {id} cancelled by {me}"));
+    }
+
+    // 3) after the delay a council member applies it (checked again against the state of now).
+    pub fn apply_rule(&mut self, id: u32) {
+        self.only_council();
+        let i = self.rule_proposals.iter().position(|r| r.id == id).unwrap_or_else(|| env::panic_str("no such rule proposal"));
+        require!(now() >= self.rule_proposals[i].ready_at, "rule delay not over");
+        let r = self.rule_proposals.remove(i);
+        self.validate_rule(&r.change);
+        self.apply_rule_change(&r.change);
+        env::log_str(&format!("keyfree: rule {id} applied: {:?}", r.change));
+    }
+
+    // Narrowing is a brake: one council member, at once.
+    pub fn remove_code(&mut self, code_hash: String) {
+        let me = self.only_council();
+        self.allowed_code.remove(&code_hash.to_lowercase());
+        env::log_str(&format!("keyfree: code {code_hash} removed by {me}"));
+    }
+    // New deploys on the chain stop; signed lines can still be re-signed or confirmed. The nonce stays.
+    pub fn disable_chain(&mut self, chain_id: u64) {
+        let me = self.only_council();
+        self.disabled_chains.insert(chain_id);
+        env::log_str(&format!("keyfree: chain {chain_id} disabled by {me}"));
+    }
+    pub fn remove_factory(&mut self, chain_id: u64) {
+        let me = self.only_council();
+        self.factories.remove(&chain_id);
+        env::log_str(&format!("keyfree: factory on chain {chain_id} removed by {me}"));
+    }
+    pub fn lower_limits(&mut self, max_gas_limit: u128, max_fee_cap: u128) {
+        let me = self.only_council();
+        require!(max_gas_limit <= self.max_gas_limit && max_fee_cap <= self.max_fee_cap, "raising a cap is a rule proposal");
+        self.max_gas_limit = max_gas_limit;
+        self.max_fee_cap = max_fee_cap;
+        env::log_str(&format!("keyfree: caps lowered to gas {max_gas_limit}, fee {max_fee_cap} by {me}"));
+    }
+
+    pub fn get_rules(&self) -> Value {
+        json!({ "allowed_code": self.allowed_code.iter().collect::<Vec<_>>(), "max_gas_limit": self.max_gas_limit.to_string(),
+            "max_fee_cap": self.max_fee_cap.to_string(), "rules_delay_sec": self.rules_delay_sec, "proposals": self.rule_proposals })
     }
 
     // The bytes the contract would sign, so tests can compare its encoding with viem.
@@ -623,6 +695,44 @@ impl Keyfree {
         let p = env::predecessor_account_id();
         require!(Some(&p) == self.agent.as_ref() || p == self.owner, "only agent or owner");
     }
+    fn validate_rule(&self, change: &RuleChange) {
+        match change {
+            RuleChange::AllowCode { code_hash } => {
+                require!(code_hash.len() == 64 && hex::decode(code_hash).is_ok(), "code hash must be 32 bytes of hex");
+            }
+            // Opens a new chain once: its current nonce (the address's nonce there) and its fee floor. After
+            // that the nonce moves only by signing, resign or proof, never by hand (two contents on one nonce, Н8).
+            RuleChange::AllowChain { chain_id, min_fee_per_gas, .. } => {
+                require!(self.next_nonce.get(chain_id).is_none(), "chain already allowed: its nonce moves only by signing");
+                require!(*min_fee_per_gas > 0, "a chain needs a fee floor above 0");
+            }
+            RuleChange::EnableChain { chain_id } => require!(self.disabled_chains.contains(chain_id), "chain is not disabled"),
+            // The owner's factory on a chain (deployed keyless through this contract first).
+            RuleChange::SetFactory { factory_hex, .. } => {
+                require!(hex::decode(factory_hex.trim_start_matches("0x")).map(|f| f.len()) == Ok(20), "factory must be a 20-byte address");
+            }
+            RuleChange::SetLimits { max_gas_limit, max_fee_cap } => require!(*max_gas_limit > 0 && *max_fee_cap > 0, "caps must be above 0"),
+        }
+    }
+
+    fn apply_rule_change(&mut self, change: &RuleChange) {
+        match change {
+            RuleChange::AllowCode { code_hash } => { self.allowed_code.insert(code_hash.to_lowercase()); }
+            RuleChange::AllowChain { chain_id, next_nonce, min_fee_per_gas } => {
+                self.next_nonce.insert(*chain_id, *next_nonce);
+                self.fee_floor.insert(*chain_id, *min_fee_per_gas);
+            }
+            RuleChange::EnableChain { chain_id } => { self.disabled_chains.remove(chain_id); }
+            RuleChange::SetFactory { chain_id, factory_hex } => {
+                self.factories.insert(*chain_id, hex::decode(factory_hex.trim_start_matches("0x")).unwrap_or_default());
+            }
+            RuleChange::SetLimits { max_gas_limit, max_fee_cap } => {
+                self.max_gas_limit = *max_gas_limit;
+                self.max_fee_cap = *max_fee_cap;
+            }
+        }
+    }
+
     // A fee under the chain's floor would be signed but never mined: the nonce would wait forever.
     fn require_fees(&self, chain_id: u64, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) {
         require!(max_fee_per_gas <= self.max_fee_cap && max_priority_fee_per_gas <= max_fee_per_gas, "gas price over the cap");
@@ -647,6 +757,7 @@ impl Keyfree {
 
     fn check(&self, chain_id: u64, init_code_hex: &str, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128, salt_hex: Option<String>, via_factory: bool) -> Pending {
         let nonce = *self.next_nonce.get(&chain_id).unwrap_or_else(|| env::panic_str("chain not allowed"));
+        require!(!self.disabled_chains.contains(&chain_id), "chain is disabled");
         // A journal line means this nonce was already given to a deploy: never sign another content on it.
         require!(self.journal.get(&key(chain_id, nonce)).is_none(), "nonce already used on this chain: re-sync the nonce");
         let init_code = hex::decode(init_code_hex.trim_start_matches("0x")).unwrap_or_else(|_| env::panic_str("init code must be hex"));
