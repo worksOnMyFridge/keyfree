@@ -1,0 +1,12 @@
+{
+  "near_network": "testnet",
+  "near_rpc": "https://test.rpc.fastnear.com",
+  "near_explorer": "https://testnet.nearblocks.io",
+  "policy": "policy13.keyfree-lab.testnet",
+  "agent": "agent13b.keyfree-lab.testnet",
+  "owner": "keyfree-lab.testnet",
+  "fee_multiplier": 1.2,
+  "chains": [
+    { "name": "base-sepolia", "chain_id": 84532, "rpc": "https://sepolia.base.org", "explorer": "https://sepolia.basescan.org" }
+  ]
+}
