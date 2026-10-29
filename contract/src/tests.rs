@@ -770,3 +770,97 @@ fn fee_at_the_floor_is_fine() {
     let _ = c.request_deploy(84532, INIT.into(), 200_000, 1_000_000, 1, None, None);
     assert!(c.pending.is_some());
 }
+
+// Golden vectors (spec R10, R21; audit v2 Н14). Transactions: viem 2.57.11 serialized the same deploys offline
+// (golden_vectors.mjs -> evidence/golden_rlp.json). Init code byte i = (i * 7 + 3) mod 256.
+const GOLDEN_FACTORY: &str = "e744243604e31d7be8b76e0c8bdff4ec5f560ffd";
+
+fn golden(nonce: u64, size: usize, factory: bool) -> Pending {
+    let init_code: Vec<u8> = (0..size).map(|i| (i * 7 + 3) as u8).collect();
+    Pending { chain_id: 84532, nonce, code_hash: hex::encode(env::keccak256_array(&init_code)), gas_limit: 3_000_000,
+        max_fee_per_gas: 14_000_000, max_priority_fee_per_gas: 1_000_000, init_code,
+        salt: factory.then(|| vec![0x11; 32]), factory: factory.then(|| hex::decode(GOLDEN_FACTORY).unwrap()), since_block: 0 }
+}
+
+fn check_golden(p: &Pending, data_keccak: &str, unsigned_len: usize, unsigned_keccak: &str, signed_keccak: &str) {
+    let tx = tx_of(p);
+    assert_eq!(hex::encode(env::keccak256_array(&tx.input)), data_keccak, "calldata (factory ABI) == viem");
+    let unsigned = tx.build_for_signing();
+    assert_eq!((unsigned.len(), hex::encode(env::keccak256_array(&unsigned))), (unsigned_len, unsigned_keccak.to_string()), "unsigned RLP == viem");
+    let signed = tx.build_with_signature(&Signature { v: 0, r: strip(&hex::decode(R).unwrap()), s: strip(&hex::decode(S).unwrap()) });
+    assert_eq!(hex::encode(env::keccak256_array(&signed)), signed_keccak, "signed RLP == viem");
+}
+
+#[test]
+fn golden_rlp_plain_create_1k_matches_viem() {
+    ctx("keyfree.testnet", 10);
+    let p = golden(9, 1024, false);
+    let data = hex::encode(env::keccak256_array(&p.init_code));
+    check_golden(&p, &data, 1051, "0434fb5db70c77ae36a72ad26e8086b587fe3b9fd48bb7501c718806d6f57fa2", "aa349737f12f1a60cca85ebec84cfa500169c4d431fe2f2cf79b6187aea0800e");
+}
+
+#[test]
+fn golden_rlp_factory_deploy_24k_matches_viem() {
+    ctx("keyfree.testnet", 10);
+    let p = golden(10, 24 * 1024, true);
+    check_golden(&p, &json_case("factory_24k", "data_keccak"), 24723, "19b64afc236f88cda4400fbb4ed66d698442679eb4fc376cdd75901b7d258827", "c78d7f42273fff5aa27c9e6097a6f2cf67cc5f03b465ee1df8f869277760e4e2");
+}
+
+#[test]
+fn golden_rlp_factory_deploy_48k_matches_viem() {
+    ctx("keyfree.testnet", 10);
+    let p = golden(11, 48 * 1024, true);
+    check_golden(&p, &json_case("factory_48k", "data_keccak"), 49299, "949ae109cfb102c8a2654d04bb130a2be1c8111fa814ec61e0ecb29ca339bcd3", "821328a68dd957888595aadb3d7a3c2f9adfb4ee90af1e8e91106ae05f43ee56");
+}
+
+// The rest of a case straight from the viem file, so the test names its source.
+fn json_case(name: &str, field: &str) -> String {
+    let v: Value = near_sdk::serde_json::from_str(include_str!("../../evidence/golden_rlp.json")).unwrap();
+    let c = v["cases"].as_array().unwrap().iter().find(|c| c["name"] == name).unwrap();
+    c[field].as_str().unwrap().trim_start_matches("0x").to_string()
+}
+
+#[test]
+fn golden_file_agrees_with_the_constants() {
+    for (name, len, unsigned, signed) in [
+        ("plain_1k", 1051, "0434fb5db70c77ae36a72ad26e8086b587fe3b9fd48bb7501c718806d6f57fa2", "aa349737f12f1a60cca85ebec84cfa500169c4d431fe2f2cf79b6187aea0800e"),
+        ("factory_24k", 24723, "19b64afc236f88cda4400fbb4ed66d698442679eb4fc376cdd75901b7d258827", "c78d7f42273fff5aa27c9e6097a6f2cf67cc5f03b465ee1df8f869277760e4e2"),
+        ("factory_48k", 49299, "949ae109cfb102c8a2654d04bb130a2be1c8111fa814ec61e0ecb29ca339bcd3", "821328a68dd957888595aadb3d7a3c2f9adfb4ee90af1e8e91106ae05f43ee56"),
+    ] {
+        assert_eq!(json_case(name, "unsigned_keccak"), unsigned, "{name}");
+        assert_eq!(json_case(name, "signed_keccak"), signed, "{name}");
+        let v: Value = near_sdk::serde_json::from_str(include_str!("../../evidence/golden_rlp.json")).unwrap();
+        let c = v["cases"].as_array().unwrap().iter().find(|c| c["name"] == name).unwrap().clone();
+        assert_eq!(c["unsigned_len"].as_u64(), Some(len), "{name}");
+    }
+}
+
+// Journal: the real confirm of nonce 1 on Base Sepolia (evidence/spike5.log). Read MPC answered CONFIRMED to
+// 0532a8f1…7771 and refused the forged log position (block number + 1) with hash 48abe25a…6040.
+fn spike5_entry() -> (Entry, [u8; 32], [u8; 32]) {
+    let h = |s: &str| -> Vec<u8> { hex::decode(s).unwrap() };
+    let mut e = Entry { code_hash: [0; 32], salt: [0; 32], factory: [0; 20], addr: [0; 20], tx_hash: [0; 32], status: SIGNED };
+    e.code_hash.copy_from_slice(&h("fb9fb2e46931e8f1035a5e589b31d7d69ea44e15806b1c71dfee37cebbbf6b16"));
+    e.salt.copy_from_slice(&h("d65193273a95b04eb6734a4c42e4cbb9b1eb3a6a0d551caa258c6bd6a3623bf5"));
+    e.factory.copy_from_slice(&h(GOLDEN_FACTORY));
+    e.addr.copy_from_slice(&h("693344d03f64450b09e3a071720aa252fe00fd6b"));
+    let mut tx = [0u8; 32]; tx.copy_from_slice(&h("9334ebfef002ccb72b030f76ced239724c61def23b0fc496c9f52427eb3cc6bb"));
+    let mut bh = [0u8; 32]; bh.copy_from_slice(&h("224dc0ef1236a0233658c5ca04c80f68d98ace2daf1a5d089488c28c444bb9dc"));
+    (e, tx, bh)
+}
+
+#[test]
+fn golden_payload_hash_of_the_confirmed_base_deploy() {
+    ctx("keyfree.testnet", 10);
+    let (e, tx, bh) = spike5_entry();
+    let log = LogIn { log_index: 0, transaction_index: 2, block_hash: String::new(), block_number: 50141591 };
+    assert_eq!(hex::encode(env::sha256_array(&deployed_payload(6, &e, &tx, &log, &bh, 1))), "0532a8f181edbd7caa7b27c1341adcdbee3ff5ddc491d4c9899abe05fcaf7771");
+}
+
+#[test]
+fn golden_payload_hash_of_the_forged_log_position() {
+    ctx("keyfree.testnet", 10);
+    let (e, tx, bh) = spike5_entry();
+    let log = LogIn { log_index: 0, transaction_index: 2, block_hash: String::new(), block_number: 50141592 };
+    assert_eq!(hex::encode(env::sha256_array(&deployed_payload(6, &e, &tx, &log, &bh, 1))), "48abe25a3e1e614ca649bfb1fb7fb2f9f9e48e700bc334ae09ca0a0223096040");
+}
