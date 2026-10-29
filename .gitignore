@@ -6,3 +6,5 @@ node_modules/
 *_key.json
 *.key
 .env
+# local account ids for a run (the example is committed)
+v13/config.json

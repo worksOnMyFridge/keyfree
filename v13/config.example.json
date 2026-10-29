@@ -1,0 +1,17 @@
+{
+  "lab": "keyfree-lab.testnet",
+  "policy": "policy13.keyfree-lab.testnet",
+  "agent": "agent13.keyfree-lab.testnet",
+  "guardian": "guard13.keyfree-lab.testnet",
+  "reserve": "reserve13.keyfree-lab.testnet",
+  "guardian2": "guard13b.keyfree-lab.testnet",
+  "signers": { "owner": "credentials", "agent": "local", "guardian": "local", "reserve": "local", "guardian2": "local" },
+  "mpc": "v1.signer-prod.testnet",
+  "path": "keyfree-1",
+  "chain_id": 84532,
+  "upgrade_delay_sec": 180,
+  "rules_delay_sec": 60,
+  "fee_floor_wei": 1000000,
+  "max_gas_limit": 10000000,
+  "max_fee_cap": 50000000000
+}
