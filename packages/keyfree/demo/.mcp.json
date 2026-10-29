@@ -5,7 +5,7 @@
       "args": ["../dist/mcp.js"],
       "env": {
         "KEYFREE_CONFIG": "keyfree.json",
-        "KEYFREE_AGENT_KEY": "${KEYFREE_AGENT_KEY}"
+        "KEYFREE_AGENT_KEY": "${KEYFREE_AGENT_KEY:-}"
       }
     }
   }

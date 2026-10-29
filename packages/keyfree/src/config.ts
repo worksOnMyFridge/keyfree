@@ -24,7 +24,10 @@ export interface Config {
 
 export class ConfigError extends Error {}
 
-export function loadConfig(file = process.env.KEYFREE_CONFIG ?? "keyfree.json"): Config {
+// An empty variable counts as unset (".mcp.json" passes "${VAR:-}" when the user has not set it).
+const env = (name: string) => process.env[name] || undefined;
+
+export function loadConfig(file = env("KEYFREE_CONFIG") ?? "keyfree.json"): Config {
   const full = path.resolve(file);
   if (!fs.existsSync(full)) {
     throw new ConfigError(`No ${file} here (${process.cwd()}). Create one (see keyfree.example.json) or set KEYFREE_CONFIG to its path.`);
@@ -55,7 +58,7 @@ function credentialsFile(cfg: Config, account: string): string {
 
 // The agent's key: a function-call key that may only call the policy's request methods.
 export function agentKey(cfg: Config): string {
-  const file = process.env.KEYFREE_AGENT_KEY ?? credentialsFile(cfg, cfg.agent);
+  const file = env("KEYFREE_AGENT_KEY") ?? credentialsFile(cfg, cfg.agent);
   if (!fs.existsSync(file)) {
     throw new ConfigError(`No key for the agent ${cfg.agent}. Set KEYFREE_AGENT_KEY to a key file, or put it in ${credentialsFile(cfg, cfg.agent)}.`);
   }
@@ -64,7 +67,7 @@ export function agentKey(cfg: Config): string {
 
 // A council member's key, for the human-only CLI commands. Never used by the MCP server.
 export function councilKey(cfg: Config, account: string): string {
-  const file = process.env.KEYFREE_COUNCIL_KEY ?? credentialsFile(cfg, account);
+  const file = env("KEYFREE_COUNCIL_KEY") ?? credentialsFile(cfg, account);
   if (!fs.existsSync(file)) throw new ConfigError(`No key for ${account}: expected ${file} (or set KEYFREE_COUNCIL_KEY).`);
   return readKeyFile(file);
 }
