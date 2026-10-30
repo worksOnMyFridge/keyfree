@@ -165,7 +165,7 @@ council keys on separate devices, never where the agent runs.
 ## Disclosures
 
 - **Built during the hackathon.** All Keyfree code was written in the NEAR HACKATHON window (from
-  2026-10-19): the first experiments on 2026-10-25, the first commit in this repository on 2026-10-28. There
+  2026-10-19): the first experiments on 2026-10-25, the first commit in this repository on 2026-10-29 (UTC). There
   is no earlier Keyfree code.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
