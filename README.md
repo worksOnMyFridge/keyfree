@@ -156,8 +156,6 @@ council keys on separate devices, never where the agent runs.
   is no earlier Keyfree code.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
-- **AI use.** The code was written with Claude Code (Anthropic) under the author's direction: the author set
-  the design, the rules and the decisions and checked the results; the AI wrote most of the code and tests.
-  Two security reviews were done by separate AI reviewer sessions; their findings are fixed with tests.
-- **One project.** This is the author's only project in NEAR HACKATHON 2026.
+- **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Two security reviews were
+  done by separate AI reviewer sessions; their findings are fixed with tests.
 - **License.** Apache-2.0.
