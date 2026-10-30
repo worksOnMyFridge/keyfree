@@ -2,7 +2,7 @@
 // tx that has logs, ask Read MPC (Log extractor, no expected hash) and compare its payload_hash with
 // ours under a few spellings of the `data` string. Testnet only.
 import crypto from "node:crypto";
-import { loadAccount, teraToGas, explorer } from "./tools/near.mjs";
+import { loadAccount, teraToGas, explorer } from "../tools/near.mjs";
 
 const RPC = "https://sepolia.base.org";
 const rpc = async (method, params) => (await (await fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json()).result;

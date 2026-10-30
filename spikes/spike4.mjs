@@ -3,8 +3,8 @@
 // contract account's only key and show that (a) the key list is empty, (b) the old key can no longer
 // redeploy, (c) the agent still deploys through the rules. Testnet NEAR + Base Sepolia dust only.
 import fs from "node:fs";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "./tools/evm.mjs";
-import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "../tools/evm.mjs";
+import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
 
 const CONTRACT = `keyfree.${ACCOUNT}`, AGENT = `proba.${ACCOUNT}`, STRANGER = `proba2.${ACCOUNT}`;
 const MPC = "v1.signer-prod.testnet", CHAIN = baseSepolia.id;
@@ -20,7 +20,7 @@ const stranger = new Account(STRANGER, provider, key("../s10-proba/proba2_contra
 const base = createPublicClient({ chain: baseSepolia, transport: http("https://sepolia.base.org") });
 const log = [];
 const say = (s) => { console.log(s); log.push(s); };
-const save = () => fs.appendFileSync(new URL("./evidence/spike4.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);
+const save = () => fs.appendFileSync(new URL("../evidence/spike4.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);
 const call = (who, methodName, args, gas = "30") => who.callFunctionRaw({ contractId: CONTRACT, methodName, args, gas: teraToGas(gas) });
 const refused = async (name, fn, reason) => {
   try { await fn(); say(`FAIL ${name}: was allowed`); }
@@ -46,7 +46,7 @@ async function deploy(label, salt) {
 
 // 1. fund the agent a little (testnet), redeploy v2 and re-init in one transaction signed by the account itself
 await owner.transfer({ receiverId: AGENT, amount: parseNearAmount("0.3") });
-const code = fs.readFileSync(new URL("./keyfree.opt.wasm", import.meta.url));
+const code = fs.readFileSync(new URL("../keyfree.opt.wasm", import.meta.url));
 const d = await contract.signAndSendTransaction({ receiverId: CONTRACT, actions: [
   actions.deployContract(code),
   actions.functionCall("new", { owner: ACCOUNT, agent: AGENT, mpc: MPC, path: "keyfree-1" }, teraToGas("30"), 0n),

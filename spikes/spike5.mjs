@@ -4,20 +4,20 @@
 //                   confirm <nonce> [Safe|Finalized] — wait until the block is safe, then ask the contract to confirm via Read MPC
 import fs from "node:fs";
 import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress,
-  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog, privateKeyToAccount, generatePrivateKey } from "./tools/evm.mjs";
-import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
+  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog, privateKeyToAccount, generatePrivateKey } from "../tools/evm.mjs";
+import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`;
 const MPC = "v1.signer-prod.testnet", CHAIN = baseSepolia.id;
 const INIT = "0x600a600c600039600a6000f3602a60005260206000f3", RUNTIME = "0x602a60005260206000f3";
-const F = JSON.parse(fs.readFileSync(new URL("./factory/factory.json", import.meta.url)));
+const F = JSON.parse(fs.readFileSync(new URL("../factory/factory.json", import.meta.url)));
 const scan = (h) => `https://sepolia.basescan.org/tx/${h}`;
-const stateFile = new URL("./evidence/spike5_state.json", import.meta.url);
+const stateFile = new URL("../evidence/spike5_state.json", import.meta.url);
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile)) : {};
 const keep = () => fs.writeFileSync(stateFile, JSON.stringify(state, null, 1));
 const log = [];
 const say = (s) => { console.log(s); log.push(s); };
-const save = () => fs.appendFileSync(new URL("./evidence/spike5.log", import.meta.url), `--- ${new Date().toISOString()} ${process.argv.slice(2).join(" ")}\n${log.join("\n")}\n`);
+const save = () => fs.appendFileSync(new URL("../evidence/spike5.log", import.meta.url), `--- ${new Date().toISOString()} ${process.argv.slice(2).join(" ")}\n${log.join("\n")}\n`);
 const owner = loadAccount(LAB);
 const base = createPublicClient({ chain: baseSepolia, transport: http("https://sepolia.base.org") });
 const keyFile = (p) => new URL(`./${p}_contract_key.json`, import.meta.url); // spike-only keys, never printed
@@ -62,7 +62,7 @@ if (stage === "near") {
   await sub("agent", "0.5");
   const policy = accountOf(POLICY, "policy");
   const d = await policy.signAndSendTransaction({ receiverId: POLICY, actions: [
-    actions.deployContract(fs.readFileSync(new URL("./keyfree.opt.wasm", import.meta.url))),
+    actions.deployContract(fs.readFileSync(new URL("../keyfree.opt.wasm", import.meta.url))),
     actions.functionCall("new", { owner: LAB, agent: AGENT, mpc: MPC, path: "keyfree-1" }, teraToGas("30"), 0n),
   ] });
   say(`v3 deployed + init ${explorer(d.transaction.hash)}`);

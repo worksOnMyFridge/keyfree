@@ -6,18 +6,18 @@
 // (4) an underpriced deploy that the chain does not take is healed by resign(): same nonce + content, new fees.
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther } from "./tools/evm.mjs";
-import { loadAccount, provider, explorer, view, teraToGas, Account, actions } from "./tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther } from "../tools/evm.mjs";
+import { loadAccount, provider, explorer, view, teraToGas, Account, actions } from "../tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`, CHAIN = baseSepolia.id;
-const stateFile = new URL("./evidence/spike5_state.json", import.meta.url);
+const stateFile = new URL("../evidence/spike5_state.json", import.meta.url);
 const state = JSON.parse(fs.readFileSync(stateFile));
-const D = fs.readFileSync(new URL("./keyfree_v6d.opt.wasm", import.meta.url));
+const D = fs.readFileSync(new URL("../keyfree_v6d.opt.wasm", import.meta.url));
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 const log = [];
 const say = (s) => { console.log(s); log.push(s); };
 const owner = loadAccount(LAB);
-const agent = new Account(AGENT, provider, JSON.parse(fs.readFileSync(new URL("./agent_contract_key.json", import.meta.url))).private_key);
+const agent = new Account(AGENT, provider, JSON.parse(fs.readFileSync(new URL("../agent_contract_key.json", import.meta.url))).private_key);
 const base = createPublicClient({ chain: baseSepolia, transport: http("https://sepolia.base.org") });
 const call = (who, methodName, args, gas = "30") => who.callFunctionRaw({ contractId: POLICY, methodName, args, gas: teraToGas(gas) });
 const result = (out) => JSON.parse(Buffer.from(out.status.SuccessValue, "base64").toString() || "null");
@@ -79,4 +79,4 @@ const fixed = result(await call(agent, "resign", { chain_id: CHAIN, nonce: u.non
 const h2 = await base.sendRawTransaction({ serializedTransaction: fixed });
 await check("resigned with real fees (same nonce and content)", u, h2);
 say(`after: contract next ${await view(POLICY, "get_next_nonce", { chain_id: CHAIN })}, Base ${await base.getTransactionCount({ address: state.address })}, open ${JSON.stringify(await view(POLICY, "get_open"))}; ETH left ${formatEther(await base.getBalance({ address: state.address }))}`);
-fs.appendFileSync(new URL("./evidence/spike8.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);
+fs.appendFileSync(new URL("../evidence/spike8.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);

@@ -1,6 +1,7 @@
 {
   "name": "keyfree-repo",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Keyfree: rules in a NEAR contract, NEAR MPC signs, no private key anywhere. Scripts only; the packages live in packages/.",
   "scripts": {

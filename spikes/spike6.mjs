@@ -3,14 +3,14 @@
 // can cancel). Afterwards the same ETH address still deploys through the factory. Pause is checked too.
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { keccak256, toHex, createPublicClient, http, baseSepolia } from "./tools/evm.mjs";
-import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
+import { keccak256, toHex, createPublicClient, http, baseSepolia } from "../tools/evm.mjs";
+import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`, GUARD = `guardian.${LAB}`;
 const MPC = "v1.signer-prod.testnet", CHAIN = baseSepolia.id, DELAY = 60;
 const INIT = "0x600a600c600039600a6000f3602a60005260206000f3";
-const state = JSON.parse(fs.readFileSync(new URL("./evidence/spike5_state.json", import.meta.url)));
-const A = fs.readFileSync(new URL("./keyfree_v4a.opt.wasm", import.meta.url)), B = fs.readFileSync(new URL("./keyfree_v4b.opt.wasm", import.meta.url));
+const state = JSON.parse(fs.readFileSync(new URL("../evidence/spike5_state.json", import.meta.url)));
+const A = fs.readFileSync(new URL("../keyfree_v4a.opt.wasm", import.meta.url)), B = fs.readFileSync(new URL("../keyfree_v4b.opt.wasm", import.meta.url));
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 const log = [];
 const say = (s) => { console.log(s); log.push(s); };
@@ -79,4 +79,4 @@ const out = await call(agent, "request_deploy", req, "250");
 const raw = JSON.parse(Buffer.from(out.status.SuccessValue, "base64").toString());
 const rc = await base.waitForTransactionReceipt({ hash: await base.sendRawTransaction({ serializedTransaction: raw }) });
 say(`${rc.status === "success" ? "OK  " : "FAIL"} deploy after the keyless upgrade, same address, through the factory  https://sepolia.basescan.org/tx/${rc.transactionHash}`);
-fs.appendFileSync(new URL("./evidence/spike6.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);
+fs.appendFileSync(new URL("../evidence/spike6.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);

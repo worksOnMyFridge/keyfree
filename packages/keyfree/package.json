@@ -2,6 +2,7 @@
   "name": "keyfree",
   "version": "0.1.0",
   "description": "Let an AI agent deploy EVM contracts with no private key anywhere: rules live in a NEAR contract, NEAR MPC signs.",
+  "license": "Apache-2.0",
   "type": "module",
   "bin": {
     "keyfree": "dist/cli.js",

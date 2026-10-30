@@ -2,8 +2,8 @@
 // EIP-1559 contract-creation tx for Base Sepolia, get it signed by the NEAR MPC through a
 // cross-contract call, and check the result independently with viem. Nothing is broadcast.
 import fs from "node:fs";
-import { keccak256, serializeTransaction, parseTransaction, recoverTransactionAddress, getContractAddress, createPublicClient, http, baseSepolia } from "./tools/evm.mjs";
-import { loadAccount, ACCOUNT, provider, explorer, gasUsed, view, KeyPair, teraToGas, parseNearAmount, Account } from "./tools/near.mjs";
+import { keccak256, serializeTransaction, parseTransaction, recoverTransactionAddress, getContractAddress, createPublicClient, http, baseSepolia } from "../tools/evm.mjs";
+import { loadAccount, ACCOUNT, provider, explorer, gasUsed, view, KeyPair, teraToGas, parseNearAmount, Account } from "../tools/near.mjs";
 
 const MPC = "v1.signer-prod.testnet", PATH = "keyfree-1", PREFIX = process.env.KF_PREFIX || "keyfree";
 const CONTRACT = `${PREFIX}.${ACCOUNT}`;
@@ -14,7 +14,7 @@ const EVIL = "0x600a600c600039600a6000f3602a60005260206000ff"; // same shape, en
 const owner = loadAccount();
 const keyFile = new URL(`./${PREFIX}_contract_key.json`, import.meta.url); // spike-only key, never printed
 const evidence = [];
-fs.mkdirSync(new URL("./evidence/", import.meta.url), { recursive: true });
+fs.mkdirSync(new URL("../evidence/", import.meta.url), { recursive: true });
 
 const step = async (name, fn, mustFail = null) => { // mustFail = expected refusal text
   const t0 = Date.now();
@@ -57,7 +57,7 @@ const contract = new Account(CONTRACT, provider, kp.toString());
 const call = (who, methodName, args, gas = "30") => who.callFunctionRaw({ contractId: CONTRACT, methodName, args, gas: teraToGas(gas) });
 
 if (process.argv[2] !== "skip-deploy") {
-  await step("deploy", () => contract.deployContract(fs.readFileSync(new URL("./keyfree.opt.wasm", import.meta.url))));
+  await step("deploy", () => contract.deployContract(fs.readFileSync(new URL("../keyfree.opt.wasm", import.meta.url))));
   await step("init", () => call(contract, "new", { owner: ACCOUNT, agent: ACCOUNT, mpc: MPC, path: PATH, eth_address: ethAddr }));
   await step("owner allows the init code hash", () => call(owner, "allow_code", { code_hash: keccak256(INIT).slice(2) }));
   await step(`owner allows chain ${CHAIN}`, () => call(owner, "allow_chain", { chain_id: CHAIN, next_nonce: nonce }));
@@ -102,6 +102,6 @@ if (raw) {
     seconds: Number(secs),
   };
   console.log(checks); evidence.push(JSON.stringify(checks));
-  fs.writeFileSync(new URL("./evidence/signed_tx.txt", import.meta.url), raw + "\n");
+  fs.writeFileSync(new URL("../evidence/signed_tx.txt", import.meta.url), raw + "\n");
 }
-fs.appendFileSync(new URL("./evidence/run.log", import.meta.url), `--- ${new Date().toISOString()}\n${evidence.join("\n")}\n`);
+fs.appendFileSync(new URL("../evidence/run.log", import.meta.url), `--- ${new Date().toISOString()}\n${evidence.join("\n")}\n`);

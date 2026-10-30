@@ -2,8 +2,8 @@
 // Base Sepolia from its keyless address: a plain CREATE and a CREATE2 through the deterministic
 // proxy (address known before signing). We broadcast them and check address, code and a call.
 import fs from "node:fs";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "./tools/evm.mjs";
-import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, Account } from "./tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "../tools/evm.mjs";
+import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, Account } from "../tools/near.mjs";
 
 const CONTRACT = `keyfree.${ACCOUNT}`, CHAIN = baseSepolia.id;
 const INIT = "0x600a600c600039600a6000f3602a60005260206000f3", RUNTIME = "0x602a60005260206000f3";
@@ -11,7 +11,7 @@ const PROXY = "0x4e59b44847b379578588920ca78fbf26c0b4956c";
 const SALT = keccak256(toHex(process.env.KF_SALT || "keyfree-spike-1"));
 const scan = (h) => `https://sepolia.basescan.org/tx/${h}`;
 const owner = loadAccount();
-const kp = KeyPair.fromString(JSON.parse(fs.readFileSync(new URL("./keyfree_contract_key.json", import.meta.url))).private_key);
+const kp = KeyPair.fromString(JSON.parse(fs.readFileSync(new URL("../keyfree_contract_key.json", import.meta.url))).private_key);
 const contract = new Account(CONTRACT, provider, kp.toString());
 const base = createPublicClient({ chain: baseSepolia, transport: http("https://sepolia.base.org") });
 const ethAddr = await view(CONTRACT, "get_eth_address");
@@ -19,7 +19,7 @@ const log = [];
 const say = (s) => { console.log(s); log.push(s); };
 
 if (process.argv[2] !== "skip-deploy") {
-  const o = await contract.deployContract(fs.readFileSync(new URL("./keyfree.opt.wasm", import.meta.url)));
+  const o = await contract.deployContract(fs.readFileSync(new URL("../keyfree.opt.wasm", import.meta.url)));
   say(`code updated ${explorer(o.transaction.hash)}`);
 }
 const nonce = await base.getTransactionCount({ address: ethAddr });
@@ -57,4 +57,4 @@ async function deploy(label, salt) {
 await deploy("plain CREATE", null);
 await deploy("CREATE2 via proxy", SALT);
 say(`contract nonce now ${await view(CONTRACT, "get_next_nonce", { chain_id: CHAIN })}, Base nonce ${await base.getTransactionCount({ address: ethAddr })}`);
-fs.appendFileSync(new URL("./evidence/spike2.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);
+fs.appendFileSync(new URL("../evidence/spike2.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);

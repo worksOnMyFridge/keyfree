@@ -3,19 +3,19 @@
 // limit): contract bytes == viem, tx lands, code is right, and the NEAR callback gas stays inside 50 Tgas.
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, encodeFunctionData, serializeTransaction, formatEther } from "./tools/evm.mjs";
-import { loadAccount, provider, explorer, view, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, encodeFunctionData, serializeTransaction, formatEther } from "../tools/evm.mjs";
+import { loadAccount, provider, explorer, view, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`, CHAIN = baseSepolia.id;
-const F = JSON.parse(fs.readFileSync(new URL("./factory/factory.json", import.meta.url)));
-const stateFile = new URL("./evidence/spike5_state.json", import.meta.url);
+const F = JSON.parse(fs.readFileSync(new URL("../factory/factory.json", import.meta.url)));
+const stateFile = new URL("../evidence/spike5_state.json", import.meta.url);
 const state = JSON.parse(fs.readFileSync(stateFile));
-const C = fs.readFileSync(new URL("./keyfree_v5c.opt.wasm", import.meta.url));
+const C = fs.readFileSync(new URL("../keyfree_v5c.opt.wasm", import.meta.url));
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 const log = [];
 const say = (s) => { console.log(s); log.push(s); };
 const owner = loadAccount(LAB);
-const agent = new Account(AGENT, provider, JSON.parse(fs.readFileSync(new URL("./agent_contract_key.json", import.meta.url))).private_key);
+const agent = new Account(AGENT, provider, JSON.parse(fs.readFileSync(new URL("../agent_contract_key.json", import.meta.url))).private_key);
 const base = createPublicClient({ chain: baseSepolia, transport: http("https://sepolia.base.org") });
 const call = (who, methodName, args, gas = "30") => who.callFunctionRaw({ contractId: POLICY, methodName, args, gas: teraToGas(gas) });
 const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
@@ -57,4 +57,4 @@ for (const size of [1024, 24576, 49152]) {
 }
 fs.writeFileSync(stateFile, JSON.stringify(state, null, 1));
 say(`ETH left ${formatEther(await base.getBalance({ address: state.address }))}`);
-fs.appendFileSync(new URL("./evidence/spike7.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);
+fs.appendFileSync(new URL("../evidence/spike7.log", import.meta.url), `--- ${new Date().toISOString()}\n${log.join("\n")}\n`);

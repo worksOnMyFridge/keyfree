@@ -151,6 +151,8 @@ v14, a new agent, the allowed proxy upgrade and its refusals, Read MPC confirmat
 | `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
 | `packages/keyfree/demo/` | `Counter`; `vault-kit`, a prompt-injection example (its README swaps the vault owner); `treasury`, the upgradeable treasury (proxy, v1, v2) |
 | `v13/`, `v14/` | end-to-end testnet scripts and builds |
+| `tools/` | small viem and NEAR helpers the scripts share |
+| `spikes/` | the first experiments (2026-10-25 .. 28), kept for the record |
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
 
@@ -169,4 +171,6 @@ council keys on separate devices, never where the agent runs.
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
 - **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Two security reviews were
   done by separate AI reviewer sessions; their findings are fixed with tests.
-- **License.** Apache-2.0.
+- **License.** Apache-2.0 ([LICENSE](LICENSE)). The Solidity contracts (`factory/`, `packages/keyfree/demo/`)
+  carry `SPDX-License-Identifier: MIT`: the header is part of their bytecode metadata, so changing it would
+  change the code hashes the live policy allows.
