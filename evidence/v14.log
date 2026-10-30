@@ -101,3 +101,15 @@ waiting 65 s for the rules delay
   log: keyfree: rule 14 applied: AllowProxyUpgrade { chain_id: 84532, proxy_hex: "0xd1b8718059d3e790b5be0fec94e7059a71186b03", implementation_hex: "0x269bdae85a7864e882bdd97d61fc5bc084594060" }
 applied rules 14
 allowed now: 84532:0xd1b8718059d3e790b5be0fec94e7059a71186b03:0x269bdae85a7864e882bdd97d61fc5bc084594060
+--- 2026-10-30T03:53:10.397Z demo (1 ok, 0 fail)
+OK   demo proxy admin = the policy's keyless address
+demo proxy 0xd1b8718059d3e790b5be0fec94e7059a71186b03 runs version 1
+allowed now: 84532:0xd1b8718059d3e790b5be0fec94e7059a71186b03:0x269bdae85a7864e882bdd97d61fc5bc084594060
+--- 2026-10-30T04:04:32.444Z demo (1 ok, 0 fail)
+OK   demo proxy admin = the policy's keyless address
+demo proxy 0xd1b8718059d3e790b5be0fec94e7059a71186b03 runs version 2
+allowed now: nothing for this proxy (used up or not yet)
+--- 2026-10-30T04:08:21.015Z demo (1 ok, 0 fail)
+OK   demo proxy admin = the policy's keyless address
+demo proxy 0xd1b8718059d3e790b5be0fec94e7059a71186b03 runs version 2
+allowed now: nothing for this proxy (used up or not yet)

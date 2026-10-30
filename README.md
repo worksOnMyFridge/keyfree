@@ -45,6 +45,8 @@ the policy signs. The council allows one exact upgrade (this proxy, this impleme
 delay; the agent's request uses it up, so the same upgrade, a rollback or any other implementation is
 refused. On Base Sepolia the agent switched a live treasury from v1 to v2 (v2 adds a daily withdrawal limit)
 and was refused all three of those ([CLAIMS 7](CLAIMS.md#7-a-treasury-upgrade-only-the-one-the-council-allowed)).
+A fresh Claude Code session did the same on a second treasury: another version refused, v2 done and confirmed
+by Read MPC, the rollback refused (CLAIMS 7.7).
 Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, and it never sends value.
 
 ## See it in 2 minutes (browser only)
@@ -53,8 +55,8 @@ Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, an
    You see a contract account with **no access keys**: it was deployed, initialised and had its key deleted in
    [one transaction](https://testnet.nearblocks.io/txns/7iawPybUxDjWqQFXCayAFxecGLLbeiMGP8bczy9sMVbd).
 2. Open its ETH address [`0x43e3…fcb0`](https://sepolia.basescan.org/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0) on Base Sepolia.
-   You see ten contract deploys and one treasury upgrade, nonces 0 to 10, from an address whose private key
-   does not exist.
+   You see eleven contract deploys and two treasury upgrades, nonces 0 to 12, from an address whose private
+   key does not exist.
 3. Open [this deploy](https://sepolia.basescan.org/tx/0x59ec94223de38de6bcbb12515c2facacd4578ce80483f734100869ae4f4e7120).
    A Claude Code session made it after one sentence: "deploy Counter with start 1 to Base Sepolia through keyfree".
 4. [CLAIMS.md](CLAIMS.md) lists every claim with its transaction, log line or test.
