@@ -1,7 +1,7 @@
 // Compile contracts/Vault.sol into out/Vault.sol/Vault.json (Foundry layout).
 const fs = require("fs");
 const path = require("path");
-const solc = require("../../../../../tools/node_modules/solc");
+const solc = require("solc");
 const src = fs.readFileSync(path.join(__dirname, "contracts", "Vault.sol"), "utf8");
 const input = { language: "Solidity", sources: { "Vault.sol": { content: src } },
   settings: { optimizer: { enabled: true, runs: 200 }, evmVersion: "cancun", outputSelection: { "*": { "*": ["abi", "evm.bytecode.object"] } } } };

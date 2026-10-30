@@ -3,8 +3,8 @@
 // limit): contract bytes == viem, tx lands, code is right, and the NEAR callback gas stays inside 50 Tgas.
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, encodeFunctionData, serializeTransaction, formatEther } from "../tools/evm.mjs";
-import { loadAccount, provider, explorer, view, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, encodeFunctionData, serializeTransaction, formatEther } from "./tools/evm.mjs";
+import { loadAccount, provider, explorer, view, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`, CHAIN = baseSepolia.id;
 const F = JSON.parse(fs.readFileSync(new URL("./factory/factory.json", import.meta.url)));

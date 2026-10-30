@@ -113,3 +113,11 @@ allowed now: nothing for this proxy (used up or not yet)
 OK   demo proxy admin = the policy's keyless address
 demo proxy 0xd1b8718059d3e790b5be0fec94e7059a71186b03 runs version 2
 allowed now: nothing for this proxy (used up or not yet)
+--- 2026-10-30T17:19:55.807Z check (0 ok, 0 fail)
+keyfree-lab.testnet: 3.702 NEAR
+policy13.keyfree-lab.testnet: 22.653 NEAR
+agent14.keyfree-lab.testnet: 0.99 NEAR
+guard13b.keyfree-lab.testnet: 0.298 NEAR
+reserve13.keyfree-lab.testnet: 0.299 NEAR
+policy: build v14, version 3, keys 0, ETH 0.000024404339127649 on 0x43e3cb8d471680307f0c232e5ac190828681fcb0
+v14 wasm 362719 bytes, stake ~3.63719 NEAR, sha256 764eb8f81ff528e0...

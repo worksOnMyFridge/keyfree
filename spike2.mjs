@@ -2,8 +2,8 @@
 // Base Sepolia from its keyless address: a plain CREATE and a CREATE2 through the deterministic
 // proxy (address known before signing). We broadcast them and check address, code and a call.
 import fs from "node:fs";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "../tools/evm.mjs";
-import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, Account } from "../tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "./tools/evm.mjs";
+import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, Account } from "./tools/near.mjs";
 
 const CONTRACT = `keyfree.${ACCOUNT}`, CHAIN = baseSepolia.id;
 const INIT = "0x600a600c600039600a6000f3602a60005260206000f3", RUNTIME = "0x602a60005260206000f3";

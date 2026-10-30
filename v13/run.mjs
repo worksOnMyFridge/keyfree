@@ -6,7 +6,7 @@
 //   install    deploy v13 "a" + new + delete the policy key in ONE transaction -> 0 keys; derive the ETH address;
 //              propose the rules (factory, test codes, Base Sepolia, caps), wait rules_delay_sec, apply them
 //   agent <id> rotate the agent: new account with a function-call key, owner proposal, delay, apply
-//   fund       wait until the derived ETH address has Base Sepolia ETH
+//   fund       wait until the derived ETH address has Base Sepolia ETH (from a faucet)
 //   factory    keyless deploy of KeyfreeFactory, then the SetFactory rule through the delay
 //   deploy     keyless deploys through the factory: 22 B, 1 KB, 24 KB, 48 KB init code; bytes == viem
 //   confirm    wait for a Safe block, confirm the last deploy by Read MPC; a forged position must fail
@@ -19,8 +19,8 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther,
-  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog } from "../../tools/evm.mjs";
-import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../../tools/near.mjs";
+  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog } from "../tools/evm.mjs";
+import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
 
 const here = (f) => new URL(`./${f}`, import.meta.url);
 const top = (f) => new URL(`../${f}`, import.meta.url);

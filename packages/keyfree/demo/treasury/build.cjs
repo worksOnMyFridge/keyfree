@@ -1,7 +1,7 @@
 // Compile contracts/*.sol into out/<File>.sol/<Contract>.json (Foundry layout).
 const fs = require("fs");
 const path = require("path");
-const solc = require("../../../../../tools/node_modules/solc");
+const solc = require("solc");
 const names = ["TreasuryProxy", "TreasuryV1", "TreasuryV2"];
 const sources = Object.fromEntries(names.map((n) => [`${n}.sol`, { content: fs.readFileSync(path.join(__dirname, "contracts", `${n}.sol`), "utf8") }]));
 const input = { language: "Solidity", sources,

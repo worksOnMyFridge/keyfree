@@ -4,8 +4,8 @@
 //                   confirm <nonce> [Safe|Finalized] — wait until the block is safe, then ask the contract to confirm via Read MPC
 import fs from "node:fs";
 import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress,
-  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog, privateKeyToAccount, generatePrivateKey } from "../tools/evm.mjs";
-import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
+  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog, privateKeyToAccount, generatePrivateKey } from "./tools/evm.mjs";
+import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`;
 const MPC = "v1.signer-prod.testnet", CHAIN = baseSepolia.id;

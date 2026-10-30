@@ -3,7 +3,7 @@
 // Init code is a fixed pattern: byte i = (i * 7 + 3) mod 256. Signature r/s are fixed test values.
 // Run: node golden_vectors.mjs  ->  evidence/golden_rlp.json
 import fs from "node:fs";
-import { keccak256, serializeTransaction, encodeFunctionData, toHex } from "../tools/evm.mjs";
+import { keccak256, serializeTransaction, encodeFunctionData, toHex } from "./tools/evm.mjs";
 
 const init = (n) => toHex(Uint8Array.from({ length: n }, (_, i) => (i * 7 + 3) & 0xff));
 const R = "0xc82ea247999e197432c89e62fdb8395b960b091b7c5128cbd6f58b1278aef4c8";

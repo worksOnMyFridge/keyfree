@@ -15,8 +15,8 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther,
-  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog, parseEther } from "../../tools/evm.mjs";
-import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../../tools/near.mjs";
+  encodeFunctionData, encodeDeployData, serializeTransaction, decodeEventLog, parseEther } from "../tools/evm.mjs";
+import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
 
 const here = (f) => new URL(`./${f}`, import.meta.url);
 const top = (f) => new URL(`../${f}`, import.meta.url);

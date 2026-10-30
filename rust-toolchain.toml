@@ -1,0 +1,4 @@
+# The exact compiler the live policy was built with: the same version gives the same wasm, byte for byte.
+[toolchain]
+channel = "1.95.0"
+targets = ["wasm32-unknown-unknown"]

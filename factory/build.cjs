@@ -1,6 +1,6 @@
 // Compile KeyfreeFactory with solc-js and write factory.json {abi, bytecode}.
 const fs = require("fs");
-const solc = require("../../tools/node_modules/solc");
+const solc = require("solc");
 const input = { language: "Solidity", sources: { "KeyfreeFactory.sol": { content: fs.readFileSync(__dirname + "/KeyfreeFactory.sol", "utf8") } },
   settings: { optimizer: { enabled: true, runs: 200 }, evmVersion: "cancun", outputSelection: { "*": { "*": ["abi", "evm.bytecode.object"] } } } };
 const out = JSON.parse(solc.compile(JSON.stringify(input)));

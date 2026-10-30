@@ -3,8 +3,8 @@
 // contract account's only key and show that (a) the key list is empty, (b) the old key can no longer
 // redeploy, (c) the agent still deploys through the rules. Testnet NEAR + Base Sepolia dust only.
 import fs from "node:fs";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "../tools/evm.mjs";
-import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther, recoverTransactionAddress } from "./tools/evm.mjs";
+import { loadAccount, ACCOUNT, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
 
 const CONTRACT = `keyfree.${ACCOUNT}`, AGENT = `proba.${ACCOUNT}`, STRANGER = `proba2.${ACCOUNT}`;
 const MPC = "v1.signer-prod.testnet", CHAIN = baseSepolia.id;

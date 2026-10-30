@@ -2,7 +2,7 @@
 // keyless Base Sepolia deploy is finalized (BlockHash extractor only: a bare deploy emits no logs).
 // Optional EXPECTED=<hex> adds expected_payload_hash to see whether testnet accepts the field.
 import fs from "node:fs";
-import { loadAccount, teraToGas, explorer } from "../tools/near.mjs";
+import { loadAccount, teraToGas, explorer } from "./tools/near.mjs";
 
 const TX = process.argv[2] || "0x336f748bc346238fe3bca1a8785085113cc8c1091efbe764946144b78ccedb76";
 const RPC = "https://sepolia.base.org";

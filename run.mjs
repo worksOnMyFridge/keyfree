@@ -2,8 +2,8 @@
 // EIP-1559 contract-creation tx for Base Sepolia, get it signed by the NEAR MPC through a
 // cross-contract call, and check the result independently with viem. Nothing is broadcast.
 import fs from "node:fs";
-import { keccak256, serializeTransaction, parseTransaction, recoverTransactionAddress, getContractAddress, createPublicClient, http, baseSepolia } from "../tools/evm.mjs";
-import { loadAccount, ACCOUNT, provider, explorer, gasUsed, view, KeyPair, teraToGas, parseNearAmount, Account } from "../tools/near.mjs";
+import { keccak256, serializeTransaction, parseTransaction, recoverTransactionAddress, getContractAddress, createPublicClient, http, baseSepolia } from "./tools/evm.mjs";
+import { loadAccount, ACCOUNT, provider, explorer, gasUsed, view, KeyPair, teraToGas, parseNearAmount, Account } from "./tools/near.mjs";
 
 const MPC = "v1.signer-prod.testnet", PATH = "keyfree-1", PREFIX = process.env.KF_PREFIX || "keyfree";
 const CONTRACT = `${PREFIX}.${ACCOUNT}`;

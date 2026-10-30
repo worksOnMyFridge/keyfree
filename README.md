@@ -111,6 +111,17 @@ The contract tests include golden tests: the policy's transaction bytes for 1 KB
 and for a proxy upgrade equal viem's (`evidence/golden_rlp.json`, made by `golden_vectors.mjs`, offline), and the journal's payload
 hash equals the one NEAR Read MPC accepted on Base Sepolia.
 
+## Check that the live policy runs this code
+
+```bash
+npm install                                # once, from the repository root: viem, near-api-js, solc, binaryen
+pwsh v14/build_wasm.ps1                    # Rust 1.95.0 (rust-toolchain.toml), then wasm-opt -Oz
+# -> keyfree_v14.opt.wasm: 362719 bytes, sha256 764eb8f81ff528e00bf7f5967ddd40f7769022a6e79cf0658acff43ca767a52b
+```
+
+NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
+`8xpjPuJPdmviP4Wzj1Pn3jUUuHggiQWnBu61NRqmXWUA` (`near state` or the RPC `view_account`), the same bytes.
+
 ## Use it from Claude Code
 
 `packages/keyfree/demo/.mcp.json` registers the MCP server. Open Claude Code in `packages/keyfree/demo` and
@@ -124,7 +135,7 @@ before and after signing.
 
 ## Run your own policy
 
-`v13/run.mjs` runs the whole thing end to end on NEAR testnet and Base Sepolia, one stage per call: accounts,
+After `npm install` in the repository root, `v13/run.mjs` runs the whole thing end to end on NEAR testnet and Base Sepolia, one stage per call: accounts,
 install without keys, rules through the delay, factory, deploys from 22 B to 48 KB, Read MPC confirmation
 (real and forged), live refusals, guardian replacement, upgrade without keys. It needs testnet NEAR (about
 10) and a little Base Sepolia ETH on the derived address. The log of our run is `evidence/v13.log`.

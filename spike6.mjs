@@ -3,8 +3,8 @@
 // can cancel). Afterwards the same ETH address still deploys through the factory. Pause is checked too.
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { keccak256, toHex, createPublicClient, http, baseSepolia } from "../tools/evm.mjs";
-import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "../tools/near.mjs";
+import { keccak256, toHex, createPublicClient, http, baseSepolia } from "./tools/evm.mjs";
+import { loadAccount, provider, explorer, view, KeyPair, teraToGas, parseNearAmount, Account, actions } from "./tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`, GUARD = `guardian.${LAB}`;
 const MPC = "v1.signer-prod.testnet", CHAIN = baseSepolia.id, DELAY = 60;

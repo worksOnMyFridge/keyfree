@@ -6,8 +6,8 @@
 // (4) an underpriced deploy that the chain does not take is healed by resign(): same nonce + content, new fees.
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther } from "../tools/evm.mjs";
-import { loadAccount, provider, explorer, view, teraToGas, Account, actions } from "../tools/near.mjs";
+import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther } from "./tools/evm.mjs";
+import { loadAccount, provider, explorer, view, teraToGas, Account, actions } from "./tools/near.mjs";
 
 const LAB = "keyfree-lab.testnet", POLICY = `policy.${LAB}`, AGENT = `agent.${LAB}`, CHAIN = baseSepolia.id;
 const stateFile = new URL("./evidence/spike5_state.json", import.meta.url);
