@@ -11,6 +11,7 @@
 //   after       after `keyfree upgrade` (the CLI, as an agent would): the proxy runs v2; the same upgrade again,
 //               a rollback to v1 and another implementation are refused
 //   confirm     Read MPC confirms the proxy's Upgraded log in a Safe block; a forged position is not confirmed
+//   demo        a second treasury proxy on v1 and AllowProxyUpgrade(it -> v2), for a fresh Claude Code session
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { keccak256, toHex, getContractAddress, createPublicClient, http, baseSepolia, formatEther,
@@ -233,8 +234,31 @@ try {
     }
     await settle();
     check((await view(P, "get_entry", { chain_id: CHAIN, nonce: state.upgrade.nonce })).status === "confirmed", "journal line is confirmed");
+  } else if (stage === "demo") {
+    // A second treasury for the Claude Code session: the same proxy code (already allowed) with a new salt,
+    // running v1, plus AllowProxyUpgrade(proxy2 -> v2). Run again after the session to see where it stands.
+    const d = (state.demo ??= { salt: keccak256(toHex(`keyfree-v14-treasury-demo-${Date.now()}`)) });
+    keep();
+    const PX = art("TreasuryProxy");
+    const init = encodeDeployData({ abi: PX.abi, bytecode: PX.bytecode.object, args: [state.v1, V13.address] });
+    const addr = getContractAddress({ opcode: "CREATE2", from: V13.factory, salt: d.salt, bytecode: init }).toLowerCase();
+    if (((await base.getCode({ address: addr })) ?? "0x").length <= 2) {
+      const r = await agentDeploy("demo treasury proxy", init, d.salt, 400_000);
+      check(r.address === addr, `demo proxy at the promised address ${addr}`);
+      Object.assign(d, { nonce: r.nonce, tx: r.rc.transactionHash });
+    }
+    d.proxy = addr;
+    keep();
+    check((await slot(addr, ADMIN_SLOT)) === V13.address, `demo proxy admin = the policy's keyless address`);
+    const key = `${CHAIN}:${addr}:${state.v2}`;
+    say(`demo proxy ${addr} runs version ${await runs(addr)}`);
+    if (d.rule === undefined && (await runs(addr)) === 1) {
+      [d.rule] = await rules([{ AllowProxyUpgrade: { chain_id: CHAIN, proxy_hex: addr, implementation_hex: state.v2 } }]);
+      keep();
+    }
+    say(`allowed now: ${(await view(P, "get_rules")).allowed_proxy_upgrades.includes(key) ? key : "nothing for this proxy (used up or not yet)"}`);
   } else {
-    console.log("stages: check | treasury | upgrade | agent <id> | allow | after | confirm");
+    console.log("stages: check | treasury | upgrade | agent <id> | allow | after | confirm | demo");
   }
 } catch (e) {
   check(false, `stopped: ${String(e.message || e).replace(/\s+/g, " ").slice(0, 300)}`);

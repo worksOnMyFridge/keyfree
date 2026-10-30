@@ -78,3 +78,26 @@ OK   FORGED log position: Read MPC answered false in 121.5 s  https://testnet.ne
   log: keyfree: chain 84532 nonce 10 CONFIRMED by Read MPC
 OK   real Upgraded log: Read MPC answered true in 21.2 s  https://testnet.nearblocks.io/txns/8PdE3yE5zPyDPsQSFwCBc5tg3d6v2BmF38qfsJcsaAL8
 OK   journal line is confirmed
+--- 2026-10-30T03:10:18.315Z check (0 ok, 0 fail)
+keyfree-lab.testnet: 3.702 NEAR
+policy13.keyfree-lab.testnet: 22.653 NEAR
+agent14.keyfree-lab.testnet: 0.994 NEAR
+guard13b.keyfree-lab.testnet: 0.298 NEAR
+reserve13.keyfree-lab.testnet: 0.299 NEAR
+policy: build v14, version 3, keys 0, ETH 0.00002602049314011 on 0x43e3cb8d471680307f0c232e5ac190828681fcb0
+v14 wasm 362719 bytes, stake ~3.63719 NEAR, sha256 764eb8f81ff528e0...
+--- 2026-10-30T03:12:34.087Z demo (5 ok, 0 fail)
+OK   demo treasury proxy: unsigned tx built by the contract == viem (nonce 11)
+  log: keyfree: signing chain 84532 nonce 11 code 171e5abfc53e91f434844a52b362fab39d61b93c5a682948c3ad2f01328d1d91 expected Some("0xd1b8718059d3e790b5be0fec94e7059a71186b03") hash 2bbc88ff4edcacade2184e38716f10e99cb8b6a65400629486b3894858cfb6e6
+  log: keyfree: signed chain 84532 nonce 11 tx 0x664ab137b424240b420204c6ffb34810ce32aeebf33bc1aeaaece5614b0f6d08
+OK   demo treasury proxy: landed, gas 236680 of 466820  https://testnet.nearblocks.io/txns/6jraf5jH4gYAqbXxSrfdXgnJCF7WTWfDnvvoD9NbKKcd  https://sepolia.basescan.org/tx/0x664ab137b424240b420204c6ffb34810ce32aeebf33bc1aeaaece5614b0f6d08
+OK   demo proxy at the promised address 0xd1b8718059d3e790b5be0fec94e7059a71186b03
+OK   demo proxy admin = the policy's keyless address
+demo proxy 0xd1b8718059d3e790b5be0fec94e7059a71186b03 runs version 1
+  log: keyfree: rule 14 proposed: AllowProxyUpgrade { chain_id: 84532, proxy_hex: "0xd1b8718059d3e790b5be0fec94e7059a71186b03", implementation_hex: "0x269bdae85a7864e882bdd97d61fc5bc084594060" }, ready at unix 1793329942
+proposed rules 14: AllowProxyUpgrade
+OK   apply a rule before the delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 14 applied: AllowProxyUpgrade { chain_id: 84532, proxy_hex: "0xd1b8718059d3e790b5be0fec94e7059a71186b03", implementation_hex: "0x269bdae85a7864e882bdd97d61fc5bc084594060" }
+applied rules 14
+allowed now: 84532:0xd1b8718059d3e790b5be0fec94e7059a71186b03:0x269bdae85a7864e882bdd97d61fc5bc084594060

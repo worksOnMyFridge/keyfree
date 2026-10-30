@@ -28,5 +28,12 @@
  "upgrade": {
   "nonce": 10,
   "tx": "0xd9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25"
+ },
+ "demo": {
+  "salt": "0x3cbee58462b7d347a7a08f5cf41cf53e543c078ff0485622b12cc8509a22dc1b",
+  "nonce": 11,
+  "tx": "0x664ab137b424240b420204c6ffb34810ce32aeebf33bc1aeaaece5614b0f6d08",
+  "proxy": "0xd1b8718059d3e790b5be0fec94e7059a71186b03",
+  "rule": 14
  }
 }
