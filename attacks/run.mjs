@@ -29,7 +29,7 @@ const nodeOk = new Set([...node.out.matchAll(/^\s*ok \d+ - (.+)$/gm)].map((m) =>
 
 console.error("3/3 table\n");
 let total = 0, refused = 0, liveOnly = 0;
-const md = ["# Attack bench", "", `Run: \`npm run attacks\` (offline). ${new Date().toISOString().slice(0, 10)}.`, "",
+const md = ["# Attack bench", "", `Run: \`npm run attacks\` (offline).`, "",
   "Contract attacks run the real policy code on near-sdk's mocked chain; tool attacks run the built keyfree package. \"Seen live\" points to the testnet run.", ""];
 for (const g of catalog.groups) {
   md.push(`## ${g.who}`, "", "| # | Attack | Result | Refusal | Test | Seen live |", "|---|---|---|---|---|---|");

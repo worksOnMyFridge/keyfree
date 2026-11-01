@@ -56,6 +56,11 @@ function credentialsFile(cfg: Config, account: string): string {
   return path.join(os.homedir(), ".near-credentials", cfg.near_network, `${account}.json`);
 }
 
+// Whether this machine holds a key for the account in the usual near-cli place. Only checks that the file exists.
+export function hasLocalKey(cfg: Config, account: string): boolean {
+  return fs.existsSync(credentialsFile(cfg, account));
+}
+
 // The agent's key: a function-call key that may only call the policy's request methods.
 export function agentKey(cfg: Config): string {
   const file = env("KEYFREE_AGENT_KEY") ?? credentialsFile(cfg, cfg.agent);

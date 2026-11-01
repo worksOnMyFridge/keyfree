@@ -1,6 +1,6 @@
 # Attack bench
 
-Run: `npm run attacks` (offline). 2026-10-30.
+Run: `npm run attacks` (offline).
 
 **53 of 53 attacks refused offline, 1 more refused live by the NEAR protocol.**
 

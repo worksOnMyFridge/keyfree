@@ -21,6 +21,8 @@ agent (agent key):
   journal --chain <c> [--limit <n>]
 
 council (human key, --as <account>):
+  pending                                 widenings waiting their delay (no key; exit code 3 if any): run it on
+                                          a schedule and alert the council, who can cancel during the delay
   rules                                   allow list, caps, open proposals
   rules allow-code <hash>                 widening: waits the rules delay, any council member may cancel
   rules allow-upgrade <chain> <proxy> <implementation>   one upgradeTo, used up by the request
@@ -28,8 +30,10 @@ council (human key, --as <account>):
   rules apply <id> | rules cancel <id>
   remove-code <hash> | remove-upgrade <chain> <proxy> <implementation> | disable-chain <chain> | remove-factory <chain>
   lower-limits <gas> <fee_wei>            brakes, at once
-  pause | unpause | roles
+  pause | unpause | roles | cancel-role <proposer> | cancel-upgrade
 `;
+
+interface Pending { kind: string; ready_in_sec: number | null; [k: string]: unknown }
 
 function flags(argv: string[]) {
   const pos: string[] = [];
@@ -71,6 +75,25 @@ async function main() {
     case "confirm": return out(await kf.confirm(f.chain, Number(f.nonce)));
     case "journal": return out(await kf.journal(f.chain, Number(f.limit ?? 10)));
     case "roles": return out(await kf.policy.view("get_roles"));
+    case "pending": {
+      // Everything that widens power waits a public delay; the delay only helps if someone looks.
+      const [rules, roles, st] = await Promise.all([
+        kf.policy.view<{ proposals?: { id: number; change: unknown; ready_at: number }[] }>("get_rules"),
+        kf.policy.view<{ role_changes?: { role: string; account: string; proposer: string; ready_at: number | null }[] }>("get_roles"),
+        kf.policy.view<{ proposed: [string, number] | null }>("get_status"),
+      ]);
+      const left = (t: number | null) => (t === null ? null : Math.max(0, Math.round(t - Date.now() / 1000)));
+      const pending: Pending[] = [
+        ...(rules.proposals ?? []).map((p) => ({ kind: "rule", id: p.id, change: p.change, ready_in_sec: left(p.ready_at), cancel: `keyfree rules cancel ${p.id}` })),
+        ...(roles.role_changes ?? []).map((r) => ({ kind: "role", role: r.role, account: r.account, proposer: r.proposer, ready_in_sec: left(r.ready_at), cancel: `keyfree cancel-role ${r.proposer}` })),
+        ...(st.proposed ? [{ kind: "policy upgrade", code_sha256: st.proposed[0], ready_in_sec: left(st.proposed[1]), cancel: "keyfree cancel-upgrade" }] : []),
+      ];
+      out({ policy: cfg.policy, pending });
+      if (pending.length) process.exitCode = 3;
+      return;
+    }
+    case "cancel-role": return out(await council(cfg, kf, f.as, "cancel_role", { proposer: pos[0] }));
+    case "cancel-upgrade": return out(await council(cfg, kf, f.as, "cancel_upgrade", {}));
     case "rules": {
       const [sub, a, b, c] = pos;
       if (!sub) return out(await kf.policy.view("get_rules"));

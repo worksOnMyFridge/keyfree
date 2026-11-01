@@ -4,7 +4,7 @@ import {
   decodeEventLog, encodeFunctionData, getAddress, getContractAddress, isAddress, parseTransaction, recoverTransactionAddress, serializeTransaction,
   type Hex, type TransactionSerializableEIP1559,
 } from "viem";
-import { agentKey, findChain, type ChainConfig, type Config } from "./config.js";
+import { agentKey, findChain, hasLocalKey, type ChainConfig, type Config } from "./config.js";
 import { loadCode, type CodeInput } from "./code.js";
 import { evm, FACTORY_ABI, PROXY_ABI, ADMIN_SLOT, IMPLEMENTATION_SLOT, slotAddress, randomSalt, txLink, addressLink } from "./evm.js";
 import { Policy, PolicyRefusal } from "./near.js";
@@ -73,8 +73,12 @@ export class Keyfree {
       const balance = address ? await evm(c).getBalance({ address: address as Hex }) : 0n;
       return { name: c.name, chain_id: c.chain_id, allowed: next !== null, next_nonce: next, balance_wei: balance.toString() };
     }));
+    // Agent and council are only as separate as their keys: say so when a council key is on this machine.
+    const council = [roles.owner, roles.guardian, roles.reserve].filter((a): a is string => typeof a === "string");
+    const here = council.filter((a) => hasLocalKey(this.cfg, a));
     return {
       policy: this.cfg.policy, policy_keys: keys, address, build: st.build, version: st.version, paused: st.paused,
+      ...(here.length ? { warning: `council keys on this machine (${here.join(", ")}): keep them on another device, never where the agent runs` } : {}),
       agent: roles.agent, owner: roles.owner, guardian: roles.guardian, reserve: roles.reserve, retiring: roles.retiring,
       upgrade_delay_sec: st.upgrade_delay_sec, rules_delay_sec: rules.rules_delay_sec, pending_upgrade: st.proposed,
       allowed_code: rules.allowed_code, allowed_proxy_upgrades: rules.allowed_proxy_upgrades ?? [], max_gas_limit: rules.max_gas_limit, max_fee_cap: rules.max_fee_cap, chains,
@@ -113,7 +117,7 @@ export class Keyfree {
     const [address, rules] = await Promise.all([this.address(), this.policy.view<Rules>("get_rules")]);
     const k = upgradeKey(chain.chain_id, proxy, implementation);
     if (!(rules.allowed_proxy_upgrades ?? []).includes(k)) {
-      throw new PolicyRefusal(`proxy upgrade not on the allow list (${k}). Only a human owner can allow it: keyfree rules allow-upgrade ${chain.name} ${proxy} ${implementation} (it then waits ${rules.rules_delay_sec} s and can be cancelled). Each allowance is used once.`);
+      throw new PolicyRefusal(`proxy upgrade not on the allow list (${k}). Allowing it is a decision for the human council, outside this tool; it then waits ${rules.rules_delay_sec} s and any member can cancel it. Each allowance is used once.`);
     }
     const c = evm(chain);
     const [admin, current, implCode] = await Promise.all([
@@ -177,7 +181,7 @@ export class Keyfree {
     const code = loadCode(input);
     const [address, rules] = await Promise.all([this.address(), this.policy.view<Rules>("get_rules")]);
     if (!rules.allowed_code.includes(code.hash)) {
-      throw new PolicyRefusal(`code not on the allow list (code hash ${code.hash}). Only a human owner can allow it: keyfree rules allow-code ${code.hash} (it then waits ${rules.rules_delay_sec} s and can be cancelled).`);
+      throw new PolicyRefusal(`code not on the allow list (code hash ${code.hash}). Allowing it is a decision for the human council, outside this tool; it then waits ${rules.rules_delay_sec} s and any member can cancel it.`);
     }
     const viaFactory = input.via_factory ?? true;
     const salt = viaFactory ? ((input.salt as Hex | undefined) ?? randomSalt()) : null;

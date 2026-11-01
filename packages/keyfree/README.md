@@ -7,7 +7,7 @@ The rules live in a NEAR contract (the policy), NEAR MPC signs, this package che
 
 | Tool | Does |
 |---|---|
-| `keyfree_status` | what the policy allows now: keyless address, keys on the policy (0), allowed code, chains, caps, roles |
+| `keyfree_status` | what the policy allows now: keyless address, keys on the policy (0), allowed code, chains, caps, roles; a warning if a council key sits on this machine |
 | `keyfree_code_hash` | the hash the allow list must hold for an artifact + constructor arguments (offline) |
 | `keyfree_preview` | builds and checks a deploy, signs nothing |
 | `keyfree_deploy` | the policy builds the transaction, MPC signs, the tool re-checks and broadcasts |
@@ -23,7 +23,7 @@ may only call `request_deploy`, `request_proxy_upgrade`, `resign`, `resign_proxy
 
 ## What the tool checks before and after signing
 
-1. The code hash is on the policy's allow list (otherwise it says what the owner would have to allow).
+1. The code hash is on the policy's allow list. Otherwise it refuses and says that allowing it is the council's decision; it does not hand the model a council command.
 2. The factory serves exactly the policy's keyless address (`keyfree()` on chain).
 3. The chain simulates the deploy from that address (`eth_estimateGas`); gas = estimate + 25 %.
 4. The unsigned transaction built by the policy equals viem's for the same fields, byte for byte; the promised
@@ -49,4 +49,6 @@ Claude Code: open `demo/` (it has `.mcp.json`), then ask "deploy Counter with st
 
 Human (council) commands sign with a key from `~/.near-credentials` (`--as <account>`, default `owner`):
 `keyfree rules allow-code <hash>`, `keyfree rules allow-upgrade <chain> <proxy> <implementation>`,
-`keyfree rules apply <id>`, `keyfree pause`, ... see `keyfree help`.
+`keyfree rules apply <id>`, `keyfree pause`, ... see `keyfree help`. `keyfree pending` needs no key: it lists
+every widening that waits its delay, with the command that cancels it, and exits with code 3 when there is one,
+so a scheduled job can alert the council.

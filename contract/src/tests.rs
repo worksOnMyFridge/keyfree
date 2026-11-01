@@ -112,7 +112,7 @@ fn new_request_blocked_while_stuck() {
     let mut c = contract();
     c.handle_signed(Err(PromiseError::Failed));
     ctx("agent.testnet", 20);
-    c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
 }
 
 #[test]

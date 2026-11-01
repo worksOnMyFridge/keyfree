@@ -106,7 +106,8 @@ mocked chain; tool attacks run the built `keyfree` package.
 From the repository root:
 
 ```bash
-(cd contract && cargo test -- --test-threads=1)       # 133 tests of the policy (Rust, near-sdk 5.29)
+(cd contract && cargo test -- --test-threads=1)       # 133 tests of the policy (Rust, near-sdk 5.29);
+                                                      # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
 (cd packages/keyfree && npm test && npm run smoke)    # 13 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
@@ -211,7 +212,13 @@ moves the policy to a reproducible build without a key (`evidence/v14.log`).
 
 Read [SECURITY.md](SECURITY.md) and, for every finding of the two security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
 council members plus the delay, or the owner plus the delay while the other two stay silent. Keep the
-council keys on separate devices, never where the agent runs.
+council keys on separate devices, never where the agent runs; `keyfree status` warns when a council key is on
+the machine it runs on.
+
+The delay protects only if someone looks. The live demo policy uses short delays so a judge can watch a whole
+cycle: 60 s for rules, 180 s for upgrades and role changes; real use needs hours or days. `keyfree pending`
+lists every widening that waits its delay, with the command that cancels it, and exits with code 3 when there
+is one: run it on a schedule (cron, a scheduled CI job) and send the alert to the council.
 
 ## Disclosures
 
