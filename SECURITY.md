@@ -49,7 +49,7 @@ only as safe as that place.
   journal can lie. Keyfree adds rules in front of it; it does not remove that trust.
 - **The EVM RPC** the tool talks to: the tool checks what the policy built against viem and what MPC signed
   against what it checked, so a lying RPC can make a deploy fail or look pending, not change what is signed.
-- **The policy code.** It is open and tested (133 unit tests, golden tests against viem, an attack bench of 53 attacks: `npm run attacks`). During development
+- **The policy code.** It is open and tested (156 unit tests, golden tests against viem, an attack bench of 63 attacks: `npm run attacks`, three AI security reviews in AUDIT.md). During development
   it went through two security reviews, each done by a separate AI reviewer session that did not write the
   code; their findings were fixed with tests. It has not had a professional human audit.
 
@@ -72,6 +72,11 @@ only as safe as that place.
   proxy whose admin is the policy, a code change is an allowed upgrade or nothing: the council should allow
   only an implementation whose code it has read (best one it deployed through Keyfree, with an allowed
   hash). A proxy with another admin, or with a way to change its admin, is outside Keyfree.
+- **The daily budget counts signatures.** Every signature counts with its most it can cost (gas limit x max
+  fee), broadcast or not, by UTC day: around midnight two days' budget can be spent close together, and on
+  Base the L1 data fee is charged on top of gas x fee. It bounds what the agent can start, not the exact bill.
+- **A retired policy keeps its account.** Deleting it would free the name for its parent account to create
+  again, and the MPC would sign for the same EVM address. The storage stake of the code stays locked for good.
 - **Reproducible from v14.1 on.** The live code is a `cargo near` reproducible build (README, "Check which
   code the live policy runs"). Versions up to v14 were built on a laptop and cannot be rebuilt byte for byte.
 - Testnets only so far (Base Sepolia, Ethereum Sepolia); Arbitrum not run yet; see "Not claimed" in

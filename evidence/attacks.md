@@ -2,7 +2,7 @@
 
 Run: `npm run attacks` (offline).
 
-**58 of 58 attacks refused offline, 1 more refused live by the NEAR protocol.**
+**63 of 63 attacks refused offline, 1 more refused live by the NEAR protocol.**
 
 Contract attacks run the real policy code on near-sdk's mocked chain; tool attacks run the built keyfree package. "Seen live" points to the testnet run.
 
@@ -40,6 +40,9 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | A28 | flood one chain with small transactions | refused | daily limit on chain | `the_daily_transaction_limit_refuses_the_next_one` |  |
 | A29 | get extra signatures past the budget through retry or re-sign | refused | daily limit on chain | `a_retry_counts_against_the_budget` |  |
 | A30 | set or raise its own daily budget | refused | only owner | `the_agent_cannot_set_a_budget` |  |
+| A31 | retry or re-sign a request after the council removed its code (signing past a brake) | refused | code not on the allow list | `retry_stops_when_the_code_was_removed` |  |
+| A32 | re-sign a signed deploy after its code was removed | refused | code not on the allow list | `resign_stops_when_the_code_was_removed` |  |
+| A33 | mark a journal line confirmed from a block that can still vanish (Latest) | refused | confirmation needs a Safe or Finalized block | `confirm_refuses_latest` |  |
 
 ## A thief with one or two council keys
 
@@ -60,6 +63,7 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | K13 | one key unpauses alone | refused | needs a second vote | `one_unpause_vote_is_not_enough` | v13 attacks |
 | K14 | stolen owner allows a treasury upgrade to its own implementation at once | refused | rule delay not over | `a_proxy_upgrade_waits_for_the_rules_delay` |  |
 | K15 | raise a chain's daily budget at once with a stolen council key | refused | raising a budget is a rule proposal | `lower_budget_cannot_raise_it` |  |
+| K16 | retire the policy, then let its parent re-create the account and sign for the same EVM address | refused | the account is never deleted | `sweep_empties_the_state_then_the_free_near_goes_to_the_beneficiary` |  |
 
 ## A stranger with no role
 
@@ -84,3 +88,4 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | M6 | prove a stuck deploy from a block that can still vanish | refused | a stuck request needs Safe or Finalized | `confirm_stuck_refuses_latest` | v13 attacks |
 | M7 | a forged log position for the journal | refused | other payload hash: Read MPC does not confirm | `golden_payload_hash_of_the_forged_log_position` | v13 confirm: Read MPC answered false |
 | M8 | a new request overwrites a used journal line | refused | nonce already used on this chain | `new_request_never_overwrites_a_used_nonce` |  |
+| M9 | prove a stuck nonce with a look-alike log from another transaction (a proxy constructor's Upgraded event) | refused | not our signature of the stuck request | `confirm_stuck_refuses_a_signature_of_other_content` |  |

@@ -1,16 +1,45 @@
 # Security reviews
 
-Two security reviews were done on 2026-10-25 by separate AI reviewer sessions that had no part in writing
-the code. Each one read the contract, ran its own probe tests (kept in [`audit/`](audit/)) and listed
-findings with a way to break them. This page lists every finding, what was changed, and the test that now
-shows the fix. **This is not a professional audit**, and the newest code (retire in v13, proxy upgrades in
-v14) has not had an independent review yet.
+Three security reviews were done by separate AI reviewer sessions that had no part in writing the code: two
+on 2026-10-25, and a third on 2026-11-01 against catalogs of current attack techniques (108 items, with
+sources). Each one read the code, ran its own probe tests and listed findings with a way to break them. This
+page lists every finding, what was changed, and the test that now shows the fix. **This is not a
+professional audit.**
 
 Status words: **fixed** (changed, with a test), **partly** (the dangerous part is fixed, something is left),
 **open** (not changed yet), **by design** (kept on purpose, explained).
 
 Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 `(cd contract && cargo test -- --test-threads=1)`. Versions are in [`contract/CHANGELOG.md`](contract/CHANGELOG.md).
+
+## Third review (code version v15, 2026-11-01): X1..X12
+
+Method: two research sessions built catalogs of current attack techniques from primary sources
+([contracts, NEAR, MPC, EVM: C1..C59](audit/attack_catalog_contracts.md);
+[AI agents and MCP: G1..G49](audit/attack_catalog_agents.md)). A third session that had not seen the code
+before checked every item against the repository at commit `c553d87`, read-only toward the chains, and
+proved or disproved each suspicion with probe tests. Fixed in v16 and in the `keyfree` tool.
+
+| Id | Finding | Severity | Status | Fix and tests |
+|---|---|---|---|---|
+| X1 | Retiring deleted the policy account. Its parent account could then create it again; NEAR MPC derives the EVM key from the account name and path alone, so the new account would sign for the same EVM address, the admin of the treasury proxies and the only caller of the factories | High | fixed (v16) | `finish_retire` sends the free NEAR to the beneficiary and keeps the account, keyless and retired for good, so its name is never free. The storage stake of the code stays locked. `sweep_empties_the_state_then_the_free_near_goes_to_the_beneficiary` asserts no `DeleteAccount` |
+| X2 | `confirm_stuck` took the tx hash from the caller and bound only the log, so a look-alike log of another transaction (the proxy constructor's `Upgraded`) could move a stuck nonce | Medium | fixed (v16) | The caller hands over the signature as it appeared on chain; the contract checks it is its own signature over exactly the stuck content, rebuilds the signed transaction and uses its hash. `confirm_stuck_takes_the_tx_id_from_our_own_signature`, `confirm_stuck_refuses_a_signature_of_other_content` |
+| X3 | The tool loaded the key of whatever account `keyfree.json` named; a cloned project naming the owner made the MCP server sign as the owner | Medium | fixed (tool) | Before signing, the tool checks on chain that its key is a function-call key on the policy for request methods only, and refuses otherwise (checked live: the agent's key is accepted, the owner's full-access key refused before any call) |
+| X4 | `retry` and `resign` ignored the brakes: removed code, a disabled chain, a removed or changed factory, a lowered gas cap | Low | fixed (v16) | One check for every new signature. `retry_stops_when_the_code_was_removed`, `retry_stops_when_the_chain_was_disabled`, `retry_stops_when_the_gas_cap_was_lowered`, `resign_stops_when_the_code_was_removed` |
+| X5 | The daily budget counts signatures, not spending: signatures never broadcast still count, a UTC day lets two days' budget meet around midnight, and Base's L1 data fee is outside gas x fee | Low | by design | Counting signatures errs on the strict side (an unbroadcast signature can still land). The midnight window and the L1 fee are stated in SECURITY.md |
+| X6 | `confirm` accepted a `Latest` block and `confirm_stuck` moved the nonce on `Safe`, which an L2 can still reorg | Low | fixed (v16) | `confirm` needs Safe or Finalized; `confirm_stuck` needs Finalized. `confirm_refuses_latest`, `confirm_stuck_refuses_latest`, `confirm_stuck_refuses_safe_too` |
+| X7 | Error text from outside (RPC messages, revert strings) reached the model and the terminal unfiltered | Low | fixed (tool) | Control, ANSI and bidi characters are stripped from every error the tool shows |
+| X8 | The agent's key has no gas allowance, so it has no spending fuse of its own | Low | by design | A key with an allowance stops for good once spent (seen in the v13 run); the daily budget is the fuse. Stated in README |
+| X9 | A salt chosen by the agent is public and could carry data out | Info | by design | The tool draws salts at random; the policy cannot tell a random salt from a chosen one |
+| X10 | `retry` took the chain from the caller, so a wrong chain was signed and then not broadcast | Info | fixed (v16, tool) | `get_open` names the chain; the tool takes it from there. `get_open_names_the_chain` |
+| X11 | CI ran install scripts and had no dependency audit | Info | fixed | `npm ci --ignore-scripts`; an `audit` job runs `cargo audit` and `npm audit` |
+| X12 | Test and attack counts in the docs were stale | Info | fixed | Updated |
+
+Checked and not an issue: every signed payload is `keccak(0x02 ‖ rlp(...))`, so it cannot be an EIP-7702
+authorization (`0x05`), an EIP-191/712 message (`0x19`) or a transaction of another chain; the v13, v14 and
+v15 state layouts never parse as one another; a late MPC answer that lands on a newer request fails the
+signature check and only parks it; the ordinary `confirm` binds the policy's own tx hash, emitter, topics,
+data and position; no narrowing method widens anything for zero, `u128::MAX` or a chain never opened.
 
 ## Second review (code version v6): N1..N17
 
@@ -61,10 +90,8 @@ Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 
 ## Not reviewed yet
 
-- Retire (v13): `retire_*`, `sweep`, `finish_retire`. Unit tests only, never run live (it deletes the policy).
-- Proxy upgrades (v14): unit tests plus two live runs on Base Sepolia ([CLAIMS 7](CLAIMS.md#7-a-treasury-upgrade-only-the-one-the-council-allowed)), no independent review.
-- The daily budget (v15): unit tests, the attack bench and a live run ([CLAIMS 9](CLAIMS.md#9-a-daily-budget-the-agent-cannot-raise)), no independent review.
-- The `keyfree` tool (`packages/keyfree`) beyond its own 13 tests.
+- The changes of v16 themselves were made after the third review and are covered by the tests named above.
+- The `keyfree` tool beyond its own tests and the review's probes.
 
 ## Requirements referred to in the code (R-ids)
 

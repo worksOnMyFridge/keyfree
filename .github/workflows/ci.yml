@@ -23,10 +23,10 @@ jobs:
           node-version: 22
       - name: Rust toolchain from rust-toolchain.toml
         run: rustup show active-toolchain || rustup toolchain install
-      - name: Install (repository root and the keyfree package)
+      - name: Install (repository root and the keyfree package; no install scripts run)
         run: |
-          npm ci
-          npm ci --prefix packages/keyfree
+          npm ci --ignore-scripts
+          npm ci --ignore-scripts --prefix packages/keyfree
       - name: Attack bench (contract unit tests + tool attacks)
         run: npm run attacks
       - name: Tool tests
@@ -35,3 +35,18 @@ jobs:
           npm test --prefix packages/keyfree
       - name: Factory tests (in-process EVM)
         run: npm run test:factory
+
+  audit:
+    # Known vulnerabilities in the Rust dependencies (RustSec advisory database) and the npm ones.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          cd contract && cargo audit
+      - name: npm audit (production dependencies of the keyfree package)
+        run: npm audit --omit=dev --prefix packages/keyfree

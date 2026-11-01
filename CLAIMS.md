@@ -78,7 +78,7 @@ Deploys through the factory (each landed at the address the policy promised befo
 | What | Count | Run |
 |---|---|---|
 | Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 53 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
-| Policy contract unit tests (Rust) | 133 | `cd contract && cargo test -- --test-threads=1` |
+| Policy contract unit tests (Rust) | 156 | `cd contract && cargo test -- --test-threads=1` |
 | keyfree package tests (5 unit, 8 attacks on the tool and the MCP server) | 13 | `cd packages/keyfree && npm test` |
 | MCP self-check against the live policy | 1 script | `cd packages/keyfree && npm run smoke` |
 

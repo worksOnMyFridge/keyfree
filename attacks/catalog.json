@@ -33,7 +33,10 @@
         { "id": "A27", "attack": "drain the address's ETH with many allowed deploys in one day", "rust": "the_daily_gas_budget_counts_the_most_each_can_cost", "refusal": "daily gas budget on chain" },
         { "id": "A28", "attack": "flood one chain with small transactions", "rust": "the_daily_transaction_limit_refuses_the_next_one", "refusal": "daily limit on chain" },
         { "id": "A29", "attack": "get extra signatures past the budget through retry or re-sign", "rust": "a_retry_counts_against_the_budget", "refusal": "daily limit on chain" },
-        { "id": "A30", "attack": "set or raise its own daily budget", "rust": "the_agent_cannot_set_a_budget", "refusal": "only owner" }
+        { "id": "A30", "attack": "set or raise its own daily budget", "rust": "the_agent_cannot_set_a_budget", "refusal": "only owner" },
+        { "id": "A31", "attack": "retry or re-sign a request after the council removed its code (signing past a brake)", "rust": "retry_stops_when_the_code_was_removed", "refusal": "code not on the allow list" },
+        { "id": "A32", "attack": "re-sign a signed deploy after its code was removed", "rust": "resign_stops_when_the_code_was_removed", "refusal": "code not on the allow list" },
+        { "id": "A33", "attack": "mark a journal line confirmed from a block that can still vanish (Latest)", "rust": "confirm_refuses_latest", "refusal": "confirmation needs a Safe or Finalized block" }
       ]
     },
     {
@@ -53,7 +56,8 @@
         { "id": "K12", "attack": "retire to an outside account", "rust": "the_beneficiary_is_a_council_member", "refusal": "the beneficiary must be a council member" },
         { "id": "K13", "attack": "one key unpauses alone", "rust": "one_unpause_vote_is_not_enough", "refusal": "needs a second vote", "live": "v13 attacks" },
         { "id": "K14", "attack": "stolen owner allows a treasury upgrade to its own implementation at once", "rust": "a_proxy_upgrade_waits_for_the_rules_delay", "refusal": "rule delay not over" },
-        { "id": "K15", "attack": "raise a chain's daily budget at once with a stolen council key", "rust": "lower_budget_cannot_raise_it", "refusal": "raising a budget is a rule proposal" }
+        { "id": "K15", "attack": "raise a chain's daily budget at once with a stolen council key", "rust": "lower_budget_cannot_raise_it", "refusal": "raising a budget is a rule proposal" },
+        { "id": "K16", "attack": "retire the policy, then let its parent re-create the account and sign for the same EVM address", "rust": "sweep_empties_the_state_then_the_free_near_goes_to_the_beneficiary", "refusal": "the account is never deleted" }
       ]
     },
     {
@@ -77,7 +81,8 @@
         { "id": "M5", "attack": "a proof for an old nonce moves the nonce back", "rust": "proof_of_an_old_stuck_nonce_never_moves_the_nonce_back", "refusal": "next nonce never goes down" },
         { "id": "M6", "attack": "prove a stuck deploy from a block that can still vanish", "rust": "confirm_stuck_refuses_latest", "refusal": "a stuck request needs Safe or Finalized", "live": "v13 attacks" },
         { "id": "M7", "attack": "a forged log position for the journal", "rust": "golden_payload_hash_of_the_forged_log_position", "refusal": "other payload hash: Read MPC does not confirm", "live": "v13 confirm: Read MPC answered false" },
-        { "id": "M8", "attack": "a new request overwrites a used journal line", "rust": "new_request_never_overwrites_a_used_nonce", "refusal": "nonce already used on this chain" }
+        { "id": "M8", "attack": "a new request overwrites a used journal line", "rust": "new_request_never_overwrites_a_used_nonce", "refusal": "nonce already used on this chain" },
+        { "id": "M9", "attack": "prove a stuck nonce with a look-alike log from another transaction (a proxy constructor's Upgraded event)", "rust": "confirm_stuck_refuses_a_signature_of_other_content", "refusal": "not our signature of the stuck request" }
       ]
     }
   ]

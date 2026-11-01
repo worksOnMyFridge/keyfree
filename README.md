@@ -97,7 +97,7 @@ Reading and previewing need no key. Deploying needs the agent's key for this pol
 npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20+
 ```
 
-53 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
+63 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
 stranger, a broken or hostile MPC answer. Each one is a test that must end in a refusal with a stated reason;
 the bench prints `attack -> refusal` and writes the table to [`evidence/attacks.md`](evidence/attacks.md), with
 the testnet run where the same refusal was seen live. Contract attacks run the real policy code on near-sdk's
@@ -108,7 +108,7 @@ mocked chain; tool attacks run the built `keyfree` package.
 From the repository root:
 
 ```bash
-(cd contract && cargo test -- --test-threads=1)       # 133 tests of the policy (Rust, near-sdk 5.29);
+(cd contract && cargo test -- --test-threads=1)       # 156 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
 (cd packages/keyfree && npm test && npm run smoke)    # 13 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
@@ -168,8 +168,10 @@ a list of methods. The live agent `agent14.keyfree-lab.testnet` has one key, for
   so it cannot lock itself out by spending its allowance; a key with an allowance stops once the allowance is
   used up, which happened to an earlier agent key in the v13 run (`evidence/v13.log`). When the account runs
   low, anyone can top it up.
-- A stolen agent key can ask only for allowed code on open chains within the caps, and any council member
-  revokes the agent at once.
+- A stolen agent key can ask only for allowed code on open chains within the caps and the daily budget, and
+  any council member revokes the agent at once.
+- The tool checks this before it signs: if the key it finds for the agent account can do more than these
+  methods on this policy (say a project's `keyfree.json` names the owner), it refuses.
 
 ## How this differs from other ways to keep the key from the agent
 
@@ -210,7 +212,7 @@ moves the policy to a reproducible build without a key, and `v14/budget.mjs` set
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
 | `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
 | `.github/workflows/` | `ci`: tests and the attack bench on every push; `build`: the reproducible build of the policy |
-| `audit/` | probe tests written by the security reviewers ([AUDIT.md](AUDIT.md)) |
+| `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
 
 ## Security
 
