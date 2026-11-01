@@ -202,3 +202,20 @@ OK   journal line 13: Counter(1) through the factory, signed, promised at 0x5fa0
   log: keyfree: signed chain 84532 nonce 13 tx 0xb22a858d71c6c341f0c64fa876f231a091b980ba56f179f3e5f84191008ff1bf
 OK   nonce 13 landed: Counter(1) at 0x5fa0f199aedac2e0135f4f27c563c18ae2d7f57d  https://testnet.nearblocks.io/txns/2B6QQ5jyyUJ7jqE72JV2Y7VBRDByvnJqxPXdiAWp7nEd  https://sepolia.basescan.org/tx/0xb22a858d71c6c341f0c64fa876f231a091b980ba56f179f3e5f84191008ff1bf
 budget used today: 2 of 10 transactions, 7200000000000 of 500000000000000 wei
+--- 2026-11-01T22:32:41.863Z upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 383323 bytes, sha256 ee66018871942c4c... == the build workflow's
+OK   every method the live code exports is still there (50 -> 50)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v15, version 5, code sha256 1ada024b96289d34...
+  log: keyfree: upgrade to code sha256 ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304 (383323 bytes, readable now) proposed, ready at unix 1793572347
+  proposed https://testnet.nearblocks.io/txns/ACh6bvaLmugXXTHYtat1Fq7CCYajoB9Za5XhRRW44D3K
+OK   guardian reads the proposed code from the chain: 383323 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 175 s for the upgrade delay
+  log: keyfree: applying upgrade ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304
+  log: keyfree: migrated to version 6
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v16, version 6  https://testnet.nearblocks.io/txns/AV3zHMa6Qi33te13WkWvSYL4kCogX5SCHSGZgrZf6qCh
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 14, Ethereum 3
+OK   a refusal still says why: code not on the allow list

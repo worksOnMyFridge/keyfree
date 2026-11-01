@@ -126,21 +126,21 @@ hash equals the one NEAR Read MPC accepted on Base Sepolia.
 
 The live policy runs a reproducible build: the same commit gives the same bytes on any machine with Docker.
 The policy says which commit itself: its `contract_source_metadata` view (NEP-330) returns the repository
-link, the commit `c27aa7d3fb71193c97cfd5633816fde1e8dc95c9`, the Docker image and the build command.
+link, the commit `e818bdcc706e356f0667c7235c183e55c30b6a3b`, the Docker image and the build command.
 
 ```bash
-git checkout c27aa7d3fb71193c97cfd5633816fde1e8dc95c9
+git checkout e818bdcc706e356f0667c7235c183e55c30b6a3b
 cd contract
 cargo near build reproducible-wasm         # cargo-near 0.22.0; Docker image pinned by digest in Cargo.toml
 sha256sum target/near/keyfree_policy.wasm
-# -> 1ada024b96289d346b53d4c3c6e36ae9d7d36aec695bb40f99e4c74b32f29826  (376 508 bytes)
+# -> ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304  (383 323 bytes)
 ```
 
 NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
-`2opQgn8YVjkdUVjSQjU5kaZFgwJqFZR5EsSifc15tAqB` (`near state` or the RPC `view_account`). The commit is part of
+`H3cFJqHCGSNxTjX3NnihiJGPy6E5QB27Ed15KEuM2aFD` (`near state` or the RPC `view_account`). The commit is part of
 the metadata inside the wasm, so every commit gives its own hash; the `build` workflow
 (`.github/workflows/build.yml`) builds each change to the contract and prints both hashes.
-The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1); earlier versions
+The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1; v16, CLAIMS 9.6); earlier versions
 were built on a laptop and their bytes carry that machine's paths, so they cannot be rebuilt elsewhere.
 
 ## Use it from Claude Code
