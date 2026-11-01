@@ -32,7 +32,7 @@ proved or disproved each suspicion with probe tests. Fixed in v16 and in the `ke
 | X8 | The agent's key has no gas allowance, so it has no spending fuse of its own | Low | by design | A key with an allowance stops for good once spent (seen in the v13 run); the daily budget is the fuse. Stated in README |
 | X9 | A salt chosen by the agent is public and could carry data out | Info | by design | The tool draws salts at random; the policy cannot tell a random salt from a chosen one |
 | X10 | `retry` took the chain from the caller, so a wrong chain was signed and then not broadcast | Info | fixed (v16, tool) | `get_open` names the chain; the tool takes it from there. `get_open_names_the_chain` |
-| X11 | CI ran install scripts and had no dependency audit | Info | fixed | `npm ci --ignore-scripts`; an `audit` job runs `cargo audit` and `npm audit` |
+| X11 | CI ran install scripts and had no dependency audit | Info | fixed | `npm ci --ignore-scripts`; an `audit` job runs `cargo audit` and `npm audit`. Its first run found 4 advisories (crypto-bigint, zstd, zstd-safe), all in near-sdk's test-only VM; they are ignored with reasons in `contract/.cargo/audit.toml`, and CI checks on every run that none of these crates is in the contract's dependency tree |
 | X12 | Test and attack counts in the docs were stale | Info | fixed | Updated |
 
 Checked and not an issue: every signed payload is `keccak(0x02 ‖ rlp(...))`, so it cannot be an EIP-7702

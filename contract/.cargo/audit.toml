@@ -1,0 +1,11 @@
+# Advisories that `cargo audit` reports for crates the contract never ships. They come with near-sdk's
+# "unit-testing" feature (a local NEAR VM for the tests: near-vm-runner, near-primitives), which is a
+# dev-dependency. The fixed versions need a newer near-sdk. CI proves on every run that none of these crates
+# is in the contract's own dependency tree (`cargo tree -e normal --target wasm32-unknown-unknown`).
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0387", # crypto-bigint 0.5: timing variability (via p256 in near-vm-runner, tests only)
+    "RUSTSEC-2026-0391", # zstd 0.13: data of an abandoned stream leaks into the next (near-primitives, tests only)
+    "RUSTSEC-2026-0398", # zstd-safe 7.3: Seekable::decompress length past capacity (tests only)
+    "RUSTSEC-2026-0403", # zstd-safe 7.3: uninitialized memory on a failed legacy frame (tests only)
+]
