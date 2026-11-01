@@ -1218,6 +1218,8 @@ fn flush_all(c: &mut Keyfree) {
     c.disabled_chains.flush();
     c.proxy_journal.flush();
     c.allowed_upgrades.flush();
+    c.budgets.flush();
+    c.spent.flush();
 }
 
 // The mock counts storage from a fake base (300 KB) reset by every new context, so the test measures
@@ -1630,4 +1632,166 @@ fn sweep_also_empties_the_proxy_upgrades() {
     ctx("guardian.testnet", 50);
     while c.sweep(100) > 0 {}
     assert_eq!((c.proxy_journal.len(), c.allowed_upgrades.len()), (0, 0));
+}
+
+// v15: a daily budget per chain (R8). 200 000 gas x 14 gwei-ish fee = 2.8e12 wei at most per test deploy.
+const ONE: u128 = 200_000 * 14_000_000;
+
+fn budget_rule(wei: u128, txs: u32) -> RuleChange { RuleChange::SetBudget { chain_id: 84532, max_wei_per_day: wei, max_tx_per_day: txs } }
+
+// The council set a budget for Base Sepolia (the rule ran its delay).
+fn budgeted(wei: u128, txs: u32) -> Keyfree {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(budget_rule(wei, txs));
+    ctx_at("guardian.testnet", 21, 1_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    c
+}
+
+// One signed deploy at `secs`: the request goes out, then the nonce moves on as after a signature.
+fn spend(c: &mut Keyfree, secs: u64) {
+    ctx_at("agent.testnet", 30, secs, vec![]);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    let n = c.pending.take().unwrap().nonce;
+    c.next_nonce.insert(84532, n + 1);
+}
+
+#[test]
+fn without_a_budget_only_the_caps_apply() {
+    let mut c = idle();
+    for _ in 0..5 { spend(&mut c, 5_000); }
+    assert!(c.get_budget(84532).is_none());
+}
+
+#[test]
+#[should_panic(expected = "rule delay not over")]
+fn a_budget_waits_for_the_rules_delay() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(budget_rule(ONE * 10, 10));
+    ctx_at("owner.testnet", 21, 1_000 + 1_799, vec![]);
+    c.apply_rule(id);
+}
+
+#[test]
+#[should_panic(expected = "only owner")]
+fn the_agent_cannot_set_a_budget() {
+    let mut c = idle();
+    ctx("agent.testnet", 20);
+    c.propose_rule(budget_rule(ONE * 1_000, 1_000));
+}
+
+#[test]
+#[should_panic(expected = "a budget must be above 0")]
+fn a_zero_budget_is_refused_at_proposal() {
+    let mut c = idle();
+    ctx("owner.testnet", 20);
+    c.propose_rule(budget_rule(ONE, 0));
+}
+
+#[test]
+#[should_panic(expected = "daily limit on chain 84532")]
+fn the_daily_transaction_limit_refuses_the_next_one() {
+    let mut c = budgeted(ONE * 100, 2);
+    spend(&mut c, 5_000);
+    spend(&mut c, 5_000);
+    spend(&mut c, 5_000);
+}
+
+#[test]
+#[should_panic(expected = "daily gas budget on chain 84532")]
+fn the_daily_gas_budget_counts_the_most_each_can_cost() {
+    let mut c = budgeted(ONE * 2, 100);
+    spend(&mut c, 5_000);
+    spend(&mut c, 5_000);
+    let b = c.get_budget(84532).unwrap();
+    assert_eq!((b["used_wei_today"].as_str().unwrap(), b["used_tx_today"].as_u64().unwrap()), ((ONE * 2).to_string().as_str(), 2));
+    spend(&mut c, 5_000);
+}
+
+#[test]
+fn a_new_utc_day_starts_from_zero() {
+    let mut c = budgeted(ONE, 1);
+    spend(&mut c, 5_000);
+    spend(&mut c, 86_400 + 5);
+    assert_eq!(c.get_budget(84532).unwrap()["used_tx_today"], 1);
+}
+
+#[test]
+#[should_panic(expected = "daily limit on chain 84532")]
+fn a_preview_shows_the_refusal_too() {
+    let mut c = budgeted(ONE, 1);
+    spend(&mut c, 5_000);
+    ctx_at("agent.testnet", 31, 5_000, vec![]);
+    c.preview(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "daily limit on chain 84532")]
+fn a_retry_counts_against_the_budget() {
+    let mut c = budgeted(ONE * 10, 1);
+    ctx_at("agent.testnet", 30, 5_000, vec![]);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    c.handle_signed(Err(PromiseError::Failed));
+    ctx_at("agent.testnet", 31, 5_000, vec![]);
+    let _ = c.retry(20_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "daily limit on chain 84532")]
+fn proxy_upgrades_count_against_the_budget() {
+    let mut c = upgrade_allowed();
+    ctx_at("owner.testnet", 22, 3_000, vec![]);
+    let id = c.propose_rule(budget_rule(ONE * 10, 1));
+    ctx_at("owner.testnet", 23, 3_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    spend(&mut c, 5_000);
+    request_upgrade(&mut c, IMPL_V2);
+}
+
+#[test]
+fn any_council_member_lowers_a_budget_at_once() {
+    let mut c = budgeted(ONE * 10, 10);
+    ctx("reserve.testnet", 40);
+    c.lower_budget(84532, ONE, 1);
+    let b = c.get_budget(84532).unwrap();
+    assert_eq!((b["max_wei_per_day"].as_str().unwrap(), b["max_tx_per_day"].as_u64().unwrap()), (ONE.to_string().as_str(), 1));
+}
+
+#[test]
+#[should_panic(expected = "raising a budget is a rule proposal")]
+fn lower_budget_cannot_raise_it() {
+    let mut c = budgeted(ONE * 10, 10);
+    ctx("owner.testnet", 40);
+    c.lower_budget(84532, ONE * 10, 11);
+}
+
+#[test]
+#[should_panic(expected = "only owner, guardian or reserve")]
+fn the_agent_cannot_lower_or_touch_a_budget() {
+    let mut c = budgeted(ONE * 10, 10);
+    ctx("agent.testnet", 40);
+    c.lower_budget(84532, ONE, 1);
+}
+
+#[test]
+fn migrate_reads_the_v14_layout() {
+    let mut c = idle();
+    flush_all(&mut c);
+    let codes = c.allowed_code.len();
+    let old = V14 {
+        owner: c.owner, agent: c.agent, mpc: c.mpc, path: c.path, eth_address: c.eth_address, allowed_code: c.allowed_code,
+        next_nonce: c.next_nonce, max_gas_limit: c.max_gas_limit, max_fee_cap: c.max_fee_cap, pending: c.pending, stuck: c.stuck,
+        factories: c.factories, journal: c.journal, guardian: c.guardian, upgrade_delay_sec: c.upgrade_delay_sec, proposed: c.proposed,
+        paused: c.paused, version: 3, used_salts: c.used_salts, fee_floor: c.fee_floor, reserve: c.reserve, role_changes: c.role_changes,
+        unpause_votes: c.unpause_votes, proposed_code: c.proposed_code, rules_delay_sec: c.rules_delay_sec, rule_proposals: c.rule_proposals,
+        next_rule_id: c.next_rule_id, disabled_chains: c.disabled_chains, retiring: c.retiring, allowed_upgrades: c.allowed_upgrades,
+        proxy_journal: c.proxy_journal,
+    };
+    env::state_write(&old);
+    ctx("keyfree.testnet", 50);
+    let s = Keyfree::migrate();
+    assert_eq!((s.version, s.allowed_code.len(), s.next_nonce.get(&84532).copied()), (4, codes, Some(4)));
+    assert!(s.budgets.is_empty() && s.get_budget(84532).is_none());
 }

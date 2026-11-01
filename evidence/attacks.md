@@ -2,7 +2,7 @@
 
 Run: `npm run attacks` (offline).
 
-**53 of 53 attacks refused offline, 1 more refused live by the NEAR protocol.**
+**58 of 58 attacks refused offline, 1 more refused live by the NEAR protocol.**
 
 Contract attacks run the real policy code on near-sdk's mocked chain; tool attacks run the built keyfree package. "Seen live" points to the testnet run.
 
@@ -36,6 +36,10 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | A24 | allow an upgrade itself | refused | only owner | `the_agent_cannot_allow_an_upgrade` | v14 allow: the agent's key cannot even call it |
 | A25 | get a signed upgrade to another implementation broadcast | refused | not the one that was checked | tool: 1 test |  |
 | A26 | give the nonce of a proxy upgrade to a deploy | refused | nonce already used on this chain | `a_deploy_never_takes_the_nonce_of_a_proxy_upgrade` |  |
+| A27 | drain the address's ETH with many allowed deploys in one day | refused | daily gas budget on chain | `the_daily_gas_budget_counts_the_most_each_can_cost` |  |
+| A28 | flood one chain with small transactions | refused | daily limit on chain | `the_daily_transaction_limit_refuses_the_next_one` |  |
+| A29 | get extra signatures past the budget through retry or re-sign | refused | daily limit on chain | `a_retry_counts_against_the_budget` |  |
+| A30 | set or raise its own daily budget | refused | only owner | `the_agent_cannot_set_a_budget` |  |
 
 ## A thief with one or two council keys
 
@@ -55,6 +59,7 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | K12 | retire to an outside account | refused | the beneficiary must be a council member | `the_beneficiary_is_a_council_member` |  |
 | K13 | one key unpauses alone | refused | needs a second vote | `one_unpause_vote_is_not_enough` | v13 attacks |
 | K14 | stolen owner allows a treasury upgrade to its own implementation at once | refused | rule delay not over | `a_proxy_upgrade_waits_for_the_rules_delay` |  |
+| K15 | raise a chain's daily budget at once with a stolen council key | refused | raising a budget is a rule proposal | `lower_budget_cannot_raise_it` |  |
 
 ## A stranger with no role
 

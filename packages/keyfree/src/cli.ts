@@ -27,9 +27,10 @@ council (human key, --as <account>):
   rules allow-code <hash>                 widening: waits the rules delay, any council member may cancel
   rules allow-upgrade <chain> <proxy> <implementation>   one upgradeTo, used up by the request
   rules allow-chain <chain> <nonce> <floor_wei> | rules set-factory <chain> <address> | rules set-limits <gas> <fee_wei>
+  rules set-budget <chain> <wei_per_day> <tx_per_day>   a chain's daily budget (raising waits the delay)
   rules apply <id> | rules cancel <id>
   remove-code <hash> | remove-upgrade <chain> <proxy> <implementation> | disable-chain <chain> | remove-factory <chain>
-  lower-limits <gas> <fee_wei>            brakes, at once
+  lower-limits <gas> <fee_wei> | lower-budget <chain> <wei_per_day> <tx_per_day>   brakes, at once
   pause | unpause | roles | cancel-role <proposer> | cancel-upgrade
 `;
 
@@ -103,7 +104,8 @@ async function main() {
         sub === "enable-chain" ? { EnableChain: { chain_id: chainId(a) } } :
         sub === "set-factory" ? { SetFactory: { chain_id: chainId(a), factory_hex: b } } :
         sub === "set-limits" ? { SetLimits: { max_gas_limit: Number(a), max_fee_cap: Number(b) } } :
-        sub === "allow-upgrade" ? { AllowProxyUpgrade: { chain_id: chainId(a), proxy_hex: b, implementation_hex: c } } : null;
+        sub === "allow-upgrade" ? { AllowProxyUpgrade: { chain_id: chainId(a), proxy_hex: b, implementation_hex: c } } :
+        sub === "set-budget" ? { SetBudget: { chain_id: chainId(a), max_wei_per_day: Number(b), max_tx_per_day: Number(c) } } : null;
       if (change) return out(await council(cfg, kf, f.as, "propose_rule", { change }));
       if (sub === "apply" || sub === "cancel") return out(await council(cfg, kf, f.as, `${sub}_rule`, { id: Number(a) }));
       throw new Error(`Unknown rules command "${sub}".\n\n${HELP}`);
@@ -113,6 +115,7 @@ async function main() {
     case "disable-chain": return out(await council(cfg, kf, f.as, "disable_chain", { chain_id: chainId(pos[0]) }));
     case "remove-factory": return out(await council(cfg, kf, f.as, "remove_factory", { chain_id: chainId(pos[0]) }));
     case "lower-limits": return out(await council(cfg, kf, f.as, "lower_limits", { max_gas_limit: Number(pos[0]), max_fee_cap: Number(pos[1]) }));
+    case "lower-budget": return out(await council(cfg, kf, f.as, "lower_budget", { chain_id: chainId(pos[0]), max_wei_per_day: Number(pos[1]), max_tx_per_day: Number(pos[2]) }));
     case "pause": return out(await council(cfg, kf, f.as, "pause", {}));
     case "unpause": return out(await council(cfg, kf, f.as, "unpause", {}));
     default: throw new Error(`Unknown command "${cmd}".\n\n${HELP}`);

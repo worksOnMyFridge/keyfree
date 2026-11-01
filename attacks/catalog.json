@@ -29,7 +29,11 @@
         { "id": "A23", "attack": "roll the treasury back to its old version", "rust": "going_back_to_the_old_version_needs_its_own_rule", "refusal": "proxy upgrade not on the allow list", "live": "v14 after" },
         { "id": "A24", "attack": "allow an upgrade itself", "rust": "the_agent_cannot_allow_an_upgrade", "refusal": "only owner", "live": "v14 allow: the agent's key cannot even call it" },
         { "id": "A25", "attack": "get a signed upgrade to another implementation broadcast", "node": "tool: a signed proxy upgrade to another implementation is not broadcast", "refusal": "not the one that was checked" },
-        { "id": "A26", "attack": "give the nonce of a proxy upgrade to a deploy", "rust": "a_deploy_never_takes_the_nonce_of_a_proxy_upgrade", "refusal": "nonce already used on this chain" }
+        { "id": "A26", "attack": "give the nonce of a proxy upgrade to a deploy", "rust": "a_deploy_never_takes_the_nonce_of_a_proxy_upgrade", "refusal": "nonce already used on this chain" },
+        { "id": "A27", "attack": "drain the address's ETH with many allowed deploys in one day", "rust": "the_daily_gas_budget_counts_the_most_each_can_cost", "refusal": "daily gas budget on chain" },
+        { "id": "A28", "attack": "flood one chain with small transactions", "rust": "the_daily_transaction_limit_refuses_the_next_one", "refusal": "daily limit on chain" },
+        { "id": "A29", "attack": "get extra signatures past the budget through retry or re-sign", "rust": "a_retry_counts_against_the_budget", "refusal": "daily limit on chain" },
+        { "id": "A30", "attack": "set or raise its own daily budget", "rust": "the_agent_cannot_set_a_budget", "refusal": "only owner" }
       ]
     },
     {
@@ -48,7 +52,8 @@
         { "id": "K11", "attack": "one key retires the policy and takes its NEAR", "rust": "one_key_cannot_retire_the_policy", "refusal": "needs 2 of 3 approvals" },
         { "id": "K12", "attack": "retire to an outside account", "rust": "the_beneficiary_is_a_council_member", "refusal": "the beneficiary must be a council member" },
         { "id": "K13", "attack": "one key unpauses alone", "rust": "one_unpause_vote_is_not_enough", "refusal": "needs a second vote", "live": "v13 attacks" },
-        { "id": "K14", "attack": "stolen owner allows a treasury upgrade to its own implementation at once", "rust": "a_proxy_upgrade_waits_for_the_rules_delay", "refusal": "rule delay not over" }
+        { "id": "K14", "attack": "stolen owner allows a treasury upgrade to its own implementation at once", "rust": "a_proxy_upgrade_waits_for_the_rules_delay", "refusal": "rule delay not over" },
+        { "id": "K15", "attack": "raise a chain's daily budget at once with a stolen council key", "rust": "lower_budget_cannot_raise_it", "refusal": "raising a budget is a rule proposal" }
       ]
     },
     {

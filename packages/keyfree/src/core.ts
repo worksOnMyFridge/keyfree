@@ -71,7 +71,9 @@ export class Keyfree {
     const chains = await Promise.all(this.cfg.chains.map(async (c) => {
       const next = await this.policy.view<number | null>("get_next_nonce", { chain_id: c.chain_id });
       const balance = address ? await evm(c).getBalance({ address: address as Hex }) : 0n;
-      return { name: c.name, chain_id: c.chain_id, allowed: next !== null, next_nonce: next, balance_wei: balance.toString() };
+      // Daily budget and today's use (R8); a policy older than v15 has no get_budget.
+      const budget = await this.policy.view<Record<string, unknown> | null>("get_budget", { chain_id: c.chain_id }).catch(() => null);
+      return { name: c.name, chain_id: c.chain_id, allowed: next !== null, next_nonce: next, balance_wei: balance.toString(), daily_budget: budget };
     }));
     // Agent and council are only as separate as their keys: say so when a council key is on this machine.
     const council = [roles.owner, roles.guardian, roles.reserve].filter((a): a is string => typeof a === "string");

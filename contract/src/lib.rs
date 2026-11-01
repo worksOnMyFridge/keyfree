@@ -17,13 +17,15 @@
 // - Journal: a line per nonce, confirmed by NEAR Read MPC from the factory's Deployed log or the proxy's
 //   Upgraded log in a Safe or Finalized block, bound with an expected payload hash computed here.
 // - Callbacks read the MPC answer as raw bytes and never panic, so no answer can freeze the contract.
+// - A daily budget per chain (R8): the most gas it may commit in one UTC day (gas limit x max fee of every
+//   signature, re-signs included) and how many transactions it signs; nothing is given back.
 //
 // Who can do what
 // - agent: a function-call key on the request methods only (request_deploy, request_proxy_upgrade,
 //   resign, resign_proxy_upgrade, retry, release, confirm, confirm_stuck).
 // - council (owner, guardian, reserve; all different accounts): brakes are immediate and need one member:
 //   pause, revoke the agent, narrow a rule. Everything that widens power waits a public delay that nobody
-//   can shorten: allow code, a chain, a factory, higher caps or a proxy upgrade (rules_delay_sec, any
+//   can shorten: allow code, a chain, a factory, higher caps or budgets, a proxy upgrade (rules_delay_sec, any
 //   member may cancel); a new agent (the owner proposes, any member may cancel); a new owner, guardian or
 //   reserve (2 of 3, cancel 2 of 3); unpause (2 of 3 votes).
 // - Self-upgrade without keys: the owner stores the new wasm in the state, anyone can read it and compare
@@ -47,7 +49,7 @@
 // State and migration
 // - Everything that grows is iterable, so retiring can empty it (DeleteAccount needs at most 10 000 bytes
 //   of state).
-// - migrate reads the current layout or the v13 one; new fields go at the end of the struct.
+// - migrate reads the current layout or an older one (v14, v13); new fields go at the end of the struct.
 //
 // Finding ids in comments (N1..N17) refer to the second security review in AUDIT.md, requirement ids
 // (R1..R29) to the requirement list there. The version history is contract/CHANGELOG.md.
@@ -132,6 +134,25 @@ pub struct ProxyEntry {
     pub status: u8,
 }
 
+// Daily spend per chain (R8): how much gas the policy may commit on one chain in one UTC day, counted as
+// gas_limit x max_fee_per_gas of every transaction it signs (the most each can cost, re-signs included),
+// and how many transactions it signs. A chain without a budget has only the per-transaction caps.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Budget {
+    pub max_wei_per_day: u128,
+    pub max_tx_per_day: u32,
+}
+
+// What a chain used on its current UTC day. Nothing is given back: a signature, once out, may land.
+#[near(serializers = [borsh])]
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Spent {
+    pub day: u64,
+    pub wei: u128,
+    pub txs: u32,
+}
+
 // Where the Deployed log sits, as the agent read it from the chain. The contract fixes everything it
 // knows (tx hash, factory, address, code hash, salt); the MPC checks the rest via expected_payload_hash.
 #[near(serializers = [json])]
@@ -172,6 +193,8 @@ pub enum RuleChange {
     SetLimits { max_gas_limit: u128, max_fee_cap: u128 },
     // One upgradeTo(implementation) on one proxy, used up by the request.
     AllowProxyUpgrade { chain_id: u64, proxy_hex: String, implementation_hex: String },
+    // A chain's daily budget (R8). Lowering one is a brake: lower_budget, at once.
+    SetBudget { chain_id: u64, max_wei_per_day: u128, max_tx_per_day: u32 },
 }
 
 #[near(serializers = [borsh, json])]
@@ -224,6 +247,62 @@ pub struct Keyfree {
     allowed_upgrades: IterableSet<String>,
     // Journal lines of proxy upgrades, keyed like the deploy journal: a nonce is in at most one of the two.
     proxy_journal: IterableMap<String, ProxyEntry>,
+    // v15. Daily budgets per chain and what each chain used today (R8).
+    budgets: IterableMap<u64, Budget>,
+    spent: IterableMap<u64, Spent>,
+}
+
+// The state as v14 wrote it, read once by migrate.
+#[near(serializers = [borsh])]
+pub struct V14 {
+    owner: AccountId,
+    agent: Option<AccountId>,
+    mpc: AccountId,
+    path: String,
+    eth_address: Option<String>,
+    allowed_code: IterableSet<String>,
+    next_nonce: IterableMap<u64, u64>,
+    max_gas_limit: u128,
+    max_fee_cap: u128,
+    pending: Option<Pending>,
+    stuck: Option<Pending>,
+    factories: IterableMap<u64, Vec<u8>>,
+    journal: IterableMap<String, Entry>,
+    guardian: AccountId,
+    upgrade_delay_sec: u64,
+    proposed: Option<(String, u64)>,
+    paused: bool,
+    version: u32,
+    used_salts: IterableMap<[u8; 32], u64>,
+    fee_floor: IterableMap<u64, u128>,
+    reserve: AccountId,
+    role_changes: Vec<RoleChange>,
+    unpause_votes: Vec<AccountId>,
+    proposed_code: LazyOption<Vec<u8>>,
+    rules_delay_sec: u64,
+    rule_proposals: Vec<RuleProposal>,
+    next_rule_id: u32,
+    disabled_chains: IterableSet<u64>,
+    retiring: Option<AccountId>,
+    allowed_upgrades: IterableSet<String>,
+    proxy_journal: IterableMap<String, ProxyEntry>,
+}
+
+impl From<V14> for Keyfree {
+    fn from(o: V14) -> Self {
+        Self {
+            owner: o.owner, agent: o.agent, mpc: o.mpc, path: o.path, eth_address: o.eth_address,
+            allowed_code: o.allowed_code, next_nonce: o.next_nonce, max_gas_limit: o.max_gas_limit, max_fee_cap: o.max_fee_cap,
+            pending: o.pending, stuck: o.stuck, factories: o.factories, journal: o.journal, guardian: o.guardian,
+            upgrade_delay_sec: o.upgrade_delay_sec, proposed: o.proposed, paused: o.paused, version: o.version,
+            used_salts: o.used_salts, fee_floor: o.fee_floor, reserve: o.reserve, role_changes: o.role_changes,
+            unpause_votes: o.unpause_votes, proposed_code: o.proposed_code, rules_delay_sec: o.rules_delay_sec,
+            rule_proposals: o.rule_proposals, next_rule_id: o.next_rule_id, disabled_chains: o.disabled_chains,
+            retiring: o.retiring, allowed_upgrades: o.allowed_upgrades, proxy_journal: o.proxy_journal,
+            budgets: IterableMap::new(b"b5".to_vec()),
+            spent: IterableMap::new(b"w5".to_vec()),
+        }
+    }
 }
 
 // The state as v13 wrote it, read once by migrate.
@@ -273,6 +352,8 @@ impl From<V13> for Keyfree {
             retiring: o.retiring,
             allowed_upgrades: IterableSet::new(b"a4".to_vec()),
             proxy_journal: IterableMap::new(b"k4".to_vec()),
+            budgets: IterableMap::new(b"b5".to_vec()),
+            spent: IterableMap::new(b"w5".to_vec()),
         }
     }
 }
@@ -317,6 +398,8 @@ impl Keyfree {
             retiring: None,
             allowed_upgrades: IterableSet::new(b"a4".to_vec()),
             proxy_journal: IterableMap::new(b"k4".to_vec()),
+            budgets: IterableMap::new(b"b5".to_vec()),
+            spent: IterableMap::new(b"w5".to_vec()),
         }
     }
 
@@ -428,6 +511,8 @@ impl Keyfree {
         drain_set!(self.allowed_code);
         drain_set!(self.allowed_upgrades);
         drain_set!(self.disabled_chains);
+        drain_map!(self.budgets);
+        drain_map!(self.spent);
         let _ = budget;
         self.proposed_code.set(None);
         let left = self.left_to_sweep();
@@ -497,12 +582,13 @@ impl Keyfree {
 
     // Runs right after the self-deploy, in the same batch. Every future version's migrate must clear the
     // proposal and the stored code: that is how a successful upgrade is marked done. Reads this layout or
-    // the v13 one (v13 bytes are too short for this layout, and this layout is too long for v13).
+    // an older one (each older layout is shorter, so the bytes of one never parse as another).
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
         let raw = env::storage_read(b"STATE").unwrap_or_else(|| env::panic_str("no state"));
         let mut s = Self::try_from_slice(&raw)
+            .or_else(|_| V14::try_from_slice(&raw).map(Self::from))
             .or_else(|_| V13::try_from_slice(&raw).map(Self::from))
             .unwrap_or_else(|_| env::panic_str("unknown state layout"));
         s.version += 1;
@@ -622,8 +708,27 @@ impl Keyfree {
         env::log_str(&format!("keyfree: caps lowered to gas {max_gas_limit}, fee {max_fee_cap} by {me}"));
     }
 
+    // A brake: lower a chain's daily budget at once. Raising it is a rule proposal (SetBudget).
+    pub fn lower_budget(&mut self, chain_id: u64, max_wei_per_day: u128, max_tx_per_day: u32) {
+        let me = self.only_council();
+        let b = self.budgets.get(&chain_id).copied().unwrap_or_else(|| env::panic_str("no budget on this chain: setting one is a rule proposal"));
+        require!(max_wei_per_day <= b.max_wei_per_day && max_tx_per_day <= b.max_tx_per_day, "raising a budget is a rule proposal");
+        self.budgets.insert(chain_id, Budget { max_wei_per_day, max_tx_per_day });
+        env::log_str(&format!("keyfree: budget on chain {chain_id} lowered to {max_wei_per_day} wei and {max_tx_per_day} transactions a day by {me}"));
+    }
+
+    // A chain's budget and what it used today (UTC); u128 amounts as strings.
+    pub fn get_budget(&self, chain_id: u64) -> Option<Value> {
+        let b = self.budgets.get(&chain_id)?;
+        let day = now() / 86_400;
+        let s = self.spent.get(&chain_id).copied().filter(|s| s.day == day).unwrap_or(Spent { day, wei: 0, txs: 0 });
+        Some(json!({ "max_wei_per_day": b.max_wei_per_day.to_string(), "max_tx_per_day": b.max_tx_per_day,
+            "used_wei_today": s.wei.to_string(), "used_tx_today": s.txs, "day_ends_at": (day + 1) * 86_400 }))
+    }
+
     pub fn get_rules(&self) -> Value {
         json!({ "allowed_code": self.allowed_code.iter().collect::<Vec<_>>(), "allowed_proxy_upgrades": self.allowed_upgrades.iter().collect::<Vec<_>>(),
+            "budgets": self.budgets.iter().map(|(c, b)| json!({ "chain_id": c, "max_wei_per_day": b.max_wei_per_day.to_string(), "max_tx_per_day": b.max_tx_per_day })).collect::<Vec<_>>(),
             "max_gas_limit": self.max_gas_limit.to_string(),
             "max_fee_cap": self.max_fee_cap.to_string(), "rules_delay_sec": self.rules_delay_sec, "proposals": self.rule_proposals })
     }
@@ -631,6 +736,7 @@ impl Keyfree {
     // The bytes the contract would sign, so tests can compare its encoding with viem.
     pub fn preview(&self, chain_id: u64, init_code_hex: String, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128, salt_hex: Option<String>, via_factory: Option<bool>) -> Value {
         let p = self.check(chain_id, &init_code_hex, gas_limit, max_fee_per_gas, max_priority_fee_per_gas, salt_hex, via_factory.unwrap_or(false));
+        self.spent_after(&p);
         let unsigned = tx_of(&p).build_for_signing();
         json!({ "unsigned": format!("0x{}", hex::encode(&unsigned)), "hash": hex::encode(env::keccak256_array(&unsigned)), "nonce": p.nonce, "expected_address": expected_address(&p), "min_gas": intrinsic_gas(&tx_of(&p)) })
     }
@@ -659,6 +765,7 @@ impl Keyfree {
     // The bytes the contract would sign for a proxy upgrade.
     pub fn preview_proxy_upgrade(&self, chain_id: u64, proxy_hex: String, implementation_hex: String, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) -> Value {
         let p = self.check_proxy_upgrade(chain_id, &proxy_hex, &implementation_hex, gas_limit, max_fee_per_gas, max_priority_fee_per_gas);
+        self.spent_after(&p);
         let unsigned = tx_of(&p).build_for_signing();
         json!({ "unsigned": format!("0x{}", hex::encode(&unsigned)), "hash": hex::encode(env::keccak256_array(&unsigned)), "nonce": p.nonce,
             "to": format!("0x{}", hex::encode(p.factory.as_deref().unwrap_or_default())), "data": format!("0x{}", hex::encode(&p.init_code)), "min_gas": intrinsic_gas(&tx_of(&p)) })
@@ -871,7 +978,24 @@ impl Keyfree {
     pub fn get_next_nonce(&self, chain_id: u64) -> Option<u64> { self.next_nonce.get(&chain_id).copied() }
     pub fn get_open(&self) -> Value { json!({ "pending": self.pending.as_ref().map(|p| p.nonce), "stuck": self.stuck.as_ref().map(|p| p.nonce) }) }
 
+    // What the chain will have used today once this transaction is signed, or a refusal (R8). Every signature
+    // counts, a re-sign too: any of them may land, and the budget is about what can be spent.
+    fn spent_after(&self, p: &Pending) -> Option<Spent> {
+        let b = self.budgets.get(&p.chain_id).copied()?;
+        let day = now() / 86_400;
+        let s = self.spent.get(&p.chain_id).copied().filter(|s| s.day == day).unwrap_or(Spent { day, wei: 0, txs: 0 });
+        let cost = p.gas_limit.saturating_mul(p.max_fee_per_gas);
+        if s.txs >= b.max_tx_per_day {
+            env::panic_str(&format!("daily limit on chain {}: {} transactions today, until the next UTC day", p.chain_id, b.max_tx_per_day));
+        }
+        if s.wei.saturating_add(cost) > b.max_wei_per_day {
+            env::panic_str(&format!("daily gas budget on chain {}: {} of {} wei used today, this one may cost {}", p.chain_id, s.wei, b.max_wei_per_day, cost));
+        }
+        Some(Spent { day, wei: s.wei + cost, txs: s.txs + 1 })
+    }
+
     fn sign(&mut self, mut p: Pending) -> Promise {
+        if let Some(s) = self.spent_after(&p) { self.spent.insert(p.chain_id, s); }
         p.since_block = env::block_height();
         let hash = env::keccak256_array(&tx_of(&p).build_for_signing());
         env::log_str(&format!("keyfree: signing chain {} nonce {} code {} expected {:?} hash {}", p.chain_id, p.nonce, p.code_hash, expected_address(&p), hex::encode(hash)));
@@ -933,6 +1057,8 @@ impl Keyfree {
                 let (proxy, implementation) = (addr20(proxy_hex, "proxy"), addr20(implementation_hex, "implementation"));
                 require!(proxy != [0u8; 20] && implementation != [0u8; 20] && proxy != implementation, "proxy and implementation must be two real addresses");
             }
+            // Zero would stop the chain: that is disable_chain, a brake.
+            RuleChange::SetBudget { max_wei_per_day, max_tx_per_day, .. } => require!(*max_wei_per_day > 0 && *max_tx_per_day > 0, "a budget must be above 0"),
         }
     }
 
@@ -953,6 +1079,9 @@ impl Keyfree {
             }
             RuleChange::AllowProxyUpgrade { chain_id, proxy_hex, implementation_hex } => {
                 self.allowed_upgrades.insert(upgrade_key(*chain_id, &addr20(proxy_hex, "proxy"), &addr20(implementation_hex, "implementation")));
+            }
+            RuleChange::SetBudget { chain_id, max_wei_per_day, max_tx_per_day } => {
+                self.budgets.insert(*chain_id, Budget { max_wei_per_day: *max_wei_per_day, max_tx_per_day: *max_tx_per_day });
             }
         }
     }
@@ -975,6 +1104,7 @@ impl Keyfree {
     fn left_to_sweep(&self) -> u32 {
         self.journal.len() + self.proxy_journal.len() + self.used_salts.len() + self.next_nonce.len() + self.fee_floor.len()
             + self.factories.len() + self.allowed_code.len() + self.allowed_upgrades.len() + self.disabled_chains.len()
+            + self.budgets.len() + self.spent.len()
     }
 
     fn check_proxy_upgrade(&self, chain_id: u64, proxy_hex: &str, implementation_hex: &str, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) -> Pending {

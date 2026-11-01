@@ -14,7 +14,7 @@ permissions:
 
 env:
   CARGO_NEAR_VERSION: "0.22.0"
-  KF_BUILD: "v14.1"
+  KF_BUILD: "v15"
 
 jobs:
   wasm:
