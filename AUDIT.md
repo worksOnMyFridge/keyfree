@@ -25,7 +25,7 @@ Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 | N7 | A salted deploy could still go through the shared CREATE2 proxy, where anyone can take the address first | Medium | fixed (v9) | A salt goes only through the council's factory. `salt_without_the_factory_is_refused` |
 | N8 | `allow_chain` could move a nonce down at once, the one way to get two different transactions on one nonce | Medium | fixed (v9, v11) | A chain is opened once; the nonce moves only by signing, re-signing or proof. `owner_cannot_move_the_nonce_down_by_hand`, `a_chain_is_opened_only_once`, `disabling_a_chain_cannot_be_used_to_reset_its_nonce` |
 | N9 | No fee floor (1 wei was signed), and a plain CREATE could not be re-signed | Medium-low | fixed (v9) | A fee floor per chain, `resign` for any signed line. `one_wei_fee_is_refused_before_signing`, `a_signed_plain_create_can_be_resigned`, `resign_also_respects_the_floor` |
-| N10 | Gas caps were constants, too low for a real 24 KB contract, and there was no daily budget | Medium-low | partly | Caps are a rule now: lowered at once, raised only through the delay (`caps_are_lowered_at_once_and_raised_by_proposal`, `caps_cannot_be_raised_at_once`); the live policy allows 10 M gas, enough for the code deposit of a 24 KB runtime (about 4.9 M). **Open:** caps per chain and a daily budget |
+| N10 | Gas caps were constants, too low for a real 24 KB contract, and there was no daily budget | Medium-low | fixed (v11, v15) | Caps are a rule: lowered at once, raised only through the delay (`caps_are_lowered_at_once_and_raised_by_proposal`, `caps_cannot_be_raised_at_once`); the live policy allows 10 M gas, enough for the code deposit of a 24 KB runtime (about 4.9 M). v15 adds a daily budget per chain, gas and transaction count, re-signs included (`the_daily_gas_budget_counts_the_most_each_can_cost`, `the_daily_transaction_limit_refuses_the_next_one`, `a_retry_counts_against_the_budget`, `proxy_upgrades_count_against_the_budget`, `lower_budget_cannot_raise_it`). The per-transaction caps stay global, not per chain |
 | N11 | Arbitrum was never tried, and its gas rules add an L1 data cost | Low | open | No deploy on Arbitrum has been run. The README does not claim it |
 | N12 | The journal keeps only the hash of the latest variant after a re-sign; if an earlier variant lands, `confirm` cannot find it | Low | open | Nonces stay correct (one content per nonce); only that journal line stays "signed" |
 | N13 | A callback macro could still panic on a non-JSON MPC answer, outside the callback body | Low | fixed (v12) | Callbacks read the answer as raw bytes. `odd_raw_answers_never_freeze_the_contract`, `odd_raw_answer_does_not_confirm_the_journal`, `odd_raw_answer_does_not_move_a_stuck_nonce` |
@@ -43,7 +43,7 @@ Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 | F3 | An allowed code hash is a seal the owner cannot check | partly: the hash covers the code and its constructor arguments (`other_constructor_arguments_are_other_code`), and the MCP tool `keyfree_code_hash` computes it from your build artifact; the contract stores only the hash |
 | F4 | A signed transaction is public and can be broadcast by anyone | by design: the contract stores only its hash; broadcasting is not a new signature |
 | F5 | A timeout does not mean "not signed": two transactions could share a nonce | fixed (v2, v7): `leaked_signature_and_retry_can_only_spend_the_nonce_on_the_same_deploy`, `retry_resigns_only_the_same_content` |
-| F6 | No daily budget, one cap for all chains | partly: see N10 |
+| F6 | No daily budget, one cap for all chains | fixed for the budget (v15, per chain); the per-transaction caps stay global (N10) |
 | F7 | A Read MPC receipt does not prove the deploy succeeded | fixed (v3): our factory emits `Deployed` only on success, and the payload hash binds factory, address, code hash and salt |
 | F8 | The agent is the owner; no pause, no role changes | fixed (v8): see N1 |
 | F9 | CREATE2 through a shared proxy: the address can be taken first | fixed (v9): see N7 |
@@ -63,6 +63,7 @@ Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 
 - Retire (v13): `retire_*`, `sweep`, `finish_retire`. Unit tests only, never run live (it deletes the policy).
 - Proxy upgrades (v14): unit tests plus two live runs on Base Sepolia ([CLAIMS 7](CLAIMS.md#7-a-treasury-upgrade-only-the-one-the-council-allowed)), no independent review.
+- The daily budget (v15): unit tests, the attack bench and a live run ([CLAIMS 9](CLAIMS.md#9-a-daily-budget-the-agent-cannot-raise)), no independent review.
 - The `keyfree` tool (`packages/keyfree`) beyond its own 13 tests.
 
 ## Requirements referred to in the code (R-ids)

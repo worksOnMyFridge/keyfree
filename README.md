@@ -11,11 +11,13 @@ Keyfree removes the key. The agent asks; a contract on NEAR decides; NEAR MPC si
 ```
 AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> NEAR MPC signature ──> Base, Ethereum
                    checks bytes       allow list, chains,        for the policy's        deploy through
-                   vs viem            caps, nonces, roles        own derived address     its own factory
+                   vs viem            caps, daily budget,        own derived address     its own factory
+                                      nonces, roles
 ```
 
 - The **policy** is a NEAR contract with no access keys. It holds the rules: which init code may be deployed
-  (hash of the code together with its constructor arguments), on which chains, with which gas and fee caps.
+  (hash of the code together with its constructor arguments), on which chains, with which gas and fee caps, and
+  how much gas and how many transactions per chain a day (the daily budget).
 - It **builds the EVM transaction itself** from fields and asks NEAR MPC to sign it for the policy's own
   derived address. It never signs a hash someone hands it.
 - The agent's NEAR key can only call the request methods. Rules, roles and upgrades belong to a council of
@@ -124,21 +126,21 @@ hash equals the one NEAR Read MPC accepted on Base Sepolia.
 
 The live policy runs a reproducible build: the same commit gives the same bytes on any machine with Docker.
 The policy says which commit itself: its `contract_source_metadata` view (NEP-330) returns the repository
-link, the commit `c2db57df045ede7fd7cf7b9f91647a91a9cad252`, the Docker image and the build command.
+link, the commit `c27aa7d3fb71193c97cfd5633816fde1e8dc95c9`, the Docker image and the build command.
 
 ```bash
-git checkout c2db57df045ede7fd7cf7b9f91647a91a9cad252
+git checkout c27aa7d3fb71193c97cfd5633816fde1e8dc95c9
 cd contract
 cargo near build reproducible-wasm         # cargo-near 0.22.0; Docker image pinned by digest in Cargo.toml
 sha256sum target/near/keyfree_policy.wasm
-# -> 9dac5b92606dbb765652c73e05e173571cc52aaf89144e718fe918b9305bf368  (355 905 bytes)
+# -> 1ada024b96289d346b53d4c3c6e36ae9d7d36aec695bb40f99e4c74b32f29826  (376 508 bytes)
 ```
 
 NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
-`BcVSfpXi7WBWmeuYFyhDoimXgEkVnGY1XGzwYFBvqT43` (`near state` or the RPC `view_account`). The commit is part of
+`2opQgn8YVjkdUVjSQjU5kaZFgwJqFZR5EsSifc15tAqB` (`near state` or the RPC `view_account`). The commit is part of
 the metadata inside the wasm, so every commit gives its own hash; the `build` workflow
 (`.github/workflows/build.yml`) builds each change to the contract and prints both hashes.
-The policy moved to this build on 2026-11-01 through its own keyless upgrade (CLAIMS 1.6); earlier versions
+The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1); earlier versions
 were built on a laptop and their bytes carry that machine's paths, so they cannot be rebuilt elsewhere.
 
 ## Use it from Claude Code
@@ -189,8 +191,9 @@ install without keys, rules through the delay, factory, deploys from 22 B to 48 
 10) and a little Base Sepolia ETH on the derived address. The log of our run is `evidence/v13.log`.
 `v14/run.mjs` continues on that policy: the treasury (proxy, v1, v2), the keyless upgrade of the policy to
 v14, a new agent, the allowed proxy upgrade and its refusals, Read MPC confirmation (`evidence/v14.log`).
-`v14/ethereum.mjs` opens Ethereum Sepolia on the same policy (`evidence/ethereum.log`), and `v14/upgrade.mjs`
-moves the policy to a reproducible build without a key (`evidence/v14.log`).
+`v14/ethereum.mjs` opens Ethereum Sepolia on the same policy (`evidence/ethereum.log`), `v14/upgrade.mjs`
+moves the policy to a reproducible build without a key, and `v14/budget.mjs` sets and tests the daily budget
+(`evidence/v14.log`).
 
 ## Layout
 

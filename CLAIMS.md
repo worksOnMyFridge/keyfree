@@ -116,6 +116,19 @@ which chains are open. Run: `v14/ethereum.mjs`, log `evidence/ethereum.log`.
 | 8.4 | A journal line on Ethereum is not confirmed, and the policy says why. | `confirm` for nonce 2: `Read MPC does not cover this chain`. NEAR Read MPC reads Base and Arbitrum, not Ethereum yet: the testnet and mainnet node configs in [near/mpc](https://github.com/near/mpc/tree/main/crates/node-config/foreign_chains) list no Ethereum section. |
 | 8.5 | A failed first try, kept in the record. | Nonce 0 ([0x2407edb5…](https://sepolia.etherscan.io/tx/0x2407edb51ac1e2d4b9489c79bc9b1c19c25208ff3fd8415dd8be8a0ebe79d6c6)) ran out of gas: the run script gave the factory 398 043 gas from a formula, and creating it on Ethereum Sepolia takes about 1.25 M (on Base Sepolia about 0.2 M). A reverted creation still spends its nonce, so the factory went to nonce 1 through a new `SetFactory` rule (17) and its delay. The `keyfree` tool asks the chain to estimate gas before anything is signed; the script now does the same. |
 
+## 9. A daily budget the agent cannot raise
+
+v15 counts, per chain and UTC day, the most gas the policy may commit (gas limit x max fee of every signature)
+and how many transactions it signs. Run: `v14/budget.mjs`, log `evidence/v14.log`.
+
+| # | Claim | Evidence |
+|---|---|---|
+| 9.1 | The policy got the budget by a keyless upgrade to v15. | The `build` workflow at commit `c27aa7d`: 376 508 bytes, sha256 `1ada024b…9826`; proposed [96qq9eJ3…](https://testnet.nearblocks.io/txns/96qq9eJ33UKHcWRkqUvcMdMrEwBjeZqWy6UHAJfxSQLy), the stored bytes matched, applying early was refused, installed by [9qdVZngM…](https://testnet.nearblocks.io/txns/9qdVZngM7P8wHV5JTMjSZe5yBxF6uhZLsojAYGjRR8cH): build `v15`, version 5, keys `[]`, codes and nonces unchanged. |
+| 9.2 | Only the council sets a budget, through the delay. | The agent's key: `Access key does not allow method propose_rule`. Rules 19 (Base Sepolia: 1 transaction, 0.00001 ETH a day) and 20 (Ethereum Sepolia: 10 transactions, 0.01 ETH) were refused before the delay and applied after it. |
+| 9.3 | When the day's budget is used, the next request is refused by the tool and by the contract. | With 1 of 1 transaction used, `keyfree preview`: `daily limit on chain 84532: 1 transactions today, until the next UTC day`; the same request sent straight to the contract with the agent's key, tool bypassed: refused with the same reason. |
+| 9.4 | Raising waits the delay; lowering is a brake any member can use at once. | Rule 21 raised Base Sepolia to 20 transactions and 0.001 ETH a day after the delay; the guardian (`guard13b`) lowered it to 10 and 0.0005 ETH at once; the guardian's attempt to raise it at once was refused: `raising a budget is a rule proposal`. |
+| 9.5 | A re-sign keeps the nonce and the content, and counts against the budget. | The day's first signature (journal line 13) was never broadcast. `resign` gave the same nonce, code and salt with fresh fees ([2B6QQ5jy…](https://testnet.nearblocks.io/txns/2B6QQ5jyyUJ7jqE72JV2Y7VBRDByvnJqxPXdiAWp7nEd)); it landed as [0xb22a858d…](https://sepolia.basescan.org/tx/0xb22a858d71c6c341f0c64fa876f231a091b980ba56f179f3e5f84191008ff1bf), Counter(1) at the promised `0x5fa0…f57d`, and the budget showed 2 transactions used. |
+
 ## Not claimed (yet)
 
 - Not every journal line is confirmed. Read MPC confirmation is a separate call made for the runs above; Base nonce 11 (the second treasury proxy) and all Ethereum lines stay `signed`, the Ethereum ones because Read MPC does not read Ethereum yet (8.4).
@@ -123,7 +136,7 @@ which chains are open. Run: `v14/ethereum.mjs`, log `evidence/ethereum.log`.
 - Only testnets: NEAR testnet, Base Sepolia and Ethereum Sepolia. Nothing on mainnet.
 - Journal confirmation on Ethereum: NEAR Read MPC does not read Ethereum yet (8.4).
 - Arbitrum: the contract knows the chain, but no deploy there has been run.
-- `resign`, `resign_proxy_upgrade`, `release`, `retry` and `confirm_stuck` are covered by unit tests only; the live runs had no MPC or network failure to recover from.
+- `resign_proxy_upgrade`, `release`, `retry` and `confirm_stuck` are covered by unit tests only; the live runs had no MPC or network failure to recover from. `resign` ran live once (9.5).
 - Calls other than `upgradeTo` on a proxy: the policy cannot sign them at all.
 - Retiring a policy (`sweep`, `finish_retire`) is covered by unit tests only; the live policy is kept for review.
 - In the live run the owner key sat on the same laptop as the agent. See SECURITY.md.

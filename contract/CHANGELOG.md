@@ -1,7 +1,7 @@
 # Policy contract versions
 
 Finding ids: F1..F20 and N1..N17 are the two security reviews in [AUDIT.md](../AUDIT.md). The live policy
-`policy13.keyfree-lab.testnet` runs v14.1; earlier versions ran on earlier testnet accounts (see `spikes/`).
+`policy13.keyfree-lab.testnet` runs v15; earlier versions ran on earlier testnet accounts (see `spikes/`).
 
 | Version | What changed |
 |---|---|
@@ -20,6 +20,7 @@ Finding ids: F1..F20 and N1..N17 are the two security reviews in [AUDIT.md](../A
 | v13 | Retire: a keyless account cannot be deleted by anyone but itself, so the council can retire the policy (2 of 3 and the full delay). Then it is paused for good, `sweep()` empties the state in portions (all growing collections are iterable) and `finish_retire()` deletes the account, sending its NEAR to a council member who approved. `apply_upgrade` keeps the proposal until `migrate` has run (N17). |
 | v14 | Proxy upgrades (the treasury scenario): besides deploys the policy signs exactly one kind of call, `upgradeTo(implementation)` on an ERC-1967 proxy whose admin is the policy's address. The council allows one (chain, proxy, implementation) through the rules delay; the contract builds the calldata itself; the allowance is used up by the request, so the same upgrade or a rollback needs a new rule. Read MPC confirms the proxy's `Upgraded` log. New state goes at the end; `migrate` reads the v13 layout. Installed on the live policy without a key. |
 | v14.1 | No change in behaviour. The first reproducible build: `cargo near build reproducible-wasm` in a Docker image pinned by digest (`Cargo.toml`), crate renamed `keyfree-policy`, Rust 1.97.1, comments in English. Installed on the live policy without a key on 2026-11-01. |
+| v15 | A daily budget per chain (R8, review finding N10): the most gas the policy may commit in one UTC day, counted as gas limit x max fee of every signature (re-signs and retries included, nothing given back), and how many transactions it signs. A budget is set or raised by a rule through the delay (`SetBudget`), lowered at once by any council member (`lower_budget`); `get_budget` shows today's use. `migrate` reads the v14 layout. Installed on the live policy without a key on 2026-11-01. |
 
 v1 to v14 were built on a laptop; their bytes carry that machine's paths and cannot be rebuilt elsewhere.
 From v14.1 on, `cargo near build reproducible-wasm` gives the live bytes (README, "Check which code the live

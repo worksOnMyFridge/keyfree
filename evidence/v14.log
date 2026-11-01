@@ -145,3 +145,60 @@ OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build
 OK   proposal cleared, policy still has 0 keys
 OK   state kept: 10 allowed codes, next nonce Base 13, Ethereum 3
 OK   a refusal still says why: code not on the allow list
+--- 2026-11-01T20:24:04.224Z upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 376508 bytes, sha256 1ada024b96289d34... == the build workflow's
+OK   every method the live code exports is still there (48 -> 50)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v14.1, version 4, code sha256 9dac5b92606dbb76...
+  log: keyfree: upgrade to code sha256 1ada024b96289d346b53d4c3c6e36ae9d7d36aec695bb40f99e4c74b32f29826 (376508 bytes, readable now) proposed, ready at unix 1793564630
+  proposed https://testnet.nearblocks.io/txns/96qq9eJ33UKHcWRkqUvcMdMrEwBjeZqWy6UHAJfxSQLy
+OK   guardian reads the proposed code from the chain: 376508 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 176 s for the upgrade delay
+  log: keyfree: applying upgrade 1ada024b96289d346b53d4c3c6e36ae9d7d36aec695bb40f99e4c74b32f29826
+  log: keyfree: migrated to version 5
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v15, version 5  https://testnet.nearblocks.io/txns/9qdVZngM7P8wHV5JTMjSZe5yBxF6uhZLsojAYGjRR8cH
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 13, Ethereum 3
+OK   a refusal still says why: code not on the allow list
+--- 2026-11-01T20:27:16.603Z budget set (4 ok, 0 fail)
+OK   the agent's key sets a budget -> Access key does not allow method propose_rule
+  log: keyfree: rule 19 proposed: SetBudget { chain_id: 84532, max_wei_per_day: 10000000000000, max_tx_per_day: 1 }, ready at unix 1793564819
+  log: keyfree: rule 20 proposed: SetBudget { chain_id: 11155111, max_wei_per_day: 10000000000000000, max_tx_per_day: 10 }, ready at unix 1793564821
+proposed rules 19, 20
+OK   apply before the rules delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 19 applied: SetBudget { chain_id: 84532, max_wei_per_day: 10000000000000, max_tx_per_day: 1 }
+  log: keyfree: rule 20 applied: SetBudget { chain_id: 11155111, max_wei_per_day: 10000000000000000, max_tx_per_day: 10 }
+OK   Base Sepolia budget: 1 transaction and 10000000000000 wei a day, used today 0
+OK   Ethereum Sepolia budget: 10 transactions and 0.01 ETH a day
+--- 2026-11-01T20:28:04.127Z budget demo (0 ok, 4 fail)
+FAIL first deploy today through the tool: Counter(1), Base Sepolia tx ERROR  wasm execution failed with error: HostError(GuestPanic { panic_msg: "daily gas budget on chain 84532: 0 of 10000000000000 wei used today, this one may cost 84000000000000" })
+FAIL budget used: 0 of 1 transactions, 0 of 10000000000000 wei
+FAIL second deploy, the tool's preview -> ERROR  wasm execution failed with error: HostError(GuestPanic { panic_msg: "daily gas budget on chain 84532: 0 of 10000000000000 wei used today, this one may cost 84000000000000" })
+  log: keyfree: signing chain 84532 nonce 13 code 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2 expected Some("0x5fa0f199aedac2e0135f4f27c563c18ae2d7f57d") hash bc880d02584d769e4b1839e051ee1afe693c9e04c7da0581260f361bd67040cc
+  log: keyfree: signed chain 84532 nonce 13 tx 0x3f8d628f172fb5c948e0e09d0172c27a01aaa49fb51ea4e0a9de2414b429ee60
+FAIL second deploy straight to the contract, tool bypassed: was allowed
+--- 2026-11-01T20:31:17.817Z budget second (3 ok, 0 fail)
+OK   budget used today: 1 of 1 transactions, 3000000000000 of 10000000000000 wei
+OK   second deploy today, the tool's preview -> ERROR  wasm execution failed with error: HostError(GuestPanic { panic_msg: "daily limit on chain 84532: 1 transactions today, until the next UTC day" })
+OK   second deploy today straight to the contract, tool bypassed -> Smart contract panicked: daily limit on chain 84532: 1 transactions today, until the next UTC day
+--- 2026-11-01T20:32:58.877Z budget raise (3 ok, 1 fail)
+  log: keyfree: rule 21 proposed: SetBudget { chain_id: 84532, max_wei_per_day: 1000000000000000, max_tx_per_day: 20 }, ready at unix 1793565156
+proposed rules 21
+OK   apply before the rules delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 21 applied: SetBudget { chain_id: 84532, max_wei_per_day: 1000000000000000, max_tx_per_day: 20 }
+OK   raised through the delay: 20 transactions and 1000000000000000 wei a day
+FAIL the guardian raises it at once -> Smart contract panicked: Failed to deserialize input from JSON. Error: `invalid number at line 1 column 37`
+  log: keyfree: budget on chain 84532 lowered to 500000000000000 wei and 10 transactions a day by guard13b.keyfree-lab.testnet
+OK   the guardian lowered it at once: 10 transactions and 500000000000000 wei a day
+--- 2026-11-01T20:34:54.790Z budget raise-at-once (retry with a numeric amount)
+OK   the guardian raises it at once (10 -> 11 transactions) -> Smart contract panicked: raising a budget is a rule proposal
+--- 2026-11-01T20:39:44.610Z budget heal (2 ok, 0 fail)
+OK   journal line 13: Counter(1) through the factory, signed, promised at 0x5fa0f199aedac2e0135f4f27c563c18ae2d7f57d
+  log: keyfree: signing chain 84532 nonce 13 code 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2 expected Some("0x5fa0f199aedac2e0135f4f27c563c18ae2d7f57d") hash 9dac2954c5a5b85cb1beb51972ec4c4216030d087d911cb61aec105ddc761c57
+  log: keyfree: signed chain 84532 nonce 13 tx 0xb22a858d71c6c341f0c64fa876f231a091b980ba56f179f3e5f84191008ff1bf
+OK   nonce 13 landed: Counter(1) at 0x5fa0f199aedac2e0135f4f27c563c18ae2d7f57d  https://testnet.nearblocks.io/txns/2B6QQ5jyyUJ7jqE72JV2Y7VBRDByvnJqxPXdiAWp7nEd  https://sepolia.basescan.org/tx/0xb22a858d71c6c341f0c64fa876f231a091b980ba56f179f3e5f84191008ff1bf
+budget used today: 2 of 10 transactions, 7200000000000 of 500000000000000 wei
