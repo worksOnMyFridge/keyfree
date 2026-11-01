@@ -1144,8 +1144,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "keyfree-spike"
-version = "0.0.1"
+name = "keyfree-policy"
+version = "0.14.1"
 dependencies = [
  "bs58 0.5.1",
  "hex",

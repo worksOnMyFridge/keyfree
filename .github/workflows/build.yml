@@ -1,0 +1,70 @@
+# Reproducible build of the policy contract: `cargo near build reproducible-wasm` runs in the Docker image
+# pinned by digest in contract/Cargo.toml, against the committed source. Anyone with Docker gets the same
+# wasm; its sha256 is printed together with the base58 code hash NEAR shows for an account.
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["contract/**", "rust-toolchain.toml", ".github/workflows/build.yml"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_NEAR_VERSION: "0.22.0"
+  KF_BUILD: "v14.1"
+
+jobs:
+  wasm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install cargo-near (release binary, checksum verified)
+        run: |
+          base="https://github.com/near/cargo-near/releases/download/cargo-near-v${CARGO_NEAR_VERSION}"
+          file="cargo-near-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL -o "$file" "$base/$file"
+          curl -sSfL -o "$file.sha256" "$base/$file.sha256"
+          sha256sum -c "$file.sha256"
+          mkdir -p "$HOME/.local/bin" /tmp/cargo-near
+          tar -xzf "$file" -C /tmp/cargo-near
+          install "$(find /tmp/cargo-near -type f -name cargo-near | head -n1)" "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Reproducible build
+        working-directory: contract
+        run: |
+          cargo near --version
+          cargo near build reproducible-wasm
+      - name: Hashes
+        working-directory: contract
+        run: |
+          wasm=target/near/keyfree_policy.wasm
+          ls -l "$wasm"
+          python3 - "$wasm" <<'PY' | tee hashes.txt
+          import hashlib, sys
+          b = open(sys.argv[1], "rb").read()
+          d = hashlib.sha256(b).digest()
+          alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+          n, s = int.from_bytes(d, "big"), ""
+          while n:
+              n, r = divmod(n, 58)
+              s = alphabet[r] + s
+          print(f"bytes  {len(b)}")
+          print(f"sha256 {d.hex()}")
+          print(f"base58 {s}")
+          PY
+          # Paths inside the container are the same for everyone; a path of the CI machine must not appear.
+          if grep -q -a -E 'Users[\/]|/home/runner' "$wasm"; then echo "machine paths in the wasm"; exit 1; fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: keyfree_policy_${{ env.KF_BUILD }}
+          path: |
+            contract/target/near/keyfree_policy.wasm
+            contract/target/near/keyfree_policy_abi.json
+            contract/hashes.txt
+          if-no-files-found: warn

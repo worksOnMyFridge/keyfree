@@ -7,7 +7,7 @@ $env:KF_BUILD = "v14"
 $env:RUSTFLAGS = "--cfg near"
 cargo build --manifest-path (Join-Path $root "contract/Cargo.toml") --target wasm32-unknown-unknown --release
 if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
-$raw = Join-Path $root "contract/target/wasm32-unknown-unknown/release/keyfree_spike.wasm"
+$raw = Join-Path $root "contract/target/wasm32-unknown-unknown/release/keyfree_policy.wasm"
 $out = Join-Path $PSScriptRoot "keyfree_v14.opt.wasm"
 node $opt -Oz $raw -o $out
 if ($LASTEXITCODE -ne 0) { throw "wasm-opt failed" }

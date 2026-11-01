@@ -1,4 +1,4 @@
-# The exact compiler the live policy was built with: the same version gives the same wasm, byte for byte.
+# The Rust version of the reproducible-build image (contract/Cargo.toml), so local tests use the same compiler.
 [toolchain]
-channel = "1.95.0"
+channel = "1.97.1"
 targets = ["wasm32-unknown-unknown"]
