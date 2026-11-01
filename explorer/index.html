@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keyfree Policy Explorer</title>
+<meta name="description" content="Read-only view of the live Keyfree policy on NEAR testnet: keys, rules, budgets, pending changes and the journal, read straight from public RPCs.">
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1f23; --muted: #626872; --line: #e3e4e0;
+    --accent: #2f5bd3; --ok: #1d7a46; --ok-bg: #e5f4ea; --no: #b3261e; --no-bg: #fbe9e7; --warn: #8a5a00; --warn-bg: #fff3d6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121417; --panel: #1b1e23; --ink: #e8e9eb; --muted: #9aa1ab; --line: #2b2f36;
+      --accent: #7fa2ff; --ok: #6fd39a; --ok-bg: #16301f; --no: #ff8a80; --no-bg: #3a1714; --warn: #ffcf70; --warn-bg: #3a2e12;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 16px 48px; overflow-x: clip; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  p.lead { color: var(--muted); margin: 0 0 24px; max-width: 760px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+  .wide { grid-column: 1 / -1; }
+  .big { font-size: 40px; font-weight: 700; line-height: 1.1; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .row > span:first-child { color: var(--muted); flex: none; }
+  .row > span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .ok { color: var(--ok); background: var(--ok-bg); }
+  .no { color: var(--no); background: var(--no-bg); }
+  .warn { color: var(--warn); background: var(--warn-bg); }
+  .muted { color: var(--muted); }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; border-top: 0; white-space: nowrap; }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .try { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+  .answer { border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 14px; }
+  footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Keyfree Policy Explorer</h1>
+  <p class="lead">The live policy on NEAR testnet, read from public RPCs in your browser. Nothing here holds a key or
+    signs anything. The policy is a NEAR contract with no access keys; NEAR MPC signs EVM transactions for its address
+    only when the contract's rules allow them.</p>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Access keys on the policy</h2>
+      <div class="big" id="keys">…</div>
+      <div class="muted" id="keys-note">Anyone with a key could replace the code. There is none.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Code</h2>
+      <div class="row"><span>Account</span><span id="account" class="mono">…</span></div>
+      <div class="row"><span>Build</span><span id="build">…</span></div>
+      <div class="row"><span>Source commit</span><span id="source">…</span></div>
+      <div class="row"><span>Code hash</span><span id="codehash" class="mono">…</span></div>
+      <div class="row"><span>Status</span><span id="paused">…</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>Who decides</h2>
+      <div class="row"><span>Owner</span><span id="owner" class="mono">…</span></div>
+      <div class="row"><span>Guardian</span><span id="guardian" class="mono">…</span></div>
+      <div class="row"><span>Reserve</span><span id="reserve" class="mono">…</span></div>
+      <div class="row"><span>Agent</span><span id="agent" class="mono">…</span></div>
+      <div class="row"><span>Delay for rules</span><span id="rdelay">…</span></div>
+      <div class="row"><span>Delay for upgrades, roles</span><span id="udelay">…</span></div>
+    </section>
+
+    <section class="panel wide">
+      <h2>Chains</h2>
+      <p class="muted" style="margin:-6px 0 10px">The same keyless address on every chain the council opened:
+        <span id="eth" class="mono">…</span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Chain</th><th>Next nonce</th><th>ETH on the address</th><th>Daily budget (UTC day)</th></tr></thead>
+        <tbody id="chains"><tr><td colspan="4" class="muted">loading…</td></tr></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel wide">
+      <h2>Waiting for their delay</h2>
+      <p class="muted" style="margin:-6px 0 10px">Everything that widens power waits in public, and any council member
+        can cancel it until it is applied.</p>
+      <div id="pending" class="muted">loading…</div>
+    </section>
+
+    <section class="panel wide">
+      <h2>Ask the policy yourself</h2>
+      <p class="muted" style="margin:-6px 0 4px">A read-only <code>preview</code> call: the policy builds the transaction
+        it would sign, or refuses with its reason. Counter(1) is on the allow list; Counter(999) is the same contract with
+        another constructor argument, so it is other code.</p>
+      <div class="try">
+        <button data-arg="1">Preview Counter(1) on Base Sepolia</button>
+        <button data-arg="999">Preview Counter(999) on Base Sepolia</button>
+      </div>
+      <div id="answer"></div>
+    </section>
+
+    <section class="panel wide">
+      <h2>Journal</h2>
+      <p class="muted" style="margin:-6px 0 10px">One line per nonce, written when the agent asks. "confirmed" means NEAR
+        Read MPC found the factory's or the proxy's log on the EVM chain itself.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Chain</th><th>Nonce</th><th>Kind</th><th>Status</th><th>Contract</th><th>Transaction</th></tr></thead>
+        <tbody id="journal"><tr><td colspan="6" class="muted">loading…</td></tr></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel wide">
+      <h2>Allowed</h2>
+      <div class="row"><span>Init code hashes (code + constructor arguments)</span><span id="codes">…</span></div>
+      <div class="row"><span>Proxy upgrades waiting to be used</span><span id="upgrades">…</span></div>
+      <div class="row"><span>Caps per transaction</span><span id="caps">…</span></div>
+    </section>
+  </div>
+
+  <footer>
+    Read at <span id="when">…</span>. NEAR RPC <code>test.rpc.fastnear.com</code>; EVM RPCs from the chain table.
+    Explorers: <a href="https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet">nearblocks</a>.
+  </footer>
+</main>
+
+<script>
+const POLICY = "policy13.keyfree-lab.testnet";
+const NEAR_RPC = "https://test.rpc.fastnear.com";
+const CHAINS = [
+  { id: 84532, name: "Base Sepolia", rpc: "https://sepolia.base.org", scan: "https://sepolia.basescan.org" },
+  { id: 11155111, name: "Ethereum Sepolia", rpc: "https://ethereum-sepolia-rpc.publicnode.com", scan: "https://sepolia.etherscan.io" },
+];
+// Counter's init code without its one constructor argument (a uint256), from packages/keyfree/demo.
+const COUNTER = "0x6080604052348015600e575f5ffd5b50604051610114380380610114833981016040819052602b916031565b5f556047565b5f602082840312156040575f5ffd5b5051919050565b60c1806100535f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604d575b5f5ffd5b603b5f5481565b60405190815260200160405180910390f35b60536055565b005b5f805490806061836068565b9190505550565b5f60018201608457634e487b7160e01b5f52601160045260245ffd5b506001019056fea26469706673582212200c9626de9671bac324d6a6524734aaf238690d26f179b6773fda71d21013e53c64736f6c634300081c0033";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const short = (s, n = 6) => (s && s.length > 2 * n + 3 ? `${s.slice(0, n + 2)}…${s.slice(-n)}` : s);
+const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
+const near = (a) => link(`https://testnet.nearblocks.io/address/${a}`, a);
+const secs = (s) => (s >= 3600 ? `${(s / 3600).toFixed(1)} h` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`);
+const eth = (wei) => `${(Number(BigInt(wei) / 10n ** 9n) / 1e9).toFixed(6)} ETH`;
+
+async function rpc(url, method, params) {
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.data || j.error.message || JSON.stringify(j.error));
+  return j.result;
+}
+// A view call on the policy; a refusal comes back as an error with the contract's own words.
+async function view(method, args = {}) {
+  const res = await rpc(NEAR_RPC, "query", { request_type: "call_function", finality: "final", account_id: POLICY, method_name: method, args_base64: btoa(JSON.stringify(args)) });
+  if (res.error) throw new Error(res.error);
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(res.result)) || "null");
+}
+const panicText = (e) => { const m = String(e.message || e).match(/panic_msg: "([^"]+)"|Smart contract panicked: (.+)/); return m ? (m[1] || m[2]) : String(e.message || e); };
+
+async function load() {
+  const [status, roles, rules, address, keys, account, source] = await Promise.all([
+    view("get_status"), view("get_roles"), view("get_rules"), view("get_eth_address"),
+    rpc(NEAR_RPC, "query", { request_type: "view_access_key_list", finality: "final", account_id: POLICY }),
+    rpc(NEAR_RPC, "query", { request_type: "view_account", finality: "final", account_id: POLICY }),
+    view("contract_source_metadata").catch(() => null),
+  ]);
+  const n = keys.keys.length;
+  $("keys").innerHTML = n === 0 ? `<span style="color:var(--ok)">0</span>` : `<span style="color:var(--no)">${n}</span>`;
+  $("account").innerHTML = near(POLICY);
+  $("build").textContent = `${status.build}, version ${status.version}`;
+  const commit = source && source.link ? source.link.split("/tree/")[1] : null;
+  $("source").innerHTML = commit ? link(source.link, short(commit, 4)) : `<span class="muted">not published</span>`;
+  $("codehash").textContent = short(account.code_hash, 8);
+  $("paused").innerHTML = status.paused ? `<span class="pill no">paused</span>` : `<span class="pill ok">running</span>`;
+  for (const r of ["owner", "guardian", "reserve", "agent"]) $(r).innerHTML = roles[r] ? near(roles[r]) : `<span class="muted">none</span>`;
+  $("rdelay").textContent = secs(rules.rules_delay_sec);
+  $("udelay").textContent = secs(status.upgrade_delay_sec);
+  $("eth").innerHTML = link(`${CHAINS[0].scan}/address/${address}`, address);
+  $("codes").textContent = rules.allowed_code.length;
+  $("upgrades").textContent = (rules.allowed_proxy_upgrades || []).length;
+  $("caps").textContent = `gas ${Number(rules.max_gas_limit).toLocaleString("en")}, fee ${Number(rules.max_fee_cap) / 1e9} gwei`;
+
+  // Chains: nonce in the policy, balance on the chain, the day's budget if one is set.
+  const rows = await Promise.all(CHAINS.map(async (c) => {
+    const [next, bal, budget] = await Promise.all([
+      view("get_next_nonce", { chain_id: c.id }), rpc(c.rpc, "eth_getBalance", [address, "latest"]).catch(() => null),
+      view("get_budget", { chain_id: c.id }).catch(() => null),
+    ]);
+    let b = `<span class="muted">none set: per-transaction caps only</span>`;
+    if (budget) {
+      const used = Number(BigInt(budget.used_wei_today) * 1000n / BigInt(budget.max_wei_per_day)) / 10;
+      b = `${budget.used_tx_today} of ${budget.max_tx_per_day} transactions, ${eth(budget.used_wei_today)} of ${eth(budget.max_wei_per_day)}<div class="bar"><i style="width:${Math.min(100, used)}%"></i></div>`;
+    }
+    return { c, next, row: `<tr><td>${esc(c.name)} <span class="muted">${c.id}</span></td><td>${next === null ? `<span class="pill no">not open</span>` : next}</td><td>${bal ? eth(BigInt(bal)) : "?"}</td><td>${b}</td></tr>` };
+  }));
+  $("chains").innerHTML = rows.map((r) => r.row).join("");
+
+  // Pending widenings.
+  const now = Date.now() / 1000;
+  const items = [
+    ...(rules.proposals || []).map((p) => `rule ${p.id}: <code>${esc(JSON.stringify(p.change))}</code>, ready in ${secs(Math.max(0, Math.round(p.ready_at - now)))}`),
+    ...(roles.role_changes || []).map((r) => `role ${esc(r.role)} → ${esc(r.account)}, ${r.ready_at ? `ready in ${secs(Math.max(0, Math.round(r.ready_at - now)))}` : "waiting for a second approval"}`),
+    ...(status.proposed ? [`policy upgrade to code sha256 <code>${esc(short(status.proposed[0], 8))}</code>, ready in ${secs(Math.max(0, Math.round(status.proposed[1] - now)))}`] : []),
+  ];
+  $("pending").innerHTML = items.length ? `<ul style="margin:0;padding-left:18px">${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "Nothing is waiting.";
+
+  // Journal: the newest lines of each open chain.
+  const lines = [];
+  for (const { c, next } of rows) {
+    if (next === null) continue;
+    for (let k = next - 1; k >= Math.max(0, next - 6); k--) lines.push(view("get_entry", { chain_id: c.id, nonce: k }).then((e) => ({ c, k, e })).catch(() => ({ c, k, e: null })));
+  }
+  const got = (await Promise.all(lines)).filter((l) => l.e);
+  $("journal").innerHTML = got.length ? got.map(({ c, k, e }) => {
+    const target = e.kind === "proxy_upgrade" ? e.proxy : e.address;
+    const st = e.status === "confirmed" ? "ok" : e.status === "signed" ? "warn" : "no";
+    return `<tr><td>${esc(c.name)}</td><td>${k}</td><td>${e.kind === "proxy_upgrade" ? "proxy upgrade" : "deploy"}</td><td><span class="pill ${st}">${esc(e.status)}</span></td>`
+      + `<td class="mono">${target && !/^0x0+$/.test(target) ? link(`${c.scan}/address/${target}`, short(target)) : `<span class="muted">plain CREATE</span>`}</td>`
+      + `<td class="mono">${e.tx_hash && !/^0x0+$/.test(e.tx_hash) ? link(`${c.scan}/tx/${e.tx_hash}`, short(e.tx_hash)) : "—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="muted">no lines</td></tr>`;
+  $("when").textContent = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+}
+
+async function preview(arg) {
+  const out = $("answer");
+  out.innerHTML = `<div class="answer muted">asking the policy…</div>`;
+  const init = COUNTER + BigInt(arg).toString(16).padStart(64, "0");
+  try {
+    // Through the council's CREATE2 factory with a fresh salt, so the policy names the address in advance.
+    const salt = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
+    const p = await view("preview", { chain_id: 84532, init_code_hex: init, gas_limit: 300000, max_fee_per_gas: 1000000000, max_priority_fee_per_gas: 1000000, salt_hex: salt, via_factory: true });
+    out.innerHTML = `<div class="answer ok">Allowed. The policy would sign nonce ${p.nonce}, a call to its factory; the contract would land at <code>${esc(p.expected_address)}</code>. Unsigned transaction hash <code>${esc(short(p.hash, 8))}</code>. Nothing was signed: this was a preview.</div>`;
+  } catch (e) {
+    out.innerHTML = `<div class="answer no">Refused by the policy: <strong>${esc(panicText(e))}</strong>. Nothing was built or signed.</div>`;
+  }
+}
+
+document.querySelectorAll("button[data-arg]").forEach((b) => b.addEventListener("click", () => preview(b.dataset.arg)));
+load().catch((e) => { $("pending").textContent = `Could not read the policy: ${e.message || e}`; });
+</script>
+</body>
+</html>

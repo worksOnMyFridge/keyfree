@@ -205,6 +205,7 @@ moves the policy to a reproducible build without a key (`evidence/v14.log`).
 | `spikes/` | the first experiments (2026-10-25 .. 28), kept for the record |
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
+| `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
 | `.github/workflows/` | `ci`: tests and the attack bench on every push; `build`: the reproducible build of the policy |
 | `audit/` | probe tests written by the security reviewers ([AUDIT.md](AUDIT.md)) |
 
