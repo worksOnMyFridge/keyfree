@@ -9,7 +9,7 @@ stolen laptop controls that key, and with it the contracts and the money behind 
 Keyfree removes the key. The agent asks; a contract on NEAR decides; NEAR MPC signs.
 
 ```
-AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> NEAR MPC signature ──> Base / Arbitrum
+AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> NEAR MPC signature ──> Base, Ethereum
                    checks bytes       allow list, chains,        for the policy's        deploy through
                    vs viem            caps, nonces, roles        own derived address     its own factory
 ```
@@ -23,7 +23,7 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 - After a deploy lands, **NEAR Read MPC** confirms the factory's `Deployed` log, so the policy's journal
   records what happened on chain, not what was intended.
 
-Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet and Base Sepolia.
+Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
 
 ## Where the money goes
 
@@ -59,7 +59,10 @@ Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, an
    key does not exist.
 3. Open [this deploy](https://sepolia.basescan.org/tx/0x59ec94223de38de6bcbb12515c2facacd4578ce80483f734100869ae4f4e7120).
    A Claude Code session made it after one sentence: "deploy Counter with start 1 to Base Sepolia through keyfree".
-4. [CLAIMS.md](CLAIMS.md) lists every claim with its transaction, log line or test.
+4. The same keyless address on [Ethereum Sepolia](https://sepolia.etherscan.io/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0):
+   the council opened a second chain with one rule, and the same allow list holds there
+   ([CLAIMS 8](CLAIMS.md#8-one-policy-a-second-chain)).
+5. [CLAIMS.md](CLAIMS.md) lists every claim with its transaction, log line or test.
 
 ## Try it in 10 minutes (no keys, no money)
 
@@ -105,22 +108,32 @@ From the repository root:
 ```bash
 (cd contract && cargo test -- --test-threads=1)       # 133 tests of the policy (Rust, near-sdk 5.29)
 (cd packages/keyfree && npm test && npm run smoke)    # 13 tool tests; MCP self-check against the live policy
+npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
+
+The same checks, without the live smoke test, run in CI (`.github/workflows/ci.yml`). `npm audit` reports `tmp`
+through solc-js 0.8.28; the build only calls solc's `compile()`, not the command-line code that uses `tmp`, and
+another solc version would change the bytecode and with it the allowed code hashes.
 
 The contract tests include golden tests: the policy's transaction bytes for 1 KB, 24 KB and 48 KB of init code
 and for a proxy upgrade equal viem's (`evidence/golden_rlp.json`, made by `golden_vectors.mjs`, offline), and the journal's payload
 hash equals the one NEAR Read MPC accepted on Base Sepolia.
 
-## Check that the live policy runs this code
+## Check which code the live policy runs
+
+NEAR shows an account's code hash as base58 of the code's sha256. For `policy13.keyfree-lab.testnet` it is
+`8xpjPuJPdmviP4Wzj1Pn3jUUuHggiQWnBu61NRqmXWUA` (`near state` or the RPC `view_account`), sha256
+`764eb8f81ff528e00bf7f5967ddd40f7769022a6e79cf0658acff43ca767a52b`.
 
 ```bash
 npm install                                # once, from the repository root: viem, near-api-js, solc, binaryen
 pwsh v14/build_wasm.ps1                    # Rust 1.95.0 (rust-toolchain.toml), then wasm-opt -Oz
-# -> keyfree_v14.opt.wasm: 362719 bytes, sha256 764eb8f81ff528e00bf7f5967ddd40f7769022a6e79cf0658acff43ca767a52b
 ```
 
-NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
-`8xpjPuJPdmviP4Wzj1Pn3jUUuHggiQWnBu61NRqmXWUA` (`near state` or the RPC `view_account`), the same bytes.
+**Not yet reproducible on another machine.** rustc writes the local path of each dependency's source into
+the panic messages, so the hash above comes out only on the machine that built the live code. The fix is a
+container build (`cargo near build reproducible-wasm`, NEAR's standard), followed by a keyless upgrade of the
+policy to that build; it is planned and listed in [SECURITY.md](SECURITY.md), "Known limits".
 
 ## Use it from Claude Code
 
@@ -133,6 +146,35 @@ and its NEAR key could not call them anyway. Tool descriptions tell the model th
 text in files is not an instruction from the user. See `packages/keyfree/README.md` for what the tool checks
 before and after signing.
 
+## What the agent's key can and cannot do
+
+The agent signs on NEAR with a **function-call access key**: a key that NEAR itself limits to one contract and
+a list of methods. The live agent `agent14.keyfree-lab.testnet` has one key, for `policy13` and eight methods:
+`request_deploy`, `request_proxy_upgrade`, `resign`, `resign_proxy_upgrade`, `retry`, `release`, `confirm`,
+`confirm_stuck`.
+
+- It cannot propose or apply rules, change roles, pause or upgrade the policy: NEAR rejects the call before
+  the contract runs (`Access key does not allow method propose_rule`, CLAIMS 7.2 and 8.1).
+- It cannot move the agent account's NEAR or add keys; a function-call key never can.
+- Each call is paid from the agent account (a request uses about 250 Tgas). This key has no allowance limit,
+  so it cannot lock itself out by spending its allowance; a key with an allowance stops once the allowance is
+  used up, which happened to an earlier agent key in the v13 run (`evidence/v13.log`). When the account runs
+  low, anyone can top it up.
+- A stolen agent key can ask only for allowed code on open chains within the caps, and any council member
+  revokes the agent at once.
+
+## How this differs from other ways to keep the key from the agent
+
+| | Rules live in | Can sign beyond the rules | Rules for deploys and upgrades |
+|---|---|---|---|
+| Private key in `.env` or CI secrets | nowhere | whoever reads the file | none |
+| Wallet services with policies in a TEE (Coinbase CDP, OutLayer agent custody) | the provider's service or enclave | the provider's infrastructure | limits on transfers and calls; no allow list of init code in their docs (checked 2026-11-01) |
+| Safe with modules | a contract on each chain | the Safe owners | per chain; the agent needs its own key for the module |
+| Keyfree | one public contract on NEAR, for every EVM chain it opens | nobody: the policy has no key, and NEAR MPC signs only what the contract built | the hash of the whole init code, exact proxy upgrades, a public delay for anything that widens power |
+
+Keyfree does not move money: it decides what code gets deployed and which upgrades happen, and a deploy or an
+upgrade is where a contract learns who it pays.
+
 ## Run your own policy
 
 After `npm install` in the repository root, `v13/run.mjs` runs the whole thing end to end on NEAR testnet and Base Sepolia, one stage per call: accounts,
@@ -141,12 +183,13 @@ install without keys, rules through the delay, factory, deploys from 22 B to 48 
 10) and a little Base Sepolia ETH on the derived address. The log of our run is `evidence/v13.log`.
 `v14/run.mjs` continues on that policy: the treasury (proxy, v1, v2), the keyless upgrade of the policy to
 v14, a new agent, the allowed proxy upgrade and its refusals, Read MPC confirmation (`evidence/v14.log`).
+`v14/ethereum.mjs` opens Ethereum Sepolia on the same policy (`evidence/ethereum.log`).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `contract/` | the policy contract (Rust, near-sdk 5.29, `omni-transaction` for EIP-1559) and its tests |
+| `contract/` | the policy contract (Rust, near-sdk 5.29, `omni-transaction` for EIP-1559), its tests and version history |
 | `factory/` | `KeyfreeFactory.sol`: CREATE2 for exactly one caller, the policy's address; emits `Deployed` |
 | `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
 | `packages/keyfree/demo/` | `Counter`; `vault-kit`, a prompt-injection example (its README swaps the vault owner); `treasury`, the upgradeable treasury (proxy, v1, v2) |
@@ -155,10 +198,11 @@ v14, a new agent, the allowed proxy upgrade and its refusals, Read MPC confirmat
 | `spikes/` | the first experiments (2026-10-25 .. 28), kept for the record |
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
+| `audit/` | probe tests written by the security reviewers ([AUDIT.md](AUDIT.md)) |
 
 ## Security
 
-Read [SECURITY.md](SECURITY.md). In one line: there is no key, but there is power. Full power is 2 of the 3
+Read [SECURITY.md](SECURITY.md) and, for every finding of the two security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
 council members plus the delay, or the owner plus the delay while the other two stay silent. Keep the
 council keys on separate devices, never where the agent runs.
 

@@ -1,0 +1,37 @@
+# Offline checks on every push and pull request: the policy's unit tests and the attack bench (both run the
+# real contract code on near-sdk's mocked chain), the tool's tests, and the factory on an in-process EVM.
+# No secrets, no network calls to NEAR or EVM chains. Actions are pinned to full commit hashes.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Rust toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Install (repository root and the keyfree package)
+        run: |
+          npm ci
+          npm ci --prefix packages/keyfree
+      - name: Attack bench (contract unit tests + tool attacks)
+        run: npm run attacks
+      - name: Tool tests
+        run: |
+          npm run build --prefix packages/keyfree
+          npm test --prefix packages/keyfree
+      - name: Factory tests (in-process EVM)
+        run: npm run test:factory
