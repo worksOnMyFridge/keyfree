@@ -121,19 +121,20 @@ hash equals the one NEAR Read MPC accepted on Base Sepolia.
 
 ## Check which code the live policy runs
 
-NEAR shows an account's code hash as base58 of the code's sha256. For `policy13.keyfree-lab.testnet` it is
-`8xpjPuJPdmviP4Wzj1Pn3jUUuHggiQWnBu61NRqmXWUA` (`near state` or the RPC `view_account`), sha256
-`764eb8f81ff528e00bf7f5967ddd40f7769022a6e79cf0658acff43ca767a52b`.
+The live policy runs a reproducible build: the same commit gives the same bytes on any machine with Docker.
 
 ```bash
-npm install                                # once, from the repository root: viem, near-api-js, solc, binaryen
-pwsh v14/build_wasm.ps1                    # Rust 1.95.0 (rust-toolchain.toml), then wasm-opt -Oz
+cd contract
+cargo near build reproducible-wasm         # cargo-near 0.22.0; Docker image pinned by digest in Cargo.toml
+sha256sum target/near/keyfree_policy.wasm
+# -> 9dac5b92606dbb765652c73e05e173571cc52aaf89144e718fe918b9305bf368  (355 905 bytes)
 ```
 
-**Not yet reproducible on another machine.** rustc writes the local path of each dependency's source into
-the panic messages, so the hash above comes out only on the machine that built the live code. The fix is a
-container build (`cargo near build reproducible-wasm`, NEAR's standard), followed by a keyless upgrade of the
-policy to that build; it is planned and listed in [SECURITY.md](SECURITY.md), "Known limits".
+NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
+`BcVSfpXi7WBWmeuYFyhDoimXgEkVnGY1XGzwYFBvqT43` (`near state` or the RPC `view_account`). The `build` workflow
+(`.github/workflows/build.yml`) runs the same command on every change to the contract and prints both hashes.
+The policy moved to this build on 2026-11-01 through its own keyless upgrade (CLAIMS 1.6); earlier versions
+were built on a laptop and their bytes carry that machine's paths, so they cannot be rebuilt elsewhere.
 
 ## Use it from Claude Code
 
@@ -183,7 +184,8 @@ install without keys, rules through the delay, factory, deploys from 22 B to 48 
 10) and a little Base Sepolia ETH on the derived address. The log of our run is `evidence/v13.log`.
 `v14/run.mjs` continues on that policy: the treasury (proxy, v1, v2), the keyless upgrade of the policy to
 v14, a new agent, the allowed proxy upgrade and its refusals, Read MPC confirmation (`evidence/v14.log`).
-`v14/ethereum.mjs` opens Ethereum Sepolia on the same policy (`evidence/ethereum.log`).
+`v14/ethereum.mjs` opens Ethereum Sepolia on the same policy (`evidence/ethereum.log`), and `v14/upgrade.mjs`
+moves the policy to a reproducible build without a key (`evidence/v14.log`).
 
 ## Layout
 
@@ -198,6 +200,7 @@ v14, a new agent, the allowed proxy upgrade and its refusals, Read MPC confirmat
 | `spikes/` | the first experiments (2026-10-25 .. 28), kept for the record |
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
+| `.github/workflows/` | `ci`: tests and the attack bench on every push; `build`: the reproducible build of the policy |
 | `audit/` | probe tests written by the security reviewers ([AUDIT.md](AUDIT.md)) |
 
 ## Security

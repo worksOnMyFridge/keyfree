@@ -72,9 +72,8 @@ only as safe as that place.
   proxy whose admin is the policy, a code change is an allowed upgrade or nothing: the council should allow
   only an implementation whose code it has read (best one it deployed through Keyfree, with an allowed
   hash). A proxy with another admin, or with a way to change its admin, is outside Keyfree.
-- **The live build is not reproducible elsewhere yet.** The wasm embeds the local paths of its dependencies'
-  sources, so another machine gets another sha256 from the same source. Until a container build replaces it,
-  anyone who checks the live code has to trust that it was built from this source.
+- **Reproducible from v14.1 on.** The live code is a `cargo near` reproducible build (README, "Check which
+  code the live policy runs"). Versions up to v14 were built on a laptop and cannot be rebuilt byte for byte.
 - Testnets only so far (Base Sepolia, Ethereum Sepolia); Arbitrum not run yet; see "Not claimed" in
   CLAIMS.md. The findings of the two security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
 

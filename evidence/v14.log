@@ -121,3 +121,27 @@ guard13b.keyfree-lab.testnet: 0.298 NEAR
 reserve13.keyfree-lab.testnet: 0.299 NEAR
 policy: build v14, version 3, keys 0, ETH 0.000024404339127649 on 0x43e3cb8d471680307f0c232e5ac190828681fcb0
 v14 wasm 362719 bytes, stake ~3.63719 NEAR, sha256 764eb8f81ff528e0...
+--- 2026-11-01T18:37:06.729Z upgrade to a reproducible build (4 ok, 1 fail)
+OK   new wasm 355905 bytes, sha256 9dac5b92606dbb76... == the build workflow's
+OK   every method the live code exports is still there (49 -> 48)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v14, version 3, code sha256 764eb8f81ff528e0...
+FAIL stopped: Not enough balance for keyfree-lab.testnet (balance: 3700573863562418099999999, cost: 3872461837863560000000000)
+--- 2026-11-01T18:44:13.576Z upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 355905 bytes, sha256 9dac5b92606dbb76... == the build workflow's
+OK   every method the live code exports is still there (49 -> 48)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v14, version 3, code sha256 764eb8f81ff528e0...
+  log: keyfree: upgrade to code sha256 9dac5b92606dbb765652c73e05e173571cc52aaf89144e718fe918b9305bf368 (355905 bytes, readable now) proposed, ready at unix 1793558639
+  proposed https://testnet.nearblocks.io/txns/F9bEhNYBJFt4N2oRc2T9s1DJ1dX9ksnpCUy1AfdBnsPP
+OK   guardian reads the proposed code from the chain: 355905 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 176 s for the upgrade delay
+  log: keyfree: applying upgrade 9dac5b92606dbb765652c73e05e173571cc52aaf89144e718fe918b9305bf368
+  log: keyfree: migrated to version 4
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v14.1, version 4  https://testnet.nearblocks.io/txns/Ac89k49KnAUSPx31zkfEB79PNqsbeqtyyvTyv8HaxbQd
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 13, Ethereum 3
+OK   a refusal still says why: code not on the allow list
