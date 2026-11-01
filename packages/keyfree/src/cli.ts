@@ -5,7 +5,7 @@
 import { councilKey, findChain, loadConfig, type Config } from "./config.js";
 import { loadCode } from "./code.js";
 import { Keyfree } from "./core.js";
-import { PolicyRefusal } from "./near.js";
+import { PolicyRefusal, clean } from "./near.js";
 
 const HELP = `keyfree - deploy EVM contracts with no private key (rules in a NEAR contract, NEAR MPC signs)
 
@@ -128,6 +128,6 @@ function out(v: unknown) {
 
 // exitCode, not process.exit(): exiting while fetch sockets close trips a libuv assertion on Windows.
 main().catch((e) => {
-  console.error(e instanceof PolicyRefusal ? `REFUSED  ${e.reason}` : `ERROR  ${(e as Error).message ?? e}`);
+  console.error(e instanceof PolicyRefusal ? `REFUSED  ${e.reason}` : `ERROR  ${clean(String((e as Error).message ?? e))}`);
   process.exitCode = 1;
 });

@@ -2,10 +2,19 @@
 import { Account, JsonRpcProvider, teraToGas } from "near-api-js";
 import type { Config } from "./config.js";
 
+// Text that comes from outside (RPC errors, revert strings) loses control and direction characters, so it
+// can neither rewrite the terminal (ANSI escapes) nor hide or reorder what the human reads (bidi marks).
+export function clean(s: string): string {
+  return s.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "");
+}
+
 // The policy said no. `reason` is its own words; the caller must not try to route around it.
 export class PolicyRefusal extends Error {
-  constructor(readonly reason: string) {
-    super(`Refused by the policy: ${reason}`);
+  readonly reason: string;
+  constructor(reason: string) {
+    const r = clean(reason);
+    super(`Refused by the policy: ${r}`);
+    this.reason = r;
   }
 }
 
@@ -61,5 +70,5 @@ export function asRefusal(e: unknown): Error {
   if (panic) return new PolicyRefusal(panic[1].trim());
   if (/does not allow method|MethodNameMismatch/.test(m)) return new PolicyRefusal(`this key may not call that method (${m.slice(0, 120)})`);
   if (/Not enough allowance/.test(m)) return new Error(`The agent key's gas allowance is too small for this call. Give the agent a key without an allowance. (${m.slice(0, 160)})`);
-  return e instanceof Error ? e : new Error(m);
+  return new Error(clean(m));
 }

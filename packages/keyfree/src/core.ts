@@ -7,7 +7,8 @@ import {
 import { agentKey, findChain, hasLocalKey, type ChainConfig, type Config } from "./config.js";
 import { loadCode, type CodeInput } from "./code.js";
 import { evm, FACTORY_ABI, PROXY_ABI, ADMIN_SLOT, IMPLEMENTATION_SLOT, slotAddress, randomSalt, txLink, addressLink } from "./evm.js";
-import { Policy, PolicyRefusal } from "./near.js";
+import { KeyPair } from "near-api-js";
+import { Policy, PolicyRefusal, clean } from "./near.js";
 
 interface Preview { unsigned: Hex; hash: string; nonce: number; expected_address: string | null; min_gas: number }
 interface Entry {
@@ -42,6 +43,8 @@ export interface DeployResult {
   next: string;
 }
 
+// The request methods the agent's function-call key may call, and nothing else.
+const AGENT_METHODS = ["request_deploy", "request_proxy_upgrade", "resign", "resign_proxy_upgrade", "retry", "release", "confirm", "confirm_stuck"];
 const AGENT_GAS = 250; // Tgas for request_deploy / retry: 100 for the MPC, 50 for the callback, the rest for the build
 
 export class Keyfree {
@@ -50,8 +53,27 @@ export class Keyfree {
     this.policy = new Policy(cfg);
   }
 
-  private agent() {
-    return this.policy.account(this.cfg.agent, agentKey(this.cfg));
+  // The key the tool signs with must be what the README promises: a function-call key on this policy for
+  // request methods only. keyfree.json, which a cloned project can bring, names the agent account; if it
+  // named the owner or any account whose local key can do more, the tool refuses to sign (review finding X3).
+  private agentChecked = false;
+  private async agent() {
+    const key = agentKey(this.cfg);
+    if (!this.agentChecked) {
+      const pk = KeyPair.fromString(key as Parameters<typeof KeyPair.fromString>[0]).getPublicKey().toString();
+      const { keys } = await this.policy.provider.viewAccessKeyList({ accountId: this.cfg.agent });
+      const found = keys.find((k) => k.public_key === pk);
+      const perm = found?.access_key.permission as unknown;
+      const fc = typeof perm === "object" && perm !== null ? (perm as { FunctionCall?: { receiver_id: string; method_names: string[] } }).FunctionCall : undefined;
+      if (!found) throw new Error(`The local key for ${this.cfg.agent} is not on that account. Not signing.`);
+      if (!fc) throw new Error(`The local key for ${this.cfg.agent} is a full-access key. The agent must hold only a function-call key on ${this.cfg.policy}; not signing with this one.`);
+      const extra = fc.method_names.filter((m) => !AGENT_METHODS.includes(m));
+      if (fc.receiver_id !== this.cfg.policy || fc.method_names.length === 0 || extra.length) {
+        throw new Error(`The local key for ${this.cfg.agent} may call ${fc.method_names.length ? fc.method_names.join(", ") : "any method"} on ${fc.receiver_id}; the agent's key must be limited to the request methods of ${this.cfg.policy}. Not signing.`);
+      }
+      this.agentChecked = true;
+    }
+    return this.policy.account(this.cfg.agent, key);
   }
 
   async address(): Promise<Hex> {
@@ -136,7 +158,7 @@ export class Keyfree {
     try {
       est = await c.estimateGas({ account: address, to: proxy, data, value: 0n });
     } catch (e) {
-      throw new Error(`The chain says this upgrade would fail (simulation): ${String((e as Error).message).split("\n")[0]}. Nothing was signed.`);
+      throw new Error(`The chain says this upgrade would fail (simulation): ${clean(String((e as Error).message).split("\n")[0])}. Nothing was signed.`);
     }
     const gas = Math.min(cap, Math.max(first.pv.min_gas, Number((est * 125n) / 100n)));
     const { pv, args } = await this.previewWithFloor({ ...first.args, gas_limit: gas }, chain, "preview_proxy_upgrade");
@@ -161,7 +183,7 @@ export class Keyfree {
 
   async upgradeProxy(input: UpgradeInput): Promise<DeployResult> {
     const p = await this.upgradePlan(input);
-    const res = await this.policy.call<Hex>(this.agent(), "request_proxy_upgrade", p.args, AGENT_GAS);
+    const res = await this.policy.call<Hex>(await this.agent(), "request_proxy_upgrade", p.args, AGENT_GAS);
     if (!res.value) {
       throw new Error(`The MPC did not sign in time (NEAR tx ${this.policy.tx(res.txHash)}). Nonce ${p.pv.nonce} stays bound to this exact upgrade; call keyfree_retry (later, with new fees). Nothing was broadcast.`);
     }
@@ -202,7 +224,7 @@ export class Keyfree {
     try {
       est = await evm(chain).estimateGas({ account: address, to, data, value: 0n });
     } catch (e) {
-      throw new Error(`The chain says this deploy would fail (simulation): ${String((e as Error).message).split("\n")[0]}. Nothing was signed.`);
+      throw new Error(`The chain says this deploy would fail (simulation): ${clean(String((e as Error).message).split("\n")[0])}. Nothing was signed.`);
     }
     const gas = Math.min(cap, Math.max(first.pv.min_gas, Number((est * 125n) / 100n)));
     const { pv, args } = await this.previewWithFloor({ ...first.args, gas_limit: gas }, chain);
@@ -238,7 +260,7 @@ export class Keyfree {
 
   async deploy(input: DeployInput): Promise<DeployResult> {
     const p = await this.plan(input);
-    const res = await this.policy.call<Hex>(this.agent(), "request_deploy", p.args, AGENT_GAS);
+    const res = await this.policy.call<Hex>(await this.agent(), "request_deploy", p.args, AGENT_GAS);
     if (!res.value) {
       throw new Error(`The MPC did not sign in time (NEAR tx ${this.policy.tx(res.txHash)}). Nonce ${p.pv.nonce} stays bound to this exact deploy; call keyfree_retry (later, with new fees). Nothing was broadcast.`);
     }
@@ -247,11 +269,15 @@ export class Keyfree {
 
   // Re-sign the stuck request (same nonce and content, new fees) and broadcast it.
   async retry(chainName: string | number) {
-    const chain = findChain(this.cfg, chainName);
-    const open = await this.policy.view<{ pending: number | null; stuck: number | null }>("get_open");
+    const open = await this.policy.view<{ pending: number | null; stuck: number | null; chain_id?: number | null }>("get_open");
     if (open.stuck === null) throw new Error(open.pending !== null ? `Request ${open.pending} is still being signed; wait for it.` : "Nothing is stuck.");
+    // The stuck request's chain is the policy's word, not the caller's (review finding X10).
+    const chain = open.chain_id != null ? findChain(this.cfg, open.chain_id) : findChain(this.cfg, chainName);
+    if (String(chainName) !== chain.name && Number(chainName) !== chain.chain_id) {
+      throw new Error(`The stuck request is on ${chain.name}, not ${chainName}. Nothing was signed.`);
+    }
     const f = await this.fees(chain);
-    const res = await this.policy.call<Hex>(this.agent(), "retry", { max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) }, AGENT_GAS);
+    const res = await this.policy.call<Hex>(await this.agent(), "retry", { max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) }, AGENT_GAS);
     if (!res.value) throw new Error(`Still not signed (NEAR tx ${this.policy.tx(res.txHash)}). Try again later.`);
     const t = parseTransaction(res.value);
     const entry = await this.policy.view<Entry | null>("get_entry", { chain_id: chain.chain_id, nonce: open.stuck });
@@ -306,7 +332,7 @@ export class Keyfree {
     if (safe.number < rc.blockNumber) {
       return { status: "waiting_for_safe", nonce, blocks_to_go: Number(rc.blockNumber - safe.number), next: "Call keyfree_confirm again later; Safe on Base Sepolia takes ~20 min." };
     }
-    const res = await this.policy.call<boolean>(this.agent(), "confirm", {
+    const res = await this.policy.call<boolean>(await this.agent(), "confirm", {
       chain_id: chain.chain_id, nonce, finality: "Safe",
       log: { log_index: log.logIndex, transaction_index: rc.transactionIndex, block_hash: rc.blockHash, block_number: Number(rc.blockNumber) },
     }, 200);
