@@ -130,8 +130,8 @@ export class Keyfree {
     const f = await this.fees(chain);
     const cap = Number(rules.max_gas_limit);
     const base = { chain_id: chain.chain_id, proxy_hex: proxy, implementation_hex: implementation, max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) };
-    const first = await this.previewWithFloor({ ...base, gas_limit: cap }, chain, "preview_proxy_upgrade");
     const data = encodeFunctionData({ abi: PROXY_ABI, functionName: "upgradeTo", args: [implementation] });
+    const first = await this.previewWithFloor({ ...base, gas_limit: Math.min(cap, probeGas(data)) }, chain, "preview_proxy_upgrade");
     let est: bigint;
     try {
       est = await c.estimateGas({ account: address, to: proxy, data, value: 0n });
@@ -190,11 +190,12 @@ export class Keyfree {
     const f = await this.fees(chain);
     const cap = Number(rules.max_gas_limit);
     const base = { chain_id: chain.chain_id, init_code_hex: code.init, max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas), salt_hex: salt, via_factory: viaFactory || null };
-    // 1) at the cap, only to learn the nonce, the target (our factory) and the intrinsic minimum
-    const first = await this.previewWithFloor({ ...base, gas_limit: cap }, chain);
+    const data = viaFactory ? encodeFunctionData({ abi: FACTORY_ABI, functionName: "deploy", args: [salt as Hex, code.init] }) : code.init;
+    // 1) only to learn the nonce, the target (our factory) and the intrinsic minimum. The gas asked here must
+    // pass the policy's minimum without inflating the day's budget, so it is an upper bound of that minimum.
+    const first = await this.previewWithFloor({ ...base, gas_limit: Math.min(cap, probeGas(data)) }, chain);
     const draft = parseTransaction(first.pv.unsigned);
     const to = draft.to ?? undefined;
-    const data = viaFactory ? encodeFunctionData({ abi: FACTORY_ABI, functionName: "deploy", args: [salt as Hex, code.init] }) : code.init;
     if (viaFactory) await this.checkFactory(chain, to, address);
     // 2) real gas: ask the chain to simulate it from our address, +25 %
     let est: bigint;
@@ -343,6 +344,15 @@ export async function checkSigned(raw: Hex, want: TransactionSerializableEIP1559
 
 function asPreviewError(e: unknown): Error {
   const m = String((e as Error)?.message ?? e);
-  const panic = /panicked: (.*?)(?:$|"|\\n)/.exec(m.replace(/\s+/g, " "));
+  // A call reports "Smart contract panicked: ...", a view "GuestPanic { panic_msg: \"...\" }".
+  const flat = m.replace(/\s+/g, " ");
+  const panic = /panic_msg: \\?"(.*?)\\?"/.exec(flat) ?? /panicked: (.*?)(?:$|"|\\n)/.exec(flat);
   return panic ? new PolicyRefusal(panic[1].trim()) : e instanceof Error ? e : new Error(m);
+}
+
+// An upper bound of the intrinsic gas the policy requires (EIP-2028 calldata, EIP-3860 init code words, the
+// EIP-7623 floor, and a creation's 32 000): enough for any preview, far below the per-transaction cap.
+function probeGas(data: Hex): number {
+  const n = (data.length - 2) / 2;
+  return 21_000 + 32_000 + 40 * n + 2 * Math.ceil(n / 32) + 1_000;
 }
