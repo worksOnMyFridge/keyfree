@@ -1,0 +1,43 @@
+--- 2026-11-01T17:32:19.141Z check (0 ok, 0 fail)
+0x43e3cb8d471680307f0c232e5ac190828681fcb0 on Sepolia: 0.05 ETH, nonce 0
+policy next nonce on Sepolia: null; factory slot at nonce 0: 0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f
+--- 2026-11-01T17:33:53.312Z open (4 ok, 0 fail)
+OK   the factory will land at 0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f, the same address as on Base
+OK   agent opens a chain itself -> Access key does not allow method propose_rule
+  log: keyfree: rule 15 proposed: AllowChain { chain_id: 11155111, next_nonce: 0, min_fee_per_gas: 10000000 }, ready at unix 1793554414
+  log: keyfree: rule 16 proposed: SetFactory { chain_id: 11155111, factory_hex: "0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f" }, ready at unix 1793554416
+proposed rules 15, 16: AllowChain(11155111, nonce 0, floor 10000000 wei), SetFactory(0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f)
+OK   apply before the rules delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 15 applied: AllowChain { chain_id: 11155111, next_nonce: 0, min_fee_per_gas: 10000000 }
+  log: keyfree: rule 16 applied: SetFactory { chain_id: 11155111, factory_hex: "0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f" }
+OK   Sepolia is open in the policy at nonce 0
+--- 2026-11-01T17:34:28.473Z factory (1 ok, 3 fail)
+OK   KeyfreeFactory: unsigned tx built by the contract == viem (chain 11155111, nonce 0)
+  log: keyfree: signing chain 11155111 nonce 0 code 28310e4dbd4af0016d2c91fbac7e8c181dc9fd764b1970cfbd2276a043b24253 expected None hash 22d704c556a5886a600b3adb1faf9984cf301ef5a7e0f864d33b4181f4c21d28
+  log: keyfree: signed chain 11155111 nonce 0 tx 0x2407edb51ac1e2d4b9489c79bc9b1c19c25208ff3fd8415dd8be8a0ebe79d6c6
+FAIL KeyfreeFactory: landed, gas 398043 of 398043  https://testnet.nearblocks.io/txns/2CQTK4DbqszMoLNb1xkMmAh6Vit74D1oGA4NwYFiR6Jo  https://sepolia.etherscan.io/tx/0x2407edb51ac1e2d4b9489c79bc9b1c19c25208ff3fd8415dd8be8a0ebe79d6c6
+FAIL factory at the promised address null
+FAIL stopped: The contract function "keyfree" returned no data ("0x"). This could be due to any of the following: - The contract does not have the function "keyfree", - The parameters passed to the contract function may be invalid, or - The address is not a contract. Contract Call: address: 0x4b78615d2ab691cf8e05
+--- 2026-11-01T17:38:41.371Z factory (5 ok, 0 fail)
+  log: keyfree: rule 17 proposed: SetFactory { chain_id: 11155111, factory_hex: "0xca875b5d982fb05d6699c61c10806f2470b9ccaa" }, ready at unix 1793554690
+proposed rule 17: SetFactory(0xca875b5d982fb05d6699c61c10806f2470b9ccaa) for nonce 1
+OK   apply before the rules delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 17 applied: SetFactory { chain_id: 11155111, factory_hex: "0xca875b5d982fb05d6699c61c10806f2470b9ccaa" }
+OK   KeyfreeFactory: unsigned tx built by the contract == viem (chain 11155111, nonce 1)
+  log: keyfree: signing chain 11155111 nonce 1 code 28310e4dbd4af0016d2c91fbac7e8c181dc9fd764b1970cfbd2276a043b24253 expected None hash 5a88d22b868a049681cc1b99b0dabd3097bb4faf83fb37eab26361143c35f578
+  log: keyfree: signed chain 11155111 nonce 1 tx 0x4bf7d487ddfe4999b88e674a6539292a3b0900a9a18c548c600bfe35c6ff92e9
+OK   KeyfreeFactory: landed, gas 1250200 of 1576611  https://testnet.nearblocks.io/txns/H1YpXsmCH4hxN8BdnnLNj6BiBnaDmkytrsgPAjudNABU  https://sepolia.etherscan.io/tx/0x4bf7d487ddfe4999b88e674a6539292a3b0900a9a18c548c600bfe35c6ff92e9
+OK   factory at the promised address 0xca875b5d982fb05d6699c61c10806f2470b9ccaa
+OK   factory 0xca875b5d982fb05d6699c61c10806f2470b9ccaa: keyfree() = the policy's keyless address
+--- 2026-11-01T17:41:04.438Z counter (7 ok, 0 fail)
+OK   Counter(1) init code hash 1fa27a80... is the one deployed on Base at 0xc8210fd2b9cff6760882d22a59fc7fa6f7c65b3a
+OK   Counter(1): unsigned tx built by the contract == viem (chain 11155111, nonce 2)
+  log: keyfree: signing chain 11155111 nonce 2 code 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2 expected Some("0xc974ad58fea2218e8d2f1378f2c58d112d00b414") hash 4625cba0c316e12c7dfc60be22958b73eac17528fdd54308f4aaab7953d9bd8d
+  log: keyfree: signed chain 11155111 nonce 2 tx 0x02fec32bf055ff33c7aae77d711058e396468aba830e690e42bb6575264821db
+OK   Counter(1): landed, gas 624562 of 788357  https://testnet.nearblocks.io/txns/8ofc8DLmA6vE6VsqQx6pWvNRSv1uorja4qt1ErbdGGz1  https://sepolia.etherscan.io/tx/0x02fec32bf055ff33c7aae77d711058e396468aba830e690e42bb6575264821db
+OK   Counter(1) at the promised address 0xc974ad58fea2218e8d2f1378f2c58d112d00b414
+OK   Counter at 0xc974ad58fea2218e8d2f1378f2c58d112d00b414 on Ethereum Sepolia, from the same keyless address as on Base; number() = 1
+OK   Counter(999) on Sepolia -> wasm execution failed with error: HostError(GuestPanic { panic_msg: "code not on the allow list" })
+OK   confirm on Sepolia (NEAR Read MPC does not read Ethereum yet) -> Smart contract panicked: Read MPC does not cover this chain

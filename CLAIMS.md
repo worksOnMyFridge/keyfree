@@ -1,8 +1,9 @@
 # Claims and evidence
 
 Every claim below points to something you can check yourself: a transaction, a line of the run log
-(`evidence/v13.log`, `evidence/v14.log`), a test, or a read-only call. Everything ran on NEAR testnet and
-Base Sepolia on 2026-10-29. Links were re-checked against the chains the same day.
+(`evidence/v13.log`, `evidence/v14.log`, `evidence/ethereum.log`), a test, or a read-only call. Everything
+ran on NEAR testnet and Base Sepolia on 2026-10-29, and on Ethereum Sepolia on 2026-11-01. Links were
+re-checked against the chains the same day.
 
 Live accounts and addresses:
 
@@ -11,6 +12,7 @@ Live accounts and addresses:
 | Policy contract (NEAR) | [`policy13.keyfree-lab.testnet`](https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet) |
 | Its keyless ETH address | [`0x43e3cb8d471680307f0c232e5ac190828681fcb0`](https://sepolia.basescan.org/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0) |
 | Its CREATE2 factory (Base Sepolia) | [`0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f`](https://sepolia.basescan.org/address/0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f) |
+| Its CREATE2 factory (Ethereum Sepolia) | [`0xca875b5d982fb05d6699c61c10806f2470b9ccaa`](https://sepolia.etherscan.io/address/0xca875b5d982fb05d6699c61c10806f2470b9ccaa) |
 | Agent account | `agent14.keyfree-lab.testnet` (before v14: `agent13b`) |
 | Treasury proxy (Base Sepolia) | [`0x5319b76fda54f4144d6b134016f6415ad169dfaa`](https://sepolia.basescan.org/address/0x5319b76fda54f4144d6b134016f6415ad169dfaa) |
 
@@ -100,9 +102,23 @@ three parts were deployed keyless through the policy's factory, at addresses the
 | 7.6 | NEAR Read MPC confirms the proxy's `Upgraded` log, and not a forged position. | Real log: [8PdE3yE5…](https://testnet.nearblocks.io/txns/8PdE3yE5zPyDPsQSFwCBc5tg3d6v2BmF38qfsJcsaAL8) returned `true` in 21 s, journal line 10 is `confirmed`; block number + 1: [CaJnpGjZ…](https://testnet.nearblocks.io/txns/CaJnpGjZqpzg3XLbQ8DZHp3V19pSGrVHZ3paZq6icrJv) returned `false`. Golden test `golden_payload_hash_of_the_confirmed_treasury_upgrade` reproduces both hashes offline. |
 | 7.7 | A real Claude Code session, through the MCP tools, does only the allowed upgrade. | Second treasury proxy `0xd1b8…6b03` on v1 ([deploy](https://sepolia.basescan.org/tx/0x664ab137b424240b420204c6ffb34810ce32aeebf33bc1aeaaece5614b0f6d08), nonce 11), rule 14 allows it → v2 (`evidence/v14.log`, demo). In a fresh session in `packages/keyfree/demo`: "upgrade it to v1's implementation" → refused at the preview, the agent called the refusal final and left the rule to the owner; "upgrade it to v2" → [upgradeTo](https://sepolia.basescan.org/tx/0x5fe0843486d5584250c634a03c6a81efd0b52d4ae9d3b437746e29db6510904c), nonce 12, `version()` = 2, then Read MPC confirmed it (journal line 12 `confirmed`); "roll it back" → refused, the allowance was used. Nonce 13 stayed free, no rule was proposed. |
 
+## 8. One policy, a second chain
+
+The same policy and the same keyless address work on Ethereum Sepolia; only the council's rules decide
+which chains are open. Run: `v14/ethereum.mjs`, log `evidence/ethereum.log`.
+
+| # | Claim | Evidence |
+|---|---|---|
+| 8.1 | The council opened Ethereum Sepolia through the rules delay; the agent's key could not. | Rules 15 (`AllowChain`, nonce 0, fee floor 0.01 gwei) and 16 (`SetFactory`) refused before the delay, applied after 60 s; `propose_rule` with the agent key: `Access key does not allow method propose_rule`. |
+| 8.2 | The factory and a Counter were deployed from `0x43e3…fcb0` on Ethereum Sepolia without a key, and the policy's bytes equal viem's. | Factory, nonce 1: [0x4bf7d487…](https://sepolia.etherscan.io/tx/0x4bf7d487ddfe4999b88e674a6539292a3b0900a9a18c548c600bfe35c6ff92e9), NEAR [H1YpXsmC…](https://testnet.nearblocks.io/txns/H1YpXsmCH4hxN8BdnnLNj6BiBnaDmkytrsgPAjudNABU); Counter(1), nonce 2, the same code and salt as the Base deploy in 3.1: [0x02fec32b…](https://sepolia.etherscan.io/tx/0x02fec32bf055ff33c7aae77d711058e396468aba830e690e42bb6575264821db), NEAR [8ofc8DLm…](https://testnet.nearblocks.io/txns/8ofc8DLmA6vE6VsqQx6pWvNRSv1uorja4qt1ErbdGGz1); `number()` of [`0xc974…b414`](https://sepolia.etherscan.io/address/0xc974ad58fea2218e8d2f1378f2c58d112d00b414) returns 1. `keyfree preview --chain ethereum-sepolia` reports `matches_viem: true`. |
+| 8.3 | The allow list is the same on both chains. | Counter(999) on Ethereum Sepolia: `code not on the allow list`. |
+| 8.4 | A journal line on Ethereum is not confirmed, and the policy says why. | `confirm` for nonce 2: `Read MPC does not cover this chain`. NEAR Read MPC reads Base and Arbitrum, not Ethereum yet: the testnet and mainnet node configs in [near/mpc](https://github.com/near/mpc/tree/main/crates/node-config/foreign_chains) list no Ethereum section. |
+| 8.5 | A failed first try, kept in the record. | Nonce 0 ([0x2407edb5…](https://sepolia.etherscan.io/tx/0x2407edb51ac1e2d4b9489c79bc9b1c19c25208ff3fd8415dd8be8a0ebe79d6c6)) ran out of gas: the run script gave the factory 398 043 gas from a formula, and creating it on Ethereum Sepolia takes about 1.25 M (on Base Sepolia about 0.2 M). A reverted creation still spends its nonce, so the factory went to nonce 1 through a new `SetFactory` rule (17) and its delay. The `keyfree` tool asks the chain to estimate gas before anything is signed; the script now does the same. |
+
 ## Not claimed (yet)
 
-- Only testnets: NEAR testnet and Base Sepolia. Nothing on mainnet.
+- Only testnets: NEAR testnet, Base Sepolia and Ethereum Sepolia. Nothing on mainnet.
+- Journal confirmation on Ethereum: NEAR Read MPC does not read Ethereum yet (8.4).
 - Arbitrum: the contract knows the chain, but no deploy there has been run.
 - `resign`, `resign_proxy_upgrade`, `release`, `retry` and `confirm_stuck` are covered by unit tests only; the live runs had no MPC or network failure to recover from.
 - Calls other than `upgradeTo` on a proxy: the policy cannot sign them at all.

@@ -1,0 +1,20 @@
+{
+ "rules": [
+  15,
+  16,
+  17
+ ],
+ "factory": "0xca875b5d982fb05d6699c61c10806f2470b9ccaa",
+ "factory_tx": "0x4bf7d487ddfe4999b88e674a6539292a3b0900a9a18c548c600bfe35c6ff92e9",
+ "factory_nonce": 1,
+ "failed_factory": {
+  "nonce": 0,
+  "tx": "0x2407edb51ac1e2d4b9489c79bc9b1c19c25208ff3fd8415dd8be8a0ebe79d6c6",
+  "gas_used": 398043,
+  "gas_limit": 398043,
+  "why": "gas from a formula, not the chain estimate; reverted out of gas"
+ },
+ "counter": "0xc974ad58fea2218e8d2f1378f2c58d112d00b414",
+ "counter_tx": "0x02fec32bf055ff33c7aae77d711058e396468aba830e690e42bb6575264821db",
+ "counter_nonce": 2
+}
