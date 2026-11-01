@@ -1,60 +1,60 @@
-// Spike S12 (Keyfree): the contract itself builds an EIP-1559 contract-creation transaction from
-// fields, checks it against owner rules (allowed code hash, allowed chain, gas caps, own nonce),
-// asks the NEAR MPC signer for a signature over its own build and returns the signed raw tx.
-// No caller-supplied hash is ever signed (attack A2), chain id is inside the signature (A4).
-// v2 after the independent audit (security_audit_2026-10-25.md):
-// - the ETH address is derived on-chain from the MPC, never taken from a caller;
-// - the signing callback never panics, so a bad MPC answer cannot freeze the contract;
-// - a nonce stays bound to one content: after a failed or late answer only the same deploy can be
-//   re-signed (fees may change), so two different transactions never share a nonce;
-// - a request stuck longer than the MPC timeout can be released by the owner or the agent.
-// v3: deploys go through the owner's own CREATE2 factory (only our address may call it, so a planned
-// address cannot be taken first), and a journal entry per nonce is confirmed by NEAR Read MPC from the
-// factory's Deployed log (a reverted deploy leaves no log), bound with expected_payload_hash.
-// v4: no keys are needed for maintenance. The owner proposes a new code hash, a public delay runs, the
-// guardian can cancel, then the contract deploys the matching code onto itself (same account, so the
-// same ETH address). Pause is immediate (safe direction); unpause only by the owner.
-// v5: a late MPC answer can leak a valid signature for a stuck request and that tx may land. Then the
-// factory's Deployed log for that exact request (unique salt + code, only our address can call the
-// factory, and every signed variant of it carries the same nonce) proves the nonce was used:
-// confirm_stuck clears the request and moves the nonce on.
-// v6: a signed tx the chain refuses (gas below the intrinsic minimum, fee too low) would leave a nonce
-// gap forever. The contract now refuses gas limits below the intrinsic minimum (EIP-2028/3860/7623), and
-// resign() re-signs a signed factory deploy with the SAME nonce and content, only gas/fees change.
-// v7 after the second audit (security_audit_v2_2026-10-25.md, Н3-Н5): next_nonce never moves back; a
-// failed or released re-sign opens nothing (the signed line stays as it was); a new request never takes a
-// nonce that already has a journal line; one (salt, code) pair binds to one nonce per chain, so a Deployed
-// log can prove only its own nonce; confirm_stuck is for the agent or owner and needs Safe or Finalized.
-// State layout changed (used_salts): deploy fresh, no migrate from v6.
-// v8 roles (spec R2, R3, R3a, R5; audit v2 Н1): owner, guardian and reserve form a council of three,
-// plus an agent. Brakes are immediate and need one council member: pause, revoke the agent. Everything
-// that widens rights waits the full delay and cannot be shortened, even by two members together:
-// a new owner/guardian/reserve needs 2 of 3 approvals (cancel too: 2 of 3, so a stolen guardian cannot
-// block its own replacement); a new agent is proposed by the owner and any council member may cancel it.
-// Unpause needs 2 of 3 votes. All four roles are different accounts.
-// v9 no side doors (audit v2 Н7-Н9; spec R9, R17, R18): a salt only goes through our own factory (the
-// shared CREATE2 proxy is gone, a planned address cannot be taken first); allow_chain only opens a new
-// chain, so the nonce never moves by hand; each chain has a fee floor; resign works for any signed line,
-// a plain creation too.
-// v10 the guardian sees the code it may veto (audit v2 Н6, spec R26): the owner puts the new wasm itself
-// into the contract state when proposing (storage paid by the attached deposit), the delay starts only
-// then, anyone can read the bytes and check their sha256 against a build of the published commit, and
-// apply_upgrade deploys exactly the stored bytes. A Global Contract would also publish the code, but it
-// burns its storage NEAR for good; state storage is only staked.
-// v11 rules (spec R6, R3a): widening a rule (code on the allow list, a new or re-enabled chain, a factory,
-// higher caps) is an owner proposal that waits rules_delay_sec and any council member may cancel; narrowing
-// (remove code, disable a chain, remove a factory, lower caps) is a brake: one council member, at once.
-// A disabled chain keeps its nonce, so turning it back on can never reset the nonce (Н8).
-// v12 callbacks read their answer as raw bytes (spec R12, audit v2 Н13): no answer, however odd, panics.
-// v13 retire (spec R29): a keyless account cannot be deleted by anyone but itself, so the council can retire
-// the policy (2 of 3 + full delay, Role::Retire); then it is paused for good, sweep() empties the state in
-// portions (all growing collections are iterable now) and finish_retire() deletes the account, sending its
-// NEAR to a council member who approved. apply_upgrade keeps the proposal until migrate has run (Н17).
-// v14 proxy upgrades (the money scenario): besides deploys the policy signs exactly one kind of call,
-// upgradeTo(implementation) on an ERC-1967 proxy whose admin is the policy's address. The council allows one
-// (chain, proxy, implementation) through the rules delay; the contract builds the calldata itself; the
-// allowance is used up by the request, so the same upgrade or a rollback needs a new rule. Read MPC confirms
-// the proxy's Upgraded log. New state goes at the end; migrate reads the v13 layout.
+// Keyfree policy: a NEAR contract with no access keys that deploys and upgrades EVM contracts for an AI
+// agent under rules a council of three people sets. NEAR MPC signs for the contract's own derived address,
+// so no private key for that address exists anywhere.
+//
+// What it does
+// - Builds every EVM transaction itself (EIP-1559) from fields and signs only its own build, never a hash
+//   a caller supplies. The chain id is inside the signature, so a signature for one chain fits no other.
+// - Deploys only init code whose keccak (the code together with its constructor arguments) is on the allow
+//   list, on allowed chains, within gas and fee caps. Salted deploys go only through the council's own
+//   CREATE2 factory, which accepts calls from this contract's address alone.
+// - Besides deploys it signs exactly one call: upgradeTo(implementation) on an ERC-1967 proxy whose admin is
+//   this contract's address, once per allowance (chain, proxy, implementation).
+// - Derives its ETH address on chain from the MPC (derived_public_key) and checks every signature against
+//   it (ecrecover, low-s).
+// - Keeps one content per nonce: after a failed or late MPC answer only the same request can be re-signed
+//   (fees may change); next_nonce never moves back and never moves by hand.
+// - Journal: a line per nonce, confirmed by NEAR Read MPC from the factory's Deployed log or the proxy's
+//   Upgraded log in a Safe or Finalized block, bound with an expected payload hash computed here.
+// - Callbacks read the MPC answer as raw bytes and never panic, so no answer can freeze the contract.
+//
+// Who can do what
+// - agent: a function-call key on the request methods only (request_deploy, request_proxy_upgrade,
+//   resign, resign_proxy_upgrade, retry, release, confirm, confirm_stuck).
+// - council (owner, guardian, reserve; all different accounts): brakes are immediate and need one member:
+//   pause, revoke the agent, narrow a rule. Everything that widens power waits a public delay that nobody
+//   can shorten: allow code, a chain, a factory, higher caps or a proxy upgrade (rules_delay_sec, any
+//   member may cancel); a new agent (the owner proposes, any member may cancel); a new owner, guardian or
+//   reserve (2 of 3, cancel 2 of 3); unpause (2 of 3 votes).
+// - Self-upgrade without keys: the owner stores the new wasm in the state, anyone can read it and compare
+//   its sha256 with a build of the published source, any member may cancel during upgrade_delay_sec, then
+//   the contract deploys exactly those bytes onto itself and runs migrate.
+// - Retire: 2 of 3 and the full delay, then paused for good; sweep() empties the state in portions and
+//   finish_retire() deletes the account, sending its NEAR to a council member who approved.
+//
+// Why the checks exist (the attack bench is attacks/)
+// - A caller-supplied hash could be any transaction on any chain: the contract signs only its own build.
+// - A prompt-injected agent asks for other code or other constructor arguments: the allow list holds the
+//   hash of the whole init code, so Vault(another owner) is other code and is refused before signing.
+// - Someone takes a planned CREATE2 address first: the factory accepts only this contract's address.
+// - Two contents on one nonce would let a late signature land instead of the intended one: one content
+//   per nonce, and a re-sign keeps the content.
+// - A stolen council key can brake at once and nothing more; widening waits the delay, and the other two
+//   members can cancel it.
+// - A forged journal line: Read MPC reads the log on the EVM chain itself; the payload hash is computed
+//   here, and the tx id comes from the contract's own signature, not from the agent.
+//
+// State and migration
+// - Everything that grows is iterable, so retiring can empty it (DeleteAccount needs at most 10 000 bytes
+//   of state).
+// - migrate reads the current layout or the v13 one; new fields go at the end of the struct.
+//
+// Finding ids in comments (N1..N17) refer to the second security review in AUDIT.md, requirement ids
+// (R1..R29) to the requirement list there. The version history is contract/CHANGELOG.md.
+// Tests: src/tests.rs (cargo test -- --test-threads=1); golden vectors: golden_vectors.mjs.
+//
+// Limits: testnets only so far, and no professional audit yet.
+// See SECURITY.md, "Known limits".
 use near_sdk::borsh::BorshDeserialize;
 use near_sdk::serde_json::{json, Value};
 use near_sdk::json_types::Base64VecU8;
@@ -279,7 +279,7 @@ impl From<V13> for Keyfree {
 
 #[near]
 impl Keyfree {
-    // ignore_state lets the spike account start over; only the account itself may call it, and once
+    // ignore_state lets a test account start over; only the account itself may call it, and once
     // its keys are deleted nobody can.
     #[init(ignore_state)]
     pub fn new(owner: AccountId, agent: AccountId, guardian: AccountId, reserve: AccountId, mpc: AccountId, path: String, upgrade_delay_sec: u64, rules_delay_sec: u64) -> Self {
@@ -480,7 +480,7 @@ impl Keyfree {
     // 3) after the delay the owner applies it: the contract deploys exactly the stored bytes onto its own
     // account and runs migrate. Nothing else can change the code. The proposal stays until migrate has run:
     // deploy + migrate is one atomic batch, so if migrate fails the old code and the proposal are both
-    // still there and nothing has to wait a second delay (audit v2 Н17).
+    // still there and nothing has to wait a second delay (N17).
     pub fn apply_upgrade(&mut self) -> Promise {
         self.only_owner();
         self.not_retiring();
@@ -918,7 +918,7 @@ impl Keyfree {
                 require!(code_hash.len() == 64 && hex::decode(code_hash).is_ok(), "code hash must be 32 bytes of hex");
             }
             // Opens a new chain once: its current nonce (the address's nonce there) and its fee floor. After
-            // that the nonce moves only by signing, resign or proof, never by hand (two contents on one nonce, Н8).
+            // that the nonce moves only by signing, resign or proof, never by hand (two contents on one nonce, N8).
             RuleChange::AllowChain { chain_id, min_fee_per_gas, .. } => {
                 require!(self.next_nonce.get(chain_id).is_none(), "chain already allowed: its nonce moves only by signing");
                 require!(*min_fee_per_gas > 0, "a chain needs a fee floor above 0");
@@ -1037,7 +1037,7 @@ impl Keyfree {
             b
         });
         // The Deployed log has no nonce in it, so a (salt, code) pair must never be given a second nonce:
-        // otherwise the log of the first deploy could "prove" the second one (Н4).
+        // otherwise the log of the first deploy could "prove" the second one (N4).
         if let Some(s) = &salt {
             let mut h = [0u8; 32];
             h.copy_from_slice(&hex::decode(&code_hash).unwrap_or_else(|_| vec![0; 32]));
@@ -1150,7 +1150,7 @@ fn key(chain_id: u64, nonce: u64) -> String { format!("{chain_id}:{nonce}") }
 
 fn now() -> u64 { env::block_timestamp() / 1_000_000_000 }
 
-// The answer a callback got, read by hand (spec R12, audit v2 Н13). With #[callback_result] near-sdk parses
+// The answer a callback got, read by hand (R12, N13). With #[callback_result] near-sdk parses
 // the JSON in its generated wrapper and panics on an empty or non-JSON answer before our code runs, which
 // would roll the callback back. Here every odd answer (failed, too long, empty, not JSON) is just an error.
 fn callback_json() -> Result<Value, PromiseError> {

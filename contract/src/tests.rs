@@ -282,7 +282,7 @@ fn agent_cannot_upgrade() {
     let _ = c.apply_upgrade();
 }
 
-// Н17: apply keeps the proposal; only a migrate that really ran marks the upgrade done.
+// N17: apply keeps the proposal; only a migrate that really ran marks the upgrade done.
 #[test]
 fn apply_keeps_the_proposal_until_migrate_has_run() {
     let mut c = proposed();
@@ -402,7 +402,7 @@ fn resign_refuses_other_code() {
     let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
 }
 
-// v7: nonce accounting after the second audit (Н3 nonce back, Н4 foreign proof, Н5 Latest).
+// v7: nonce accounting after the second audit (N3 nonce back, N4 foreign proof, N5 Latest).
 const SALT: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
 fn signed_line(c: &mut Keyfree, nonce: u64, status: u8) {
@@ -524,7 +524,7 @@ fn confirm_stuck_with_safe_goes_to_read_mpc() {
     let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Safe".into());
 }
 
-// v8: roles (spec R2, R3, R3a, R5; audit v2 Н1). Delay in contract() is 3600 s.
+// v8: roles (R2, R3, R3a, R5; N1). Delay in contract() is 3600 s.
 fn acc(s: &str) -> AccountId { s.parse().unwrap() }
 
 fn idle() -> Keyfree {
@@ -706,7 +706,7 @@ fn reserve_can_cancel_an_upgrade() {
     assert!(c.proposed.is_none());
 }
 
-// v9: no side doors (audit v2 Н7, Н8, Н9; spec R9, R17, R18).
+// v9: no side doors (N7, N8, N9; R9, R17, R18).
 #[test]
 #[should_panic(expected = "a salt needs the factory")]
 fn salt_without_the_factory_is_refused() {
@@ -783,7 +783,7 @@ fn fee_at_the_floor_is_fine() {
     assert!(c.pending.is_some());
 }
 
-// Golden vectors (spec R10, R21; audit v2 Н14). Transactions: viem 2.57.11 serialized the same deploys offline
+// Golden vectors (R10, R21; N14). Transactions: viem 2.57.11 serialized the same deploys offline
 // (golden_vectors.mjs -> evidence/golden_rlp.json). Init code byte i = (i * 7 + 3) mod 256.
 const GOLDEN_FACTORY: &str = "e744243604e31d7be8b76e0c8bdff4ec5f560ffd";
 
@@ -877,7 +877,7 @@ fn golden_payload_hash_of_the_forged_log_position() {
     assert_eq!(hex::encode(env::sha256_array(&deployed_payload(6, &e, &tx, &log, &bh, 1))), "48abe25a3e1e614ca649bfb1fb7fb2f9f9e48e700bc334ae09ca0a0223096040");
 }
 
-// v11: rules (spec R6, R3a). Widening waits rules_delay_sec (1800 s in contract()) and can be cancelled;
+// v11: rules (R6, R3a). Widening waits rules_delay_sec (1800 s in contract()) and can be cancelled;
 // narrowing is one council member, at once.
 fn code_rule() -> RuleChange { RuleChange::AllowCode { code_hash: "ab".repeat(32) } }
 
@@ -998,7 +998,7 @@ fn caps_are_lowered_at_once_and_raised_by_proposal() {
     ctx_at("guardian.testnet", 20, 1_000, vec![]);
     c.lower_limits(1_000_000, 20_000_000_000);
     assert_eq!((c.max_gas_limit, c.max_fee_cap), (1_000_000, 20_000_000_000));
-    // a 24 KB runtime needs about 4.9 M gas for the code deposit alone (audit v2 Н10)
+    // a 24 KB runtime needs about 4.9 M gas for the code deposit alone (N10)
     ctx_at("owner.testnet", 21, 1_000, vec![]);
     let id = c.propose_rule(RuleChange::SetLimits { max_gas_limit: 6_000_000, max_fee_cap: 50_000_000_000 });
     ctx_at("owner.testnet", 22, 1_000 + 1_800, vec![]);
@@ -1034,7 +1034,7 @@ fn a_bad_factory_is_refused_at_proposal() {
     c.propose_rule(RuleChange::SetFactory { chain_id: 84532, factory_hex: "0x1234".into() });
 }
 
-// v12: callbacks read the raw answer (spec R12, audit v2 Н13). The mock feeds the bytes the MPC would return.
+// v12: callbacks read the raw answer (R12, N13). The mock feeds the bytes the MPC would return.
 fn ctx_answer(result: near_sdk::PromiseResult) {
     let c = VMContextBuilder::new()
         .current_account_id("keyfree.testnet".parse().unwrap())
@@ -1100,7 +1100,7 @@ fn odd_raw_answer_does_not_set_an_address() {
     assert!(c.eth_address.is_none());
 }
 
-// v13: retire (spec R29). DeleteAccount refuses more than 10 000 bytes of state, and a missing beneficiary
+// v13: retire (R29). DeleteAccount refuses more than 10 000 bytes of state, and a missing beneficiary
 // loses the NEAR, so: 2 of 3 + full delay, final, sweep in portions, pay a council member who approved.
 fn retire_proposed(c: &mut Keyfree) {
     ctx_at("owner.testnet", 20, 1_000, vec![]);

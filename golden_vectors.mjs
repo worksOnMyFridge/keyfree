@@ -1,4 +1,4 @@
-// Golden vectors for the contract's own transaction builder (spec R10, audit v2 Н14): viem serializes the
+// Golden vectors for the contract's own transaction builder (R10, N14): viem serializes the
 // same EIP-1559 deploys the contract builds, offline, and the Rust tests compare bytes/hashes with these.
 // Init code is a fixed pattern: byte i = (i * 7 + 3) mod 256. Signature r/s are fixed test values.
 // Run: node golden_vectors.mjs  ->  evidence/golden_rlp.json
