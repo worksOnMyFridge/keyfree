@@ -384,6 +384,7 @@ fn resign_keeps_nonce_and_content_and_never_moves_the_nonce_back() {
     let mut code_hash = [0u8; 32];
     code_hash.copy_from_slice(&env::keccak256_array(&code));
     c.journal.insert(key(84532, 2), Entry { code_hash, salt: [7; 32], factory: [9; 20], addr: [0; 20], tx_hash: [1; 32], status: SIGNED });
+    c.factories.insert(84532, vec![9; 20]);
     ctx("agent.testnet", 20);
     let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
     let p = c.pending.clone().unwrap();
@@ -409,6 +410,8 @@ fn signed_line(c: &mut Keyfree, nonce: u64, status: u8) {
     let mut code_hash = [0u8; 32];
     code_hash.copy_from_slice(&env::keccak256_array(&hex::decode(INIT).unwrap()));
     c.journal.insert(key(84532, nonce), Entry { code_hash, salt: [7; 32], factory: [9; 20], addr: [5; 20], tx_hash: [1; 32], status });
+    // the factory the line names is the chain's factory, as on a live policy
+    if c.factories.get(&84532).is_none() { c.factories.insert(84532, vec![9; 20]); }
 }
 
 fn log_in() -> LogIn { LogIn { log_index: 0, transaction_index: 0, block_hash: "cd".repeat(32), block_number: 1 } }
@@ -500,28 +503,87 @@ fn stranger_cannot_confirm_stuck() {
     c.stuck = Some(Pending { salt: Some(vec![7; 32]), factory: Some(vec![9; 20]), ..pending() });
     signed_line(&mut c, 4, REQUESTED);
     ctx("stranger.testnet", 12);
-    let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Safe".into());
+    let _ = c.confirm_stuck(SigIn { r: "ab".repeat(32), s: "cd".repeat(32), v: 0, gas_limit: None, max_fee_per_gas: None, max_priority_fee_per_gas: None }, log_in(), "Finalized".into());
 }
 
 #[test]
-#[should_panic(expected = "a stuck request needs Safe or Finalized")]
+#[should_panic(expected = "a stuck request needs a Finalized block")]
 fn confirm_stuck_refuses_latest() {
     let mut c = contract();
     c.pending = None;
     c.stuck = Some(Pending { salt: Some(vec![7; 32]), factory: Some(vec![9; 20]), ..pending() });
     signed_line(&mut c, 4, REQUESTED);
     ctx("agent.testnet", 12);
-    let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Latest".into());
+    let _ = c.confirm_stuck(SigIn { r: "ab".repeat(32), s: "cd".repeat(32), v: 0, gas_limit: None, max_fee_per_gas: None, max_priority_fee_per_gas: None }, log_in(), "Latest".into());
 }
 
 #[test]
-fn confirm_stuck_with_safe_goes_to_read_mpc() {
+#[should_panic(expected = "a stuck request needs a Finalized block")]
+fn confirm_stuck_refuses_safe_too() {
     let mut c = contract();
     c.pending = None;
     c.stuck = Some(Pending { salt: Some(vec![7; 32]), factory: Some(vec![9; 20]), ..pending() });
     signed_line(&mut c, 4, REQUESTED);
     ctx("agent.testnet", 12);
-    let _ = c.confirm_stuck("ab".repeat(32), log_in(), "Safe".into());
+    let _ = c.confirm_stuck(SigIn { r: "ab".repeat(32), s: "cd".repeat(32), v: 0, gas_limit: None, max_fee_per_gas: None, max_priority_fee_per_gas: None }, log_in(), "Safe".into());
+}
+
+// A stuck factory deploy whose signature (golden R, S) is made to recover to the policy's address.
+fn stuck_and_signed() -> Keyfree {
+    let mut c = contract();
+    c.pending = None;
+    let p = Pending { salt: Some(vec![7; 32]), factory: Some(vec![9; 20]), ..pending() };
+    let hash = env::keccak256_array(&tx_of(&p).build_for_signing());
+    let mut rs = [0u8; 64];
+    rs[..32].copy_from_slice(&hex::decode(R).unwrap());
+    rs[32..].copy_from_slice(&hex::decode(S).unwrap());
+    let pk = env::ecrecover(&hash, &rs, 0, true).unwrap();
+    c.eth_address = Some(format!("0x{}", hex::encode(&env::keccak256_array(&pk)[12..])));
+    c.stuck = Some(p);
+    signed_line(&mut c, 4, REQUESTED);
+    c
+}
+
+fn golden_sig() -> SigIn { SigIn { r: R.into(), s: S.into(), v: 0, gas_limit: None, max_fee_per_gas: None, max_priority_fee_per_gas: None } }
+
+#[test]
+fn confirm_stuck_takes_the_tx_id_from_our_own_signature() {
+    let mut c = stuck_and_signed();
+    ctx("agent.testnet", 12);
+    let _ = c.confirm_stuck(golden_sig(), log_in(), "Finalized".into());
+    let p = c.stuck.clone().unwrap();
+    let answer = json!({ "big_r": { "affine_point": format!("02{R}") }, "s": { "scalar": S }, "recovery_id": 0 });
+    let raw = c.finish(&p, &answer).unwrap();
+    let want = hex::encode(env::keccak256_array(&hex::decode(&raw[2..]).unwrap()));
+    let asked: Vec<String> = near_sdk::test_utils::get_created_receipts().into_iter().flat_map(|r| r.actions)
+        .filter_map(|a| match a { near_sdk::mock::MockAction::FunctionCallWeight { method_name, args, .. } if method_name == b"verify_foreign_transaction".to_vec() => Some(String::from_utf8(args).unwrap()), _ => None })
+        .collect();
+    assert_eq!(asked.len(), 1);
+    assert!(asked[0].contains(&want), "the Read MPC request names the tx id rebuilt from the signature");
+}
+
+#[test]
+#[should_panic(expected = "not our signature of the stuck request")]
+fn confirm_stuck_refuses_a_signature_of_other_content() {
+    let mut c = stuck_and_signed();
+    ctx("agent.testnet", 12);
+    let _ = c.confirm_stuck(SigIn { gas_limit: Some(250_000), ..golden_sig() }, log_in(), "Finalized".into());
+}
+
+#[test]
+#[should_panic(expected = "confirmation needs a Safe or Finalized block")]
+fn confirm_refuses_latest() {
+    let mut c = idle();
+    signed_line(&mut c, 3, SIGNED);
+    ctx("agent.testnet", 12);
+    let _ = c.confirm(84532, 3, log_in(), "Latest".into());
+}
+
+#[test]
+fn confirm_stuck_with_finalized_goes_to_read_mpc() {
+    let mut c = stuck_and_signed();
+    ctx("agent.testnet", 12);
+    let _ = c.confirm_stuck(golden_sig(), log_in(), "Finalized".into());
 }
 
 // v8: roles (R2, R3, R3a, R5; N1). Delay in contract() is 3600 s.
@@ -1225,7 +1287,7 @@ fn flush_all(c: &mut Keyfree) {
 // The mock counts storage from a fake base (300 KB) reset by every new context, so the test measures
 // bytes added and freed inside one context, plus the size of the main state that stays.
 #[test]
-fn sweep_brings_the_state_under_10_000_bytes_then_the_account_goes_to_the_beneficiary() {
+fn sweep_empties_the_state_then_the_free_near_goes_to_the_beneficiary() {
     let mut c = idle();
     flush_all(&mut c);
     let base = env::storage_usage();
@@ -1246,12 +1308,18 @@ fn sweep_brings_the_state_under_10_000_bytes_then_the_account_goes_to_the_benefi
     assert!(freed >= added, "sweep freed {freed} of {added} bytes");
     let main_state = near_sdk::borsh::to_vec(&c).unwrap().len();
     assert!(main_state < 5_000, "what stays is only the main state: {main_state} bytes");
+    let locked = (env::storage_usage() as u128 + 1_000) * env::storage_byte_cost().as_yoctonear();
+    let free = env::account_balance().as_yoctonear() - locked;
     let _ = c.finish_retire();
-    let deleted: Vec<AccountId> = near_sdk::test_utils::get_created_receipts().into_iter()
-        .flat_map(|r| r.actions)
-        .filter_map(|a| match a { near_sdk::mock::MockAction::DeleteAccount { beneficiary_id, .. } => Some(beneficiary_id), _ => None })
+    let receipts = near_sdk::test_utils::get_created_receipts();
+    assert!(receipts.iter().flat_map(|r| r.actions.iter()).all(|a| !matches!(a, near_sdk::mock::MockAction::DeleteAccount { .. })),
+        "the account is never deleted: its name, and with it the EVM address, must never be free again");
+    let paid: Vec<_> = receipts.iter().filter(|r| r.receiver_id == acc("owner.testnet"))
+        .flat_map(|r| r.actions.iter())
+        .filter_map(|a| match a { near_sdk::mock::MockAction::Transfer { deposit, .. } => Some(deposit.as_yoctonear()), _ => None })
         .collect();
-    assert_eq!(deleted, vec![acc("owner.testnet")]);
+    assert_eq!(paid.len(), 1, "the free NEAR goes to the beneficiary");
+    assert_eq!(paid[0], free, "only what the storage does not need");
 }
 
 // Attack bench additions (attacks/catalog.json maps every attack to a test).
@@ -1794,4 +1862,57 @@ fn migrate_reads_the_v14_layout() {
     let s = Keyfree::migrate();
     assert_eq!((s.version, s.allowed_code.len(), s.next_nonce.get(&84532).copied()), (4, codes, Some(4)));
     assert!(s.budgets.is_empty() && s.get_budget(84532).is_none());
+}
+
+// v16: review findings X4 and X10.
+#[test]
+#[should_panic(expected = "code not on the allow list")]
+fn retry_stops_when_the_code_was_removed() {
+    let mut c = contract();
+    c.handle_signed(Err(PromiseError::Failed));
+    signed_line(&mut c, 4, REQUESTED);
+    ctx("guardian.testnet", 20);
+    c.remove_code(pending().code_hash);
+    ctx("agent.testnet", 21);
+    let _ = c.retry(20_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "chain disabled")]
+fn retry_stops_when_the_chain_was_disabled() {
+    let mut c = contract();
+    c.handle_signed(Err(PromiseError::Failed));
+    ctx("reserve.testnet", 20);
+    c.disable_chain(84532);
+    ctx("agent.testnet", 21);
+    let _ = c.retry(20_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "gas limit over the cap")]
+fn retry_stops_when_the_gas_cap_was_lowered() {
+    let mut c = contract();
+    c.handle_signed(Err(PromiseError::Failed));
+    ctx("guardian.testnet", 20);
+    c.lower_limits(100_000, 50_000_000_000);
+    ctx("agent.testnet", 21);
+    let _ = c.retry(20_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "code not on the allow list")]
+fn resign_stops_when_the_code_was_removed() {
+    let mut c = idle();
+    c.journal.insert(key(84532, 3), Entry { code_hash: env::keccak256_array(&hex::decode(INIT).unwrap()), salt: [0; 32], factory: [0; 20], addr: [0; 20], tx_hash: [1; 32], status: SIGNED });
+    ctx("owner.testnet", 20);
+    c.remove_code(pending().code_hash);
+    ctx("agent.testnet", 21);
+    let _ = c.resign(84532, 3, INIT.into(), 200_000, 20_000_000, 1_000_000);
+}
+
+#[test]
+fn get_open_names_the_chain() {
+    let c = contract();
+    assert_eq!(c.get_open()["chain_id"], 84532);
+    assert_eq!(c.get_open()["pending"], 4);
 }

@@ -32,7 +32,8 @@
 //   its sha256 with a build of the published source, any member may cancel during upgrade_delay_sec, then
 //   the contract deploys exactly those bytes onto itself and runs migrate.
 // - Retire: 2 of 3 and the full delay, then paused for good; sweep() empties the state in portions and
-//   finish_retire() deletes the account, sending its NEAR to a council member who approved.
+//   finish_retire() sends its free NEAR to a council member who approved. The account is never deleted:
+//   its name, and with it the MPC-derived EVM address, must never be free for its parent to take again.
 //
 // Why the checks exist (the attack bench is attacks/)
 // - A caller-supplied hash could be any transaction on any chain: the contract signs only its own build.
@@ -47,8 +48,7 @@
 //   here, and the tx id comes from the contract's own signature, not from the agent.
 //
 // State and migration
-// - Everything that grows is iterable, so retiring can empty it (DeleteAccount needs at most 10 000 bytes
-//   of state).
+// - Everything that grows is iterable, so retiring can empty it and return the storage stake.
 // - migrate reads the current layout or an older one (v14, v13); new fields go at the end of the struct.
 //
 // Finding ids in comments (N1..N17) refer to the second security review in AUDIT.md, requirement ids
@@ -161,6 +161,19 @@ pub struct LogIn {
     pub transaction_index: u64,
     pub block_hash: String,
     pub block_number: u64,
+}
+
+// A signature of the stuck request as it appeared on the EVM chain (y parity, r, s), and the gas fields of
+// the variant that landed when they differ from the last request. The contract checks that it is its own
+// signature over exactly that content and takes the tx id from it (review finding X2).
+#[near(serializers = [json])]
+pub struct SigIn {
+    pub r: String,
+    pub s: String,
+    pub v: u8,
+    pub gas_limit: Option<u128>,
+    pub max_fee_per_gas: Option<u128>,
+    pub max_priority_fee_per_gas: Option<u128>,
 }
 
 // Retire is not a role: it is the council decision to retire the policy (R29), and its `account` is the
@@ -520,13 +533,20 @@ impl Keyfree {
         left
     }
 
-    // 2) when the state is empty, delete the account; its NEAR goes to the beneficiary.
+    // 2) when the state is empty, send the account's free NEAR to the beneficiary. The account itself stays,
+    // keyless and retired for good: deleting it would free its name, its parent could create it again, and
+    // the MPC derives the EVM key from the account name and path alone, so the new account would sign for
+    // the same EVM address, the admin of the proxies and the only caller of the factories (review finding X1).
     pub fn finish_retire(&mut self) -> Promise {
         self.only_council();
         let to = self.retiring.clone().unwrap_or_else(|| env::panic_str("the policy is not retiring"));
         require!(self.left_to_sweep() == 0, "sweep first");
-        env::log_str(&format!("keyfree: retiring, account deleted, NEAR to {to}"));
-        Promise::new(env::current_account_id()).delete_account(to)
+        // What the account's storage needs stays locked; the margin covers the state written after this call.
+        let locked = (env::storage_usage() as u128 + 1_000) * env::storage_byte_cost().as_yoctonear();
+        let free = env::account_balance().as_yoctonear().saturating_sub(locked);
+        require!(free > 0, "nothing to send: what is left pays for the account's storage");
+        env::log_str(&format!("keyfree: retired; {free} yoctoNEAR to {to}; the account stays, keyless, so its name and EVM address are never free again"));
+        Promise::new(to).transfer(NearToken::from_yoctonear(free))
     }
 
     // Maintenance without keys. 1) the owner sends the new code itself (raw bytes as the call input) and
@@ -797,6 +817,7 @@ impl Keyfree {
         self.require_fees(chain_id, max_fee_per_gas, max_priority_fee_per_gas);
         let p = proxy_pending(chain_id, nonce, &e.proxy, &e.implementation, gas_limit, max_fee_per_gas, max_priority_fee_per_gas);
         require_intrinsic(&p);
+        self.require_not_braked(&p);
         self.sign(p)
     }
 
@@ -818,6 +839,7 @@ impl Keyfree {
         let p = Pending { chain_id, nonce, code_hash: hex::encode(e.code_hash), gas_limit, max_fee_per_gas, max_priority_fee_per_gas,
             init_code, salt: factory_deploy.then(|| e.salt.to_vec()), factory: factory_deploy.then(|| e.factory.to_vec()), since_block: 0 };
         require_intrinsic(&p);
+        self.require_not_braked(&p);
         self.sign(p)
     }
 
@@ -829,6 +851,7 @@ impl Keyfree {
         self.require_fees(p.chain_id, max_fee_per_gas, max_priority_fee_per_gas);
         p.max_fee_per_gas = max_fee_per_gas;
         p.max_priority_fee_per_gas = max_priority_fee_per_gas;
+        self.require_not_braked(&p);
         self.sign(p)
     }
 
@@ -888,6 +911,7 @@ impl Keyfree {
     #[payable]
     pub fn confirm(&mut self, chain_id: u64, nonce: u64, log: LogIn, finality: String) -> Promise {
         self.not_retiring();
+        require!(finality == "Safe" || finality == "Finalized", "confirmation needs a Safe or Finalized block");
         let k = key(chain_id, nonce);
         let (status, tx_hash) = self.line(&k).unwrap_or_else(|| env::panic_str("no such deploy"));
         require!(status == SIGNED, "deploy is not waiting for confirmation");
@@ -895,18 +919,25 @@ impl Keyfree {
             .then(Self::ext(env::current_account_id()).with_static_gas(Gas::from_tgas(10)).on_confirmed(chain_id, nonce))
     }
 
-    // A stuck request whose late signature landed anyway: the agent points at the tx, the MPC must find
-    // our Deployed log in it. Then the nonce is spent on exactly this content and can move on. This moves
-    // the nonce, so only the agent or owner may ask, and a Latest block (may still vanish) is not enough.
+    // A stuck request whose late signature landed anyway: the agent hands over that signature as it appears on
+    // the chain; the contract checks it is its own signature over exactly the stuck content, rebuilds the signed
+    // transaction and takes its hash as the tx id, so only the log of that very transaction can prove the nonce
+    // (a look-alike log of another transaction cannot, review finding X2). This moves the nonce, so only the
+    // agent or owner may ask, and only a Finalized block counts (an L2's Safe block can still be reorged).
     #[payable]
-    pub fn confirm_stuck(&mut self, tx_hash: String, log: LogIn, finality: String) -> Promise {
+    pub fn confirm_stuck(&mut self, sig: SigIn, log: LogIn, finality: String) -> Promise {
         self.only_agent_or_owner();
         self.not_retiring();
-        require!(finality == "Safe" || finality == "Finalized", "a stuck request needs Safe or Finalized");
-        let p = self.stuck.clone().unwrap_or_else(|| env::panic_str("nothing stuck"));
+        require!(finality == "Finalized", "a stuck request needs a Finalized block");
+        let mut p = self.stuck.clone().unwrap_or_else(|| env::panic_str("nothing stuck"));
         let k = key(p.chain_id, p.nonce);
         require!(self.line(&k).is_some(), "no journal line");
-        let tx: [u8; 32] = hex::decode(tx_hash.trim_start_matches("0x")).ok().and_then(|b| b.try_into().ok()).unwrap_or_else(|| env::panic_str("bad tx hash"));
+        if let Some(g) = sig.gas_limit { p.gas_limit = g; }
+        if let Some(f) = sig.max_fee_per_gas { p.max_fee_per_gas = f; }
+        if let Some(f) = sig.max_priority_fee_per_gas { p.max_priority_fee_per_gas = f; }
+        let answer = json!({ "big_r": { "affine_point": format!("02{}", sig.r.trim_start_matches("0x")) }, "s": { "scalar": sig.s.trim_start_matches("0x") }, "recovery_id": sig.v });
+        let raw = self.finish(&p, &answer).unwrap_or_else(|e| env::panic_str(&format!("not our signature of the stuck request: {e}")));
+        let tx = env::keccak256_array(&hex::decode(&raw[2..]).unwrap_or_default());
         self.read_mpc(p.chain_id, &k, tx, &log, &finality)
             .then(Self::ext(env::current_account_id()).with_static_gas(Gas::from_tgas(10)).on_stuck_confirmed(p.chain_id, p.nonce, hex::encode(tx)))
     }
@@ -976,7 +1007,10 @@ impl Keyfree {
 
     pub fn get_eth_address(&self) -> Option<String> { self.eth_address.clone() }
     pub fn get_next_nonce(&self, chain_id: u64) -> Option<u64> { self.next_nonce.get(&chain_id).copied() }
-    pub fn get_open(&self) -> Value { json!({ "pending": self.pending.as_ref().map(|p| p.nonce), "stuck": self.stuck.as_ref().map(|p| p.nonce) }) }
+    pub fn get_open(&self) -> Value {
+        json!({ "pending": self.pending.as_ref().map(|p| p.nonce), "stuck": self.stuck.as_ref().map(|p| p.nonce),
+            "chain_id": self.pending.as_ref().or(self.stuck.as_ref()).map(|p| p.chain_id) })
+    }
 
     // What the chain will have used today once this transaction is signed, or a refusal (R8). Every signature
     // counts, a re-sign too: any of them may land, and the budget is about what can be spent.
@@ -1121,6 +1155,19 @@ impl Keyfree {
     }
 
     // A fee under the chain's floor would be signed but never mined: the nonce would wait forever.
+    // A brake stops every new signature, re-signs and retries included (review finding X4): a disabled chain,
+    // removed code, a removed or changed factory, a lowered gas cap.
+    fn require_not_braked(&self, p: &Pending) {
+        require!(!self.disabled_chains.contains(&p.chain_id), "chain disabled");
+        require!(p.gas_limit <= self.max_gas_limit, "gas limit over the cap");
+        if self.journal.get(&key(p.chain_id, p.nonce)).is_some() {
+            require!(self.allowed_code.contains(&p.code_hash), "code not on the allow list");
+            if let Some(f) = &p.factory {
+                require!(self.factories.get(&p.chain_id) == Some(f), "the factory of this chain changed");
+            }
+        }
+    }
+
     fn require_fees(&self, chain_id: u64, max_fee_per_gas: u128, max_priority_fee_per_gas: u128) {
         require!(max_fee_per_gas <= self.max_fee_cap && max_priority_fee_per_gas <= max_fee_per_gas, "gas price over the cap");
         let floor = self.fee_floor.get(&chain_id).copied().unwrap_or(0);
