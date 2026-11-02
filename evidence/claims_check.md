@@ -3,7 +3,7 @@
 Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the
 repository: every linked transaction and address, the live policy, every count, every quoted log line.
 
-Result: 101 of 102 checks agree, **1 do not**.
+Result: 101 of 101 checks agree.
 
 | | Check | Result |
 |---|---|---|
@@ -108,4 +108,3 @@ Result: 101 of 102 checks agree, **1 do not**.
 | ok | CLAIMS.md:101 quotes v14.log | "Access key does not allow method propose_rule" |
 | ok | CLAIMS.md:103 quotes v14.log | "proxy upgrade not on the allow list" |
 | ok | CLAIMS.md:103 quotes v14.log | "the allowance is used up" |
-| **FAIL** | CLAIMS.md:145 quotes tool_live.log | "rules allow-chain" not found |

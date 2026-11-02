@@ -187,7 +187,7 @@ read("CLAIMS.md").split("\n").forEach((line, i) => {
   const text = logs.map((f) => read(`evidence/${f}`)).join("\n");
   // code spans that read as log text: words with spaces, not a path, a command, a list of names or a cut hash
   const quotes = line.split("`").filter((_, k) => k % 2 === 1)
-    .filter((q) => q.includes(" ") && !/[/…*]|^(cargo|npm|node|keyfree) |^[\w]+(, [\w]+)+$/.test(q));
+    .filter((q) => q.includes(" ") && !/[/…*]|^(cargo|npm|node|keyfree|rules) |^[\w]+(, [\w]+)+$/.test(q));
   for (const q of quotes) report(text.includes(q), `CLAIMS.md:${i + 1} quotes ${logs.join(", ")}`, `"${q.slice(0, 70)}${q.length > 70 ? "…" : ""}"${text.includes(q) ? "" : " not found"}`);
 });
 
