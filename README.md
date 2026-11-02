@@ -110,7 +110,7 @@ From the repository root:
 ```bash
 (cd contract && cargo test -- --test-threads=1)       # 156 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
-(cd packages/keyfree && npm test && npm run smoke)    # 13 tool tests; MCP self-check against the live policy
+(cd packages/keyfree && npm test && npm run smoke)    # 37 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
 
@@ -211,7 +211,7 @@ moves the policy to a reproducible build without a key, and `v14/budget.mjs` set
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
 | `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
-| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push; `build`: the reproducible build of the policy |
+| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `live`: the README's read-only paths against the live policy, daily |
 | `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
 
 ## Security

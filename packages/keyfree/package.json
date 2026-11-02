@@ -11,7 +11,7 @@
   "files": ["dist"],
   "scripts": {
     "build": "tsc",
-    "test": "node --test test/unit.test.mjs test/attacks.test.mjs",
+    "test": "node --test test/unit.test.mjs test/cli.test.mjs test/attacks.test.mjs",
     "smoke": "node scripts/smoke.mjs"
   },
   "engines": { "node": ">=20.3" },

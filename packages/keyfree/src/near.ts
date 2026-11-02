@@ -18,6 +18,12 @@ export class PolicyRefusal extends Error {
   }
 }
 
+// The policy writes u64 and u128 values as plain JSON numbers. JSON.parse would round any above 2^53 (a daily
+// budget of 0.0123 ETH in wei already is), so integers of 16 digits or more are read as exact decimal strings.
+export function parseExact(text: string): unknown {
+  return JSON.parse(text.replace(/"(?:[^"\\]|\\.)*"|-?\d{16,}/g, (m) => (m.startsWith('"') ? m : `"${m}"`)));
+}
+
 export interface CallResult<T> {
   value: T | null;
   logs: string[];
@@ -38,8 +44,8 @@ export class Policy {
   }
 
   async view<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {
-    const r = await this.provider.callFunction({ contractId: this.cfg.policy, method, args, blockQuery: { finality: "optimistic" } });
-    return r as T;
+    const r = await this.provider.callFunctionRaw({ contractId: this.cfg.policy, method, args, blockQuery: { finality: "optimistic" } });
+    return parseExact(Buffer.from(r.result).toString()) as T;
   }
 
   account(id: string, key: string): Account {
@@ -55,7 +61,7 @@ export class Policy {
     }
     const logs = out.receipts_outcome.flatMap((r) => r.outcome.logs).filter((l) => l.startsWith("keyfree"));
     const raw = out.status.SuccessValue ? Buffer.from(out.status.SuccessValue, "base64").toString() : "";
-    return { value: raw ? (JSON.parse(raw) as T) : null, logs, txHash: out.transaction.hash };
+    return { value: raw ? (parseExact(raw) as T) : null, logs, txHash: out.transaction.hash };
   }
 
   tx(hash: string): string {

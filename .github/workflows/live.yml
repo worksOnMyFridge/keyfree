@@ -1,0 +1,48 @@
+# The README's read-only paths against the live policy on NEAR testnet, once a day and on demand: the policy
+# still has no keys, Counter(1) previews and equals viem, Counter(999) is refused, the MCP self-check passes.
+# No keys and no secrets: reading and previewing need none. A red run means the live demo needs a look.
+name: live
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readme:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/keyfree
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts && npm run build && cp keyfree.example.json demo/keyfree.json
+      - name: status - the policy has no access keys
+        working-directory: packages/keyfree/demo
+        run: |
+          node ../dist/cli.js status > status.json
+          node -e 'const s = require("./status.json"); if (s.policy_keys !== 0) throw new Error("policy has keys"); console.log(s.policy, "keys", s.policy_keys, "build", s.build)'
+      - name: preview Counter(1) equals viem
+        working-directory: packages/keyfree/demo
+        run: |
+          node ../dist/cli.js preview --chain base-sepolia --artifact out/Counter.sol/Counter.json --args "[1]" > p.json
+          node -e 'const p = require("./p.json"); if (p.matches_viem !== true) throw new Error("not equal to viem"); console.log("nonce", p.nonce, "matches_viem", p.matches_viem)'
+      - name: preview Counter(999) is refused (exit code 2)
+        working-directory: packages/keyfree/demo
+        run: |
+          set +e
+          node ../dist/cli.js preview --chain base-sepolia --artifact out/Counter.sol/Counter.json --args "[999]" 2> refused.txt
+          code=$?
+          cat refused.txt
+          test "$code" = 2 && grep -q "code not on the allow list" refused.txt
+      - name: MCP self-check
+        run: npm run smoke

@@ -55,21 +55,21 @@ function createServer(): McpServer {
   server.registerTool("keyfree_preview", {
     title: "Preview a deploy",
     description: `Build and check a deploy without signing anything: the nonce, the address the contract will get, gas and fees, the ETH it needs up front, and that the policy's transaction equals viem's byte for byte. Use before keyfree_deploy when the user wants to see the plan. The address depends on the salt: pass the returned salt to keyfree_deploy to get exactly this address. ${RULE}`,
-    inputSchema: z.strictObject({ chain: chainArg, ...codeArgs, salt: z.string().optional().describe("32-byte hex salt for CREATE2; random when omitted") }),
+    inputSchema: z.strictObject({ chain: chainArg, ...codeArgs, salt: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "0x and 64 hex characters").optional().describe("32-byte hex salt for CREATE2; random when omitted") }),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, async (a) => run(() => kf.preview(a)));
 
   server.registerTool("keyfree_deploy", {
     title: "Deploy a contract",
     description: `Deploy a contract to an EVM chain with no private key: the NEAR policy checks its rules, builds the transaction itself, NEAR MPC signs it, this tool checks the signed bytes and broadcasts them, then waits for the receipt. Returns the new contract address and links. Through the owner's CREATE2 factory by default (the address is known before signing). One call = one deploy = one nonce. Example: "deploy Counter to Base Sepolia" -> chain="base-sepolia", artifact="out/Counter.sol/Counter.json". ${RULE}`,
-    inputSchema: z.strictObject({ chain: chainArg, ...codeArgs, salt: z.string().optional().describe("32-byte hex salt for CREATE2; random when omitted. The same salt and code cannot be deployed twice on a chain.") }),
+    inputSchema: z.strictObject({ chain: chainArg, ...codeArgs, salt: z.string().regex(/^0x[0-9a-fA-F]{64}$/, "0x and 64 hex characters").optional().describe("32-byte hex salt for CREATE2; random when omitted. The same salt and code cannot be deployed twice on a chain.") }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }, async (a) => run(() => kf.deploy(a)));
 
   const upgradeArgs = {
     chain: chainArg,
-    proxy: z.string().describe("Address of the ERC-1967 proxy (its admin must be the policy's address)"),
-    implementation: z.string().describe("Address of the new implementation the proxy should run"),
+    proxy: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "a 0x address").describe("Address of the ERC-1967 proxy (its admin must be the policy's address)"),
+    implementation: z.string().regex(/^0x[0-9a-fA-F]{40}$/, "a 0x address").describe("Address of the new implementation the proxy should run"),
   };
 
   server.registerTool("keyfree_upgrade_preview", {

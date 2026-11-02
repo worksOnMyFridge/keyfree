@@ -37,6 +37,32 @@ jobs:
       - name: Factory tests (in-process EVM)
         run: npm run test:factory
 
+  tool-matrix:
+    # The tool the way README installs it (npm install, build, tests) on each OS and supported Node version.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+        node: [20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/keyfree
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install --ignore-scripts --no-audit --no-fund && npm run build
+      - run: npm test
+      - name: The README's Counter(1) hash, offline
+        working-directory: packages/keyfree/demo
+        run: test "$(node ../dist/cli.js hash --artifact out/Counter.sol/Counter.json --args '[1]')" = 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2
+
   audit:
     # Known vulnerabilities in the Rust dependencies (RustSec advisory database) and the npm ones.
     runs-on: ubuntu-24.04

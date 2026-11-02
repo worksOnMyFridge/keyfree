@@ -52,3 +52,8 @@ Human (council) commands sign with a key from `~/.near-credentials` (`--as <acco
 `keyfree rules apply <id>`, `keyfree pause`, ... see `keyfree help`. `keyfree pending` needs no key: it lists
 every widening that waits its delay, with the command that cancels it, and exits with code 3 when there is one,
 so a scheduled job can alert the council.
+
+Every argument is checked before anything is signed: an unknown flag (`--arg` for `--args`), a missing value,
+a malformed hash or address, or a number that is not a whole number in range stops the command with a message,
+so a typo never reaches the chain. Wei amounts are passed and read as exact integers, also above 2^53.
+Exit codes: `0` done, `1` error, `2` refused by the policy, `3` (`pending` only) something waits its delay.
