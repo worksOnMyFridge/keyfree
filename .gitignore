@@ -12,3 +12,7 @@ packages/keyfree/demo/keyfree.json
 # build output of the package
 packages/keyfree/dist/
 v14/config.json
+# your own policy (setup/): local config, progress and the tool config it writes
+setup/config.json
+setup/state.json
+setup/keyfree.json

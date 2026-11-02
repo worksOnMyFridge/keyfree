@@ -187,15 +187,35 @@ upgrade is where a contract learns who it pays.
 
 ## Run your own policy
 
-After `npm install` in the repository root, `v13/run.mjs` runs the whole thing end to end on NEAR testnet and Base Sepolia, one stage per call: accounts,
-install without keys, rules through the delay, factory, deploys from 22 B to 48 KB, Read MPC confirmation
-(real and forged), live refusals, guardian replacement, upgrade without keys. It needs testnet NEAR (about
-10) and a little Base Sepolia ETH on the derived address. The log of our run is `evidence/v13.log`.
-`v14/run.mjs` continues on that policy: the treasury (proxy, v1, v2), the keyless upgrade of the policy to
-v14, a new agent, the allowed proxy upgrade and its refusals, Read MPC confirmation (`evidence/v14.log`).
-`v14/ethereum.mjs` opens Ethereum Sepolia on the same policy (`evidence/ethereum.log`), `v14/upgrade.mjs`
-moves the policy to a reproducible build without a key, and `v14/budget.mjs` sets and tests the daily budget
-(`evidence/v14.log`).
+`setup/policy.mjs` installs a policy of your own on NEAR testnet, on exactly the code the demo policy runs:
+it takes the wasm from the demo policy on chain and installs it only if its sha256 equals the reproducible
+build above. You need Node 20+, a testnet account with about 7 NEAR whose key is in
+`~/.near-credentials/testnet/`, and later a little Base Sepolia ETH from a faucet.
+
+```bash
+npm install                                           # repository root
+cp setup/config.example.json setup/config.json        # put your account in "owner", sub-accounts for the rest
+node setup/policy.mjs plan                            # offline: what will happen
+node setup/policy.mjs wasm                            # the policy code, checked against the reproducible build
+node setup/policy.mjs accounts                        # policy, agent (function-call key only), guardian, reserve
+node setup/policy.mjs install                         # deploy + init + delete the key in one transaction; rules proposed
+node setup/policy.mjs apply                           # after the rules delay
+node setup/policy.mjs factory base-sepolia            # once the printed ETH address holds a little ETH
+node setup/policy.mjs apply                           # the factory rule, after the delay
+node setup/policy.mjs keyfree                         # writes setup/keyfree.json for the tool
+```
+
+The example config uses a one-hour rules delay and a one-day delay for upgrades and role changes; the demo
+policy's 60 s and 180 s are for watching a whole cycle. Each chain gets a daily budget from the start. Keys of
+the accounts the script creates stay in `setup/*_key.json` (gitignored): move the guardian's and reserve's to
+other devices. Then allow your code with `keyfree rules allow-code <hash> --config setup/keyfree.json`
+(`keyfree hash` prints it) and give the agent `KEYFREE_AGENT_KEY=setup/agent_key.json`.
+
+How the demo policy itself got here, stage by stage, with logs: `v13/run.mjs` (install, rules, factory,
+deploys from 22 B to 48 KB, Read MPC confirmation, refusals, guardian replacement, keyless upgrade;
+`evidence/v13.log`), `v14/run.mjs` (treasury proxy and its allowed upgrade, `evidence/v14.log`),
+`v14/ethereum.mjs` (Ethereum Sepolia, `evidence/ethereum.log`), `v14/upgrade.mjs` (keyless upgrades to the
+reproducible builds) and `v14/budget.mjs` (the daily budget).
 
 ## Layout
 
@@ -205,7 +225,8 @@ moves the policy to a reproducible build without a key, and `v14/budget.mjs` set
 | `factory/` | `KeyfreeFactory.sol`: CREATE2 for exactly one caller, the policy's address; emits `Deployed` |
 | `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
 | `packages/keyfree/demo/` | `Counter`; `vault-kit`, a prompt-injection example (its README swaps the vault owner); `treasury`, the upgradeable treasury (proxy, v1, v2) |
-| `v13/`, `v14/` | end-to-end testnet scripts and builds |
+| `setup/` | your own policy on testnet, on the code the demo policy runs (README, "Run your own policy") |
+| `v13/`, `v14/` | the end-to-end testnet scripts that built the demo policy, with their logs in `evidence/` |
 | `tools/` | small viem and NEAR helpers the scripts share |
 | `spikes/` | the first experiments (2026-10-25 .. 28), kept for the record |
 | `attacks/` | the attack catalog and `npm run attacks` |

@@ -1,0 +1,31 @@
+{
+  "owner": "you.testnet",
+  "policy": "policy.you.testnet",
+  "agent": "agent.you.testnet",
+  "guardian": "guardian.you.testnet",
+  "reserve": "reserve.you.testnet",
+  "policy_near": "5",
+  "agent_near": "1",
+  "council_near": "0.2",
+  "mpc": "v1.signer-prod.testnet",
+  "path": "keyfree-1",
+  "near_rpc": "https://test.rpc.fastnear.com",
+  "reference_policy": "policy13.keyfree-lab.testnet",
+  "wasm_sha256": "ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304",
+  "expect_build": "v16",
+  "upgrade_delay_sec": 86400,
+  "rules_delay_sec": 3600,
+  "max_gas_limit": "10000000",
+  "max_fee_cap": "50000000000",
+  "chains": [
+    {
+      "name": "base-sepolia",
+      "chain_id": 84532,
+      "rpc": "https://sepolia.base.org",
+      "explorer": "https://sepolia.basescan.org",
+      "fee_floor_wei": "1000000",
+      "max_wei_per_day": "500000000000000",
+      "max_tx_per_day": 10
+    }
+  ]
+}
