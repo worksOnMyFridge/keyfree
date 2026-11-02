@@ -2,8 +2,9 @@
 
 Every claim below points to something you can check yourself: a transaction, a line of the run log
 (`evidence/v13.log`, `evidence/v14.log`, `evidence/ethereum.log`), a test, or a read-only call. Everything
-ran on NEAR testnet and Base Sepolia on 2026-10-29, and on Ethereum Sepolia on 2026-11-01. Links were
-re-checked against the chains the same day.
+ran on NEAR testnet and Base Sepolia on 2026-10-29, and on Ethereum Sepolia on 2026-11-01. `npm run check:claims`
+checks every link here against the chains, every quoted log line against its log, and every count against the
+repository, read-only (`evidence/claims_check.md`); the `live` workflow runs it daily.
 
 Live accounts and addresses:
 
@@ -62,7 +63,7 @@ Deploys through the factory (each landed at the address the policy promised befo
 |---|---|---|
 | 4.1 | New code, a new chain, a factory or higher caps wait the rules delay; applying early is refused. | `rule delay not over` (`evidence/v13.log`, install and factory); rules 0–9 on the policy. |
 | 4.2 | Any one council member pauses at once; unpausing needs two of three. | `paused by guard13…`, `one unpause vote is not enough`, `second vote (reserve) unpauses` (`evidence/v13.log`, attacks). |
-| 4.3 | A stolen guardian key cannot freeze the contract forever: owner + reserve replace the guardian after the full delay, and the old guardian alone cannot cancel that. | `evidence/v13.log`, roles: `needs 2 of 3 approvals`, `the old guardian alone cannot cancel its own replacement`, `role change delay not over`, `guardian is now guard13b…`, `the old guardian pauses -> only owner, guardian or reserve`. Check now: `get_roles`. |
+| 4.3 | A stolen guardian key cannot freeze the contract forever: owner + reserve replace the guardian after the full delay, and the old guardian alone cannot cancel that. | `evidence/v13.log`, roles: `needs 2 of 3 approvals`, `the old guardian alone cannot cancel its own replacement`, `role change delay not over`, `guardian is now guard13b…`, `the old guardian pauses -> Smart contract panicked: only owner, guardian or reserve`. Check now: `get_roles`. |
 | 4.4 | The code of an upgrade is on chain for the whole delay, and the guardian can read and check it before it can be applied. | `guardian reads the proposed code from the chain: 332954 bytes, sha256 c8c4992e… == local build "b"` (`evidence/v13.log`); cancel re-check: `guardian cancelled: no proposal, no stored code`. |
 | 4.5 | A nonce never moves backwards and is never given to a second content. | Contract tests `proof_of_an_old_stuck_nonce_never_moves_the_nonce_back`, `new_request_never_overwrites_a_used_nonce`, `same_salt_and_code_cannot_take_a_second_nonce`; live refusals `salt and code already used on this chain`, `chain already allowed: its nonce moves only by signing`. |
 
@@ -77,7 +78,7 @@ Deploys through the factory (each landed at the address the policy promised befo
 
 | What | Count | Run |
 |---|---|---|
-| Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 53 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
+| Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 63 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
 | Policy contract tests (Rust): unit, golden, 400 random transactions against viem, 3 property tests | 160 | `cd contract && cargo test -- --test-threads=1` |
 | The live wasm in a local nearcore node with a stand-in MPC: access matrix, flows, upgrade, retirement, faults | 16 | `sandbox` workflow (`evidence/sandbox.md`) |
 | keyfree package tests (unit, command-line checks, attacks on the tool and the MCP server) | 37 | `cd packages/keyfree && npm test` |
@@ -99,7 +100,7 @@ three parts were deployed keyless through the policy's factory, at addresses the
 | 7.1 | The proxy's admin is the policy's keyless address, so no person can change the treasury's code. | ERC-1967 admin slot of the proxy = `0x43e3…fcb0` (`evidence/v14.log`, treasury); `TreasuryProxy.sol` has no function that changes it. |
 | 7.2 | An upgrade needs a council rule for exactly (chain, proxy, implementation), and it waits the rules delay. | Before rule 13 the agent's request was refused `proxy upgrade not on the allow list`; applying rule 13 early: `rule delay not over`; the agent's key cannot propose it: `Access key does not allow method propose_rule` (`evidence/v14.log`, allow). |
 | 7.3 | With the rule, the agent upgraded the live treasury from v1 to v2 through the `keyfree upgrade` tool. | [0xd9673701…](https://sepolia.basescan.org/tx/0xd9673701797e62a2a4c4853bbc6574ceea5956f21ff0abcf0e6500caff2b1f25), NEAR [3Hhip3r3…](https://testnet.nearblocks.io/txns/3Hhip3r38i4oAU2mk7mjJKTmEE56XbGVzjVWwmgXhMAp), nonce 10. Check now: `version()` of the proxy returns 2. Before signing, the tool checked the admin slot, the implementation's code, a simulation and that the policy's bytes equal viem's. |
-| 7.4 | Any other upgrade is refused: another implementation, the same upgrade again, a rollback to v1. | `proxy upgrade not on the allow list` for all three, live (`evidence/v14.log`, allow and after); the allowance is gone after the request (`get_rules`: `allowed_proxy_upgrades: []`). |
+| 7.4 | Any other upgrade is refused: another implementation, the same upgrade again, a rollback to v1. | `proxy upgrade not on the allow list` for all three, live (`evidence/v14.log`, allow and after); the allowance is gone after the request: `the allowance is used up` (`get_rules` lists no upgrade for that proxy). |
 | 7.5 | The calldata is built by the policy, never taken from the caller, and equals viem's. | `upgrade_call` in `contract/src/lib.rs`; golden test `golden_rlp_proxy_upgrade_matches_viem`. |
 | 7.6 | NEAR Read MPC confirms the proxy's `Upgraded` log, and not a forged position. | Real log: [8PdE3yE5…](https://testnet.nearblocks.io/txns/8PdE3yE5zPyDPsQSFwCBc5tg3d6v2BmF38qfsJcsaAL8) returned `true` in 21 s, journal line 10 is `confirmed`; block number + 1: [CaJnpGjZ…](https://testnet.nearblocks.io/txns/CaJnpGjZqpzg3XLbQ8DZHp3V19pSGrVHZ3paZq6icrJv) returned `false`. Golden test `golden_payload_hash_of_the_confirmed_treasury_upgrade` reproduces both hashes offline. |
 | 7.7 | A real Claude Code session, through the MCP tools, does only the allowed upgrade. | Second treasury proxy `0xd1b8…6b03` on v1 ([deploy](https://sepolia.basescan.org/tx/0x664ab137b424240b420204c6ffb34810ce32aeebf33bc1aeaaece5614b0f6d08), nonce 11), rule 14 allows it → v2 (`evidence/v14.log`, demo). In a fresh session in `packages/keyfree/demo`: "upgrade it to v1's implementation" → refused at the preview, the agent called the refusal final and left the rule to the owner; "upgrade it to v2" → [upgradeTo](https://sepolia.basescan.org/tx/0x5fe0843486d5584250c634a03c6a81efd0b52d4ae9d3b437746e29db6510904c), nonce 12, `version()` = 2, then Read MPC confirmed it (journal line 12 `confirmed`); "roll it back" → refused, the allowance was used. Nonce 13 stayed free, no rule was proposed. |

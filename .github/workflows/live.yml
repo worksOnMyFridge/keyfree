@@ -1,5 +1,6 @@
 # The README's read-only paths against the live policy on NEAR testnet, once a day and on demand: the policy
-# still has no keys, Counter(1) previews and equals viem, Counter(999) is refused, the MCP self-check passes.
+# still has no keys, Counter(1) previews and equals viem, Counter(999) is refused, the MCP self-check passes;
+# then every link, quoted log line and count in the docs is checked (tools/check_claims.mjs).
 # No keys and no secrets: reading and previewing need none. A red run means the live demo needs a look.
 name: live
 
@@ -46,3 +47,12 @@ jobs:
           test "$code" = 2 && grep -q "code not on the allow list" refused.txt
       - name: MCP self-check
         run: npm run smoke
+      - name: The docs against the chains and the repository
+        working-directory: .
+        run: node tools/check_claims.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: claims-check
+          path: evidence/claims_check.md
+          if-no-files-found: warn

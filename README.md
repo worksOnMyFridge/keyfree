@@ -57,7 +57,7 @@ Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, an
    You see a contract account with **no access keys**: it was deployed, initialised and had its key deleted in
    [one transaction](https://testnet.nearblocks.io/txns/7iawPybUxDjWqQFXCayAFxecGLLbeiMGP8bczy9sMVbd).
 2. Open its ETH address [`0x43e3…fcb0`](https://sepolia.basescan.org/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0) on Base Sepolia.
-   You see eleven contract deploys and two treasury upgrades, nonces 0 to 12, from an address whose private
+   You see twelve contract deploys and two treasury upgrades, nonces 0 to 13, from an address whose private
    key does not exist.
 3. Open [this deploy](https://sepolia.basescan.org/tx/0x59ec94223de38de6bcbb12515c2facacd4578ce80483f734100869ae4f4e7120).
    A Claude Code session made it after one sentence: "deploy Counter with start 1 to Base Sepolia through keyfree".
@@ -238,13 +238,13 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `packages/keyfree/demo/` | `Counter`; `vault-kit`, a prompt-injection example (its README swaps the vault owner); `treasury`, the upgradeable treasury (proxy, v1, v2) |
 | `setup/` | your own policy on testnet, on the code the demo policy runs (README, "Run your own policy") |
 | `v13/`, `v14/` | the end-to-end testnet scripts that built the demo policy, with their logs in `evidence/` |
-| `tools/` | small viem and NEAR helpers the scripts share |
+| `tools/` | small viem and NEAR helpers the scripts share, and `check_claims.mjs`: the docs against the chains |
 | `spikes/` | the first experiments (2026-10-25 .. 28), kept for the record |
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `sandbox/` | the policy in a local nearcore node: the tests and a stand-in MPC contract (`mock-mpc`, test keys anyone can recompute) |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
 | `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
-| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy, daily |
+| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy and `tools/check_claims.mjs` (every link, quoted log line and count in the docs), daily |
 | `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
 
 ## Security
