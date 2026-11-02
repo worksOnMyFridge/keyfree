@@ -42,6 +42,7 @@ npm install && npm run build
 cp keyfree.example.json demo/keyfree.json
 export KEYFREE_AGENT_KEY=/path/to/agent_key.json   # {"private_key": "ed25519:..."}, never in the repo
 npm test && npm run smoke                            # offline unit tests; MCP self-check (read only)
+npm run live                                         # every command and MCP tool for real, on a policy of your own
 node dist/cli.js status                              # from a folder with keyfree.json
 ```
 

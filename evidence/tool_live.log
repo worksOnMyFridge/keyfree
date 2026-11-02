@@ -1,0 +1,160 @@
+--- 2026-11-02T06:16:00.963Z live run on policy.kf-outsider-494bd7.testnet, base-sepolia
+OK   status: policy.kf-outsider-494bd7.testnet has 0 keys, build v16, address 0x4ca9bb1863f3d5f8e1176cada02bcf99fc1d031d
+
+[agent: read, preview, refusals]
+OK   hash of Counter(1): exit 0
+OK   hash == viem's: 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2
+OK   hash from raw init code: exit 0
+OK   preview Counter(1): exit 0
+OK   preview: nonce 9, promises 0x26050ab91b3c9d0a7143f5020ff683e7ce71d729, matches viem
+OK   preview Counter(999): exit 2, REFUSED code not on the allow list (code hash 5ec712c914585b857a54139c4ed9f4df30cdc61088589f4e81ad8feccefd5871). Allowing it is a decision f
+OK   deploy Counter(999): exit 2, REFUSED code not on the allow list (code hash 5ec712c914585b857a54139c4ed9f4df30cdc61088589f4e81ad8feccefd5871). Allowing it is a decision fo
+OK   upgrade-preview without a rule: exit 2, REFUSED proxy upgrade not on the allow list (84532:0xbb67dc38bbd935762ed2ccab005cf8c471f2518f:0x9ec6f9302be674d52a7e6bc9ff261c8a7a
+OK   upgrade without a rule: exit 2, REFUSED proxy upgrade not on the allow list (84532:0xbb67dc38bbd935762ed2ccab005cf8c471f2518f:0x9ec6f9302be674d52a7e6bc9ff261c8a7a476fa2).
+OK   retry with nothing stuck: exit 1, ERROR Nothing is stuck.
+OK   journal: exit 0
+OK   rules: exit 0
+OK   roles: exit 0
+OK   pending with nothing open: exit 0
+
+[agent: deploy]
+OK   deploy Counter(1): exit 0
+OK   landed at the promised 0x26050ab91b3c9d0a7143f5020ff683e7ce71d729: https://sepolia.basescan.org/tx/0x44793d454f119657dcc383f109691734d6b773f81227bd081ea21a10151a6254
+OK   nonce 9
+OK   number() = 1 on chain
+OK   the same salt and code again: exit 2, REFUSED salt and code already used on this chain
+OK   journal shows it: exit 0
+OK   journal line 9: signed, deploy
+OK   confirm a plain creation: exit 1, ERROR No Deployed log from our factory in that transaction: only factory deploys can be confirmed.
+OK   confirm a line that does not exist: exit 1, ERROR No journal line for base-sepolia nonce 9999.
+OK   confirm the fresh line: exit 0
+OK   too early: waiting_for_safe, 907 blocks to go
+
+[council: a widening waits; pending shows it; apply early refused; any member cancels]
+OK   rules allow-code Counter(2): exit 0
+OK   pending exits 3 and lists rule 19, ready in 54 s
+OK   rules apply before the delay: exit 2, REFUSED rule delay not over
+OK   the agent's key cannot propose: exit 2, REFUSED this key may not call that method (Access key does not allow method propose_rule)
+OK   rules cancel by the guardian: exit 0
+OK   pending exits 0 again
+OK   Counter(2) stays refused: exit 2, REFUSED code not on the allow list (code hash 36e6fa24b0d229f0388ba62718e1837b927542d482f99929e42cf651c2601f38). Allowing it is a decisi
+
+[council: pause takes one, unpause takes two]
+OK   pause by the guardian: exit 0
+OK   status: paused
+OK   deploy while paused: exit 2, REFUSED paused
+OK   unpause, first vote (owner): exit 0
+OK   one vote is not enough: still paused
+OK   unpause, second vote (reserve): exit 0
+OK   two votes: running again
+
+[council: each brake at once; the order lets each refusal show, the tool checks the code before the contract]
+OK   lower-budget to what is used: exit 0
+OK   preview over the lowered budget: exit 2, REFUSED daily limit on chain 84532: 10 transactions today, until the next UTC day
+OK   lower-limits: exit 0
+OK   preview under the lowered gas cap: exit 2, REFUSED gas limit below the intrinsic minimum 34560
+OK   raising a cap at once is refused: exit 2, REFUSED raising a cap is a rule proposal
+OK   remove-factory: exit 0
+OK   preview without a factory: exit 2, REFUSED no factory on this chain
+OK   disable-chain: exit 0
+OK   preview on a disabled chain: exit 2, REFUSED chain is disabled
+OK   remove-code: exit 0
+OK   preview of removed code: exit 2, REFUSED code not on the allow list (code hash 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2). Allowing it is a decisio
+OK   allow-chain on an open chain: its nonce moves only by signing: exit 2, REFUSED chain already allowed: its nonce moves only by signing
+
+[council: reopening is a widening, and the run's treasury goes through the same delay]
+OK   set-budget: exit 0
+OK   set-factory: exit 0
+OK   set-limits: exit 0
+OK   allow-code Counter(1): exit 0
+OK   enable-chain: exit 0
+OK   allow-code TreasuryV1: exit 0
+OK   allow-code TreasuryV2: exit 0
+waiting 58 s for the rules delay
+OK   rule 20 applied by the guardian: exit 0
+OK   rule 21 applied by the guardian: exit 0
+OK   rule 22 applied by the guardian: exit 0
+OK   rule 23 applied by the guardian: exit 0
+OK   rule 24 applied by the guardian: exit 0
+OK   rule 25 applied by the guardian: exit 0
+OK   rule 26 applied by the guardian: exit 0
+OK   allow-code TreasuryProxy: exit 0
+OK   allow-code Counter(161037) for the MCP run: exit 0
+OK   allow-upgrade proxy -> v2: exit 0
+OK   allow-upgrade proxy -> v1, for the MCP run: exit 0
+OK   allow-upgrade of a dummy, to remove it: exit 0
+waiting 58 s for the rules delay
+OK   rule 27 applied by the guardian: exit 0
+OK   rule 28 applied by the guardian: exit 0
+OK   rule 29 applied by the guardian: exit 0
+OK   rule 30 applied by the guardian: exit 0
+OK   rule 31 applied by the guardian: exit 0
+OK   chain open again, budget 20 transactions a day
+OK   Counter(1) previews again: exit 0
+OK   the dummy upgrade is on the list
+OK   remove-upgrade at once: exit 0
+OK   and off it
+
+[council: a role change and a policy upgrade, proposed and cancelled]
+OK   pending lists the new agent proposed by the owner
+OK   rules apply of an id that does not exist: exit 2, REFUSED no such rule proposal
+OK   cancel-role by the guardian: exit 0
+OK   the new agent is gone
+OK   pending lists a proposed policy upgrade
+OK   cancel-upgrade by the reserve: exit 0
+OK   the proposal is gone
+
+[agent: a treasury, and its one allowed upgrade]
+OK   deploy TreasuryV1: exit 0
+OK   TreasuryV1 at the promised 0xa41ca8d5632a4e4c0ab62543fa52653ef0ca7c61: https://sepolia.basescan.org/tx/0x34c18c792b724d23e27b4ea4a59f6d48e57003011ed0444cd36ba50c4a6bb6ea
+OK   deploy TreasuryProxy: exit 0
+OK   TreasuryProxy at the promised 0xbb67dc38bbd935762ed2ccab005cf8c471f2518f: https://sepolia.basescan.org/tx/0xab28100a3a03e4a8e44dbdabe46ee78dd81cca40d48407c41fd79d7cc49a9553
+OK   deploy TreasuryV2: exit 0
+OK   TreasuryV2 at the promised 0x9ec6f9302be674d52a7e6bc9ff261c8a7a476fa2: https://sepolia.basescan.org/tx/0xf320b7556a22e1bc77503ab85871ab4e2c1c7f3fc289ec0b8e5f3864b10b128e
+OK   the proxy runs v1
+OK   upgrade-preview proxy -> v2: exit 0
+OK   upgrade-preview: admin ok, matches viem, nonce 13
+OK   upgrade proxy -> v2: exit 0
+OK   the proxy runs v2: https://sepolia.basescan.org/tx/0xe4e6d52ac794771d311208dc89ead48a151dabd3fa55a4d89e05ed73b67c0e52
+OK   the same upgrade again: exit 2, REFUSED proxy upgrade not on the allow list (84532:0xbb67dc38bbd935762ed2ccab005cf8c471f2518f:0x9ec6f9302be674d52a7e6bc9ff261c8a7a476fa2).
+
+[MCP: the 9 tools over stdio, the way a coding agent uses them]
+keyfree-mcp-server running on stdio, policy policy.kf-outsider-494bd7.testnet
+OK   9 tools, none of the council's
+OK   keyfree_status: policy.kf-outsider-494bd7.testnet, 0 keys
+OK   keyfree_code_hash: 2ae64eb867d31b3bea8918b067cae0142ee9d8ac7426d1dd2c6875d7db559e6d
+OK   keyfree_preview: promises 0x48bdc3b4a532d2a65b9349be3429ef309e2205db
+OK   keyfree_preview of other code: refused, with the do-not-work-around rule
+OK   keyfree_deploy with an extra argument: rejected before the handler
+OK   keyfree_deploy: at the promised 0x48bdc3b4a532d2a65b9349be3429ef309e2205db: https://sepolia.basescan.org/tx/0x92ae4ec9784ae2aa77ad2701a69c65c37862e6f74514148c1dabf6c51242bb49
+OK   keyfree_deploy again: refused
+OK   keyfree_upgrade_preview: the allowed rollback, matches viem
+OK   keyfree_upgrade: the proxy runs v1 again: https://sepolia.basescan.org/tx/0x15775c28a02f4b5b577da2c8ebf2287975173e7a5305547c8aaa4c37e1e3ac73
+OK   keyfree_upgrade again: refused, the allowance was used
+OK   keyfree_retry with nothing stuck
+OK   keyfree_confirm too early: waiting_for_safe
+OK   keyfree_journal: line 15 proxy_upgrade, line 14 deploy
+
+[what is left]
+OK   running, 0 keys, caps as before (10000000 gas, 50000000000 wei)
+OK   nothing waiting
+  line 15 (proxy_upgrade): exit 0 waiting_for_safe
+OK   line 15: waiting_for_safe (274 blocks to go)
+  line 14 (deploy): exit 0 waiting_for_safe
+OK   line 14: waiting_for_safe (203 blocks to go)
+  line 13 (proxy_upgrade): exit 0 waiting_for_safe
+OK   line 13: waiting_for_safe (101 blocks to go)
+  line 12 (deploy): exit 0 waiting_for_safe
+OK   line 12: waiting_for_safe (13 blocks to go)
+  line 11 (deploy): exit 0 confirmed
+OK   line 11 (deploy) confirmed by Read MPC https://testnet.nearblocks.io/txns/8yUYKpFSQxKuy4BprEuwxP4h8W1p3XxLhdGtG71SLAMi
+  line 10 (deploy): exit 0 confirmed
+OK   line 10 (deploy) confirmed by Read MPC https://testnet.nearblocks.io/txns/DMHHqct53baqcs9yonw49nKXoMdCpb5MpXjfei2G6nAJ
+  line 9 (deploy): exit 0 confirmed
+OK   line 9 (deploy) confirmed by Read MPC https://testnet.nearblocks.io/txns/EdtniUtZaCH1eLAF2iM9EEd5hmXayQ6kHUUQ3VkjDQ7L
+  line 8 (proxy_upgrade): exit 0 confirmed
+OK   line 8 (proxy_upgrade) confirmed by Read MPC https://testnet.nearblocks.io/txns/HyVm3E3Rt1o9QkiS74tjeJzo9QBz4sCtFdULHaRNkNZU
+  line 0 (deploy): exit 1 ERROR  No Deployed log from our factory in that transaction: only factory deploys can be confirmed.
+OK   line 0, a plain creation, cannot be confirmed
+
+125/125 steps ok

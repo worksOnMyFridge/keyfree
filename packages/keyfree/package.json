@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc",
     "test": "node --test test/unit.test.mjs test/cli.test.mjs test/attacks.test.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "live": "node scripts/live.mjs"
   },
   "engines": { "node": ">=20.3" },
   "dependencies": {

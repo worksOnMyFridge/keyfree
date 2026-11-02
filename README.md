@@ -121,7 +121,10 @@ checks its sha256, and runs it in a local nearcore node next to a stand-in MPC c
 ([`sandbox/`](sandbox/)): who may call each of the 47 methods, every flow end to end with real keys, gas,
 storage and callbacks, a failed upgrade batch, retirement, and faults (an MPC that fails, answers garbage,
 answers late or never, two requests at once, a policy short of NEAR). Results: [`evidence/sandbox.md`](evidence/sandbox.md).
-Locally (Linux or macOS arm64): `POLICY_WASM=<wasm> MOCK_WASM=<wasm> npm run test:sandbox`. `npm audit` reports `tmp`
+Locally (Linux or macOS arm64): `POLICY_WASM=<wasm> MOCK_WASM=<wasm> npm run test:sandbox`.
+
+Every CLI command and MCP tool also ran for real on a separate policy, with its refusals: 125 steps in
+[`evidence/tool_live.log`](evidence/tool_live.log) (`npm run live` in `packages/keyfree`). `npm audit` reports `tmp`
 through solc-js 0.8.28; the build only calls solc's `compile()`, not the command-line code that uses `tmp`, and
 another solc version would change the bytecode and with it the allowed code hashes.
 

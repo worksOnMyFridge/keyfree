@@ -3,7 +3,7 @@
 Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the
 repository: every linked transaction and address, the live policy, every count, every quoted log line.
 
-Result: 98 of 98 checks agree.
+Result: 101 of 102 checks agree, **1 do not**.
 
 | | Check | Result |
 |---|---|---|
@@ -68,6 +68,9 @@ Result: 98 of 98 checks agree.
 | ok | NEAR tx w3i2zLjA… CLAIMS.md:144 (claim 10.3) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9021283014a3401830f424083802c80830 |
 | ok | Base Sepolia tx 0x7069d601… CLAIMS.md:144 (claim 10.3) | block 53375859, status success, created 0x7716a4bd3547d36153ec7b24a93e8349157fb766 |
 | ok | Base Sepolia tx 0xbd514782… CLAIMS.md:144 (claim 10.3) | block 53376399, status success |
+| ok | NEAR tx HyVm3E3R… CLAIMS.md:145 (claim 10.4) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet confirm: success = true |
+| ok | Base Sepolia tx 0xe4e6d52a… CLAIMS.md:145 (claim 10.4) | block 53393627, status success |
+| ok | Base Sepolia tx 0x1343f4a9… CLAIMS.md:145 (claim 10.4) | block 53390721, status success |
 | ok | policy13.keyfree-lab.testnet access keys | 0 (docs: 0) |
 | ok | live code sha256 | ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304 (README: ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304) |
 | ok | live code size | 383323 bytes (README: 383 323) |
@@ -105,3 +108,4 @@ Result: 98 of 98 checks agree.
 | ok | CLAIMS.md:101 quotes v14.log | "Access key does not allow method propose_rule" |
 | ok | CLAIMS.md:103 quotes v14.log | "proxy upgrade not on the allow list" |
 | ok | CLAIMS.md:103 quotes v14.log | "the allowance is used up" |
+| **FAIL** | CLAIMS.md:145 quotes tool_live.log | "rules allow-chain" not found |
