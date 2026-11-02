@@ -1,0 +1,24 @@
+[package]
+name = "mock-mpc"
+description = "Stand-in for the NEAR MPC contract in the sandbox tests only: same methods and answer shapes, test keys anyone can recompute"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.29"
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "arithmetic"] }
+hex = "0.4"
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true

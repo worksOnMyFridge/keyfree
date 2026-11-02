@@ -108,19 +108,30 @@ mocked chain; tool attacks run the built `keyfree` package.
 From the repository root:
 
 ```bash
-(cd contract && cargo test -- --test-threads=1)       # 156 tests of the policy (Rust, near-sdk 5.29);
+(cd contract && cargo test -- --test-threads=1)       # 160 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
 (cd packages/keyfree && npm test && npm run smoke)    # 37 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
 
-The same checks, without the live smoke test, run in CI (`.github/workflows/ci.yml`). `npm audit` reports `tmp`
+The same checks, without the live smoke test, run in CI (`.github/workflows/ci.yml`).
+
+The policy also runs in a real NEAR runtime: the `sandbox` workflow rebuilds the live wasm from its commit,
+checks its sha256, and runs it in a local nearcore node next to a stand-in MPC contract
+([`sandbox/`](sandbox/)): who may call each of the 47 methods, every flow end to end with real keys, gas,
+storage and callbacks, a failed upgrade batch, retirement, and faults (an MPC that fails, answers garbage,
+answers late or never, two requests at once, a policy short of NEAR). Results: [`evidence/sandbox.md`](evidence/sandbox.md).
+Locally (Linux or macOS arm64): `POLICY_WASM=<wasm> MOCK_WASM=<wasm> npm run test:sandbox`. `npm audit` reports `tmp`
 through solc-js 0.8.28; the build only calls solc's `compile()`, not the command-line code that uses `tmp`, and
 another solc version would change the bytecode and with it the allowed code hashes.
 
 The contract tests include golden tests: the policy's transaction bytes for 1 KB, 24 KB and 48 KB of init code
 and for a proxy upgrade equal viem's (`evidence/golden_rlp.json`, made by `golden_vectors.mjs`, offline), and the journal's payload
-hash equals the one NEAR Read MPC accepted on Base Sepolia.
+hash equals the one NEAR Read MPC accepted on Base Sepolia. 400 more transactions with random fields at every
+encoding boundary (`evidence/random_txs.json`, made by `random_vectors.mjs`) must equal viem's too, and three
+property tests run thousands of random action sequences: one stolen council key never changes the council or
+unpauses, every role change waits the full delay after its last approval, and the daily budget refuses exactly
+when it must.
 
 ## Check which code the live policy runs
 
@@ -230,9 +241,10 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `tools/` | small viem and NEAR helpers the scripts share |
 | `spikes/` | the first experiments (2026-10-25 .. 28), kept for the record |
 | `attacks/` | the attack catalog and `npm run attacks` |
+| `sandbox/` | the policy in a local nearcore node: the tests and a stand-in MPC contract (`mock-mpc`, test keys anyone can recompute) |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
 | `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
-| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `live`: the README's read-only paths against the live policy, daily |
+| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy, daily |
 | `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
 
 ## Security

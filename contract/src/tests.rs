@@ -25,7 +25,15 @@ fn ctx_pay(pred: &str, height: u64, secs: u64, input: Vec<u8>, deposit_milli_nea
         .attached_deposit(NearToken::from_millinear(deposit_milli_near))
         .build();
     c.input = input.into();
-    testing_env!(c);
+    testing_env!(c, cached(near_sdk::test_vm_config), cached(near_sdk::RuntimeFeesConfig::test));
+}
+
+// testing_env! builds the runtime's whole parameter set on every call; the property tests make 10^5 calls, so
+// each thread builds it once and clones it.
+fn cached<T: Clone + 'static>(make: fn() -> T) -> T {
+    use std::any::{Any, TypeId};
+    thread_local! { static MADE: std::cell::RefCell<std::collections::HashMap<TypeId, Box<dyn Any>>> = Default::default(); }
+    MADE.with(|m| m.borrow_mut().entry(TypeId::of::<T>()).or_insert_with(|| Box::new(make())).downcast_ref::<T>().unwrap().clone())
 }
 
 fn pending() -> Pending {
@@ -1915,4 +1923,189 @@ fn get_open_names_the_chain() {
     let c = contract();
     assert_eq!(c.get_open()["chain_id"], 84532);
     assert_eq!(c.get_open()["pending"], 4);
+}
+
+// Property tests (P4): thousands of random sequences checked against invariants. A fixed-seed generator makes a
+// failure replay exactly; no new dependencies (xorshift and catch_unwind), the policy code is unchanged.
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> u64 { let mut x = self.0; x ^= x << 13; x ^= x >> 7; x ^= x << 17; self.0 = x; x }
+    fn below(&mut self, n: u64) -> u64 { self.next() % n }
+    fn pick<T: Copy>(&mut self, xs: &[T]) -> T { xs[self.below(xs.len() as u64) as usize] }
+}
+
+// One call as the runtime sees it: a panic is a refused call.
+fn attempt(f: impl FnOnce()) -> bool { std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_ok() }
+
+const PEOPLE: [&str; 9] = ["owner.testnet", "guardian.testnet", "reserve.testnet", "agent.testnet", "stranger.testnet", "x.testnet", "y.testnet", "z.testnet", "w.testnet"];
+const ROLES: [Role; 5] = [Role::Owner, Role::Guardian, Role::Reserve, Role::Agent, Role::Retire];
+
+// One random role action by `caller` at time `t`; proposers are council members, so changes can get far.
+fn role_action(c: &mut Keyfree, rng: &mut Rng, caller: &str, t: u64) -> bool {
+    ctx_at(caller, 20, t, vec![]);
+    let (role, who, proposer) = (rng.pick(&ROLES), acc(rng.pick(&PEOPLE)), acc(rng.pick(&PEOPLE[..3])));
+    match rng.below(7) {
+        0 => attempt(|| c.propose_role(role, who)),
+        1 => attempt(|| c.approve_role(proposer)),
+        2 => attempt(|| c.cancel_role(proposer)),
+        3 => attempt(|| c.apply_role(proposer)),
+        4 => attempt(|| c.pause()),
+        5 => attempt(|| c.unpause()),
+        _ => attempt(|| c.revoke_agent()),
+    }
+}
+
+fn roles_distinct(c: &Keyfree) {
+    let mut held = vec![&c.owner, &c.guardian, &c.reserve];
+    if let Some(a) = &c.agent { held.push(a); }
+    for i in 0..held.len() { for j in i + 1..held.len() { assert_ne!(held[i], held[j], "one account holds two roles"); } }
+}
+
+#[test]
+fn prop_one_stolen_council_key_never_changes_the_council() {
+    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+    let mut taken = 0;
+    for thief in ["owner.testnet", "guardian.testnet", "reserve.testnet"] {
+        for _ in 0..1_000 {
+            let mut c = idle();
+            let council = (c.owner.clone(), c.guardian.clone(), c.reserve.clone());
+            let mut t = 1_000;
+            for _ in 0..40 {
+                t += rng.below(2 * c.upgrade_delay_sec);
+                // the thief, or anyone outside the council
+                let caller = if rng.below(2) == 0 { thief } else { rng.pick(&PEOPLE[3..]) };
+                let was_paused = c.paused;
+                if role_action(&mut c, &mut rng, caller, t) { taken += 1; }
+                assert_eq!((c.owner.clone(), c.guardian.clone(), c.reserve.clone()), council, "{thief} alone changed the council");
+                assert!(c.retiring.is_none(), "{thief} alone retired the policy");
+                assert!(!was_paused || c.paused, "{thief} alone unpaused");
+                roles_distinct(&c);
+            }
+        }
+    }
+    assert!(taken > 10_000, "the sequences must do things, not only get refused ({taken} taken)");
+    println!("property: 3000 sequences of 40 actions by one council key and outsiders, {taken} actions taken, the council never changed");
+}
+
+type RoleHolders = (AccountId, AccountId, AccountId, Option<AccountId>, Option<AccountId>);
+
+#[test]
+fn prop_role_changes_wait_the_full_delay_after_the_last_approval() {
+    let mut rng = Rng(0xd1b5_4a32_d192_ed03);
+    let mut changed = 0;
+    for _ in 0..5_000 {
+        let mut c = idle();
+        let delay = c.upgrade_delay_sec;
+        // (proposer, role, account, the time the change got all the approvals it needs)
+        let mut ready: Vec<(AccountId, Role, AccountId, u64)> = vec![];
+        let mut t = 1_000;
+        for _ in 0..80 {
+            t += rng.below(delay);
+            let caller = rng.pick(&PEOPLE);
+            let snap = c.role_changes.clone();
+            let before: RoleHolders = (c.owner.clone(), c.guardian.clone(), c.reserve.clone(), c.retiring.clone(), c.agent.clone());
+            role_action(&mut c, &mut rng, caller, t);
+            let after: RoleHolders = (c.owner.clone(), c.guardian.clone(), c.reserve.clone(), c.retiring.clone(), c.agent.clone());
+            let made = if after.0 != before.0 { Some((Role::Owner, after.0.clone())) }
+                else if after.1 != before.1 { Some((Role::Guardian, after.1.clone())) }
+                else if after.2 != before.2 { Some((Role::Reserve, after.2.clone())) }
+                else if after.3 != before.3 { after.3.clone().map(|a| (Role::Retire, a)) }
+                else if after.4 != before.4 { after.4.clone().map(|a| (Role::Agent, a)) } // revoking the agent is a brake: no delay
+                else { None };
+            if let Some((role, account)) = made {
+                // Several council members may propose the same change; one of them must have been due.
+                let council = |a: &AccountId| *a == before.0 || *a == before.1 || *a == before.2;
+                let due = snap.iter().filter(|r| r.role == role && r.account == account).any(|ch| {
+                    let at = ready.iter().find(|r| r.0 == ch.proposer && r.1 == role && r.2 == account).map(|r| r.3);
+                    at.is_some_and(|at| t >= at + delay) && (role == Role::Agent || ch.approvals.iter().filter(|a| council(a)).count() >= 2)
+                });
+                assert!(due, "{role:?} = {account} applied at {t} without a proposal that had its approvals and the full {delay} s delay");
+                changed += 1;
+            }
+            ready.retain(|r| c.role_changes.iter().any(|x| x.proposer == r.0 && x.role == r.1 && x.account == r.2 && x.ready_at.is_some()));
+            for x in &c.role_changes {
+                if x.ready_at.is_some() && !ready.iter().any(|r| r.0 == x.proposer && r.1 == x.role && r.2 == x.account) {
+                    ready.push((x.proposer.clone(), x.role, x.account.clone(), t));
+                }
+            }
+            roles_distinct(&c);
+        }
+    }
+    assert!(changed > 400, "the sequences must change roles often enough to mean something ({changed} changes)");
+    println!("property: 5000 sequences of 80 actions by everyone, {changed} role changes, each after its approvals and the full delay");
+}
+
+// Gas limits and fees from tiny to absurd, to reach every branch and every overflow.
+fn amount(rng: &mut Rng) -> u128 {
+    match rng.below(6) {
+        0 => rng.below(3) as u128,
+        1 => rng.below(10_000_000) as u128,
+        2 => rng.below(100_000_000_000) as u128,
+        3 => rng.next() as u128,
+        4 => u128::MAX - rng.below(2) as u128,
+        _ => (rng.next() as u128) << 64 | rng.next() as u128,
+    }
+}
+
+#[test]
+fn prop_daily_budget_is_never_exceeded_and_refuses_only_when_it_must() {
+    let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+    let (mut signed, mut refused) = (0, 0);
+    for _ in 0..2_000 {
+        let mut c = idle();
+        let max_wei = if rng.below(5) == 0 { u128::MAX } else { rng.below(1_000_000_000_000_000_000) as u128 + 1 };
+        let max_tx = rng.below(12) as u32 + 1;
+        c.budgets.insert(84532, Budget { max_wei_per_day: max_wei, max_tx_per_day: max_tx });
+        let mut t = rng.below(10_000_000_000);
+        let (mut day, mut wei, mut txs) = (t / 86_400, 0u128, 0u32);
+        for _ in 0..30 {
+            t += rng.below(4 * 3_600); // a new UTC day now and then
+            if t / 86_400 != day { (day, wei, txs) = (t / 86_400, 0, 0); }
+            ctx_at("agent.testnet", 20, t, vec![]);
+            let p = Pending { gas_limit: amount(&mut rng), max_fee_per_gas: amount(&mut rng), ..pending() };
+            // the most a transaction can cost (2^128 - 1 wei at most), and whether today's total still fits
+            let cost = p.gas_limit.saturating_mul(p.max_fee_per_gas);
+            let fits = txs < max_tx && wei.checked_add(cost).is_some_and(|w| w <= max_wei);
+            let got = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.spent_after(&p)));
+            assert_eq!(got.is_ok(), fits, "budget {max_wei} wei / {max_tx} tx, used {wei} / {txs}, this one {cost}");
+            if let Ok(Some(s)) = got { c.spent.insert(84532, s); wei += cost; txs += 1; signed += 1; } else { refused += 1; }
+            let b = c.get_budget(84532).unwrap();
+            assert_eq!((b["used_wei_today"].as_str().unwrap().parse::<u128>().unwrap(), b["used_tx_today"].as_u64().unwrap() as u32), (wei, txs), "get_budget agrees");
+            assert!(wei <= max_wei && txs <= max_tx);
+        }
+    }
+    assert!(signed > 5_000 && refused > 5_000, "both outcomes often ({signed} signed, {refused} refused)");
+    println!("property: 2000 budgets x 30 requests, {signed} counted and {refused} refused, each exactly as the budget says");
+}
+
+// 400 random transactions serialized by viem (random_vectors.mjs -> evidence/random_txs.json): nonces, gas and fees
+// at every RLP length boundary up to 2^128 - 1, chain ids up to 2^64 - 1, code of 0..1100 bytes, all three kinds.
+#[test]
+fn random_transactions_encode_like_viem() {
+    ctx("keyfree.testnet", 10);
+    let v: Value = near_sdk::serde_json::from_str(include_str!("../../evidence/random_txs.json")).unwrap();
+    let n = |c: &Value, f: &str| c[f].as_str().unwrap().parse::<u128>().unwrap();
+    let h = |c: &Value, f: &str| hex::decode(c[f].as_str().unwrap().trim_start_matches("0x")).unwrap();
+    let cases = v["cases"].as_array().unwrap();
+    for (i, c) in cases.iter().enumerate() {
+        let init: Vec<u8> = c["init_seed"].as_str().map(|s| {
+            let seed: u64 = s.parse().unwrap();
+            (0..c["init_len"].as_u64().unwrap()).map(|j| (seed.wrapping_add(j.wrapping_mul(0x9e37_79b9_7f4a_7c15)) >> 56) as u8).collect()
+        }).unwrap_or_default();
+        let mut p = Pending { chain_id: n(c, "chain_id") as u64, nonce: n(c, "nonce") as u64, code_hash: String::new(), gas_limit: n(c, "gas_limit"),
+            max_fee_per_gas: n(c, "max_fee_per_gas"), max_priority_fee_per_gas: n(c, "max_priority_fee_per_gas"), init_code: init, salt: None, factory: None, since_block: 0 };
+        match c["kind"].as_str().unwrap() {
+            "plain" => {}
+            "factory" => { p.salt = Some(h(c, "salt")); p.factory = Some(h(c, "to")); }
+            _ => {
+                let (to, imp): ([u8; 20], [u8; 20]) = (h(c, "to").try_into().unwrap(), h(c, "implementation").try_into().unwrap());
+                p = proxy_pending(p.chain_id, p.nonce, &to, &imp, p.gas_limit, p.max_fee_per_gas, p.max_priority_fee_per_gas);
+            }
+        }
+        let tx = tx_of(&p);
+        assert_eq!(format!("0x{}", hex::encode(env::keccak256_array(&tx.build_for_signing()))), c["unsigned_keccak"].as_str().unwrap(), "case {i}: unsigned");
+        let sig = Signature { v: c["y_parity"].as_u64().unwrap(), r: strip(&h(c, "r")), s: strip(&h(c, "s")) };
+        assert_eq!(format!("0x{}", hex::encode(env::keccak256_array(&tx.build_with_signature(&sig)))), c["signed_keccak"].as_str().unwrap(), "case {i}: signed");
+    }
+    assert_eq!(cases.len(), 400);
 }

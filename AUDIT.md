@@ -12,6 +12,24 @@ Status words: **fixed** (changed, with a test), **partly** (the dangerous part i
 Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 `(cd contract && cargo test -- --test-threads=1)`. Versions are in [`contract/CHANGELOG.md`](contract/CHANGELOG.md).
 
+## Verification pass (code version v16, 2026-11-01): V1..V7
+
+Method: the product taken apart plane by plane after the reviews. A newcomer follows the README from a clean
+copy; an outsider installs a policy of their own from nothing; the live wasm runs in a local nearcore node
+([`evidence/sandbox.md`](evidence/sandbox.md)) with an access matrix of all 47 methods, every flow, faults of
+the MPC and of the policy's own balance; property tests run thousands of random action sequences; 400 random
+transactions are compared with viem.
+
+| Id | Finding | Severity | Status | What changed / test |
+|---|---|---|---|---|
+| V1 | A chain opened without a `SetBudget` rule has no daily limit, only the per-transaction caps | Low | partly | `setup/policy.mjs` proposes a budget together with every chain, and the live policy has one on both chains. The contract itself still allows a chain without one: a default budget is planned for the next version. `without_a_budget_only_the_caps_apply` |
+| V2 | With a budget of 2^128 - 1 wei, a day whose total would pass 2^128 is refused by the overflow check, not by the budget message | Info | by design | The request is refused either way (fail closed). Found by the property test's model: `prop_daily_budget_is_never_exceeded_and_refuses_only_when_it_must` |
+| V3 | The tool ignored a misspelled flag, sent council calls with missing numbers to the chain (gas spent on a refusal), rounded wei amounts above 2^53 in what it showed the council, and gave refusals and errors the same exit code | Low | fixed | Arguments checked before signing, exact integers both ways, exit code 2 for a refusal; seen live: a rule of `12345678901234567891` wei was shown as `…567000` (the rule was cancelled). 23 command-line tests in `packages/keyfree/test/cli.test.mjs` |
+| V4 | There was no way for someone else to install a policy on the live code: the old scripts installed a laptop build of v13 and upgraded it step by step | Low | fixed | `setup/policy.mjs` takes the wasm from the live policy, checks it against the reproducible build's sha256 and installs it keyless; run by a fresh testnet account with no link to this one |
+| V5 | A signature request already at the MPC is completed after a pause | Info | by design | A pause stops new requests; a signature once asked for may come back, like one that already left. Now tested in the sandbox: a pause between the request and a late answer, and the answer still gives the previewed transaction |
+| V6 | Real-runtime limits were never measured | Info | done | In nearcore: a request with the largest allowed code (49 152 bytes) costs 83.5 Tgas end to end; a policy short of NEAR for that storage refuses with `LackBalanceForState` before the MPC is asked, and a top-up from anyone fixes it; a wasm without `migrate` cannot be applied and leaves the old code and the proposal (N17) |
+| V7 | u128 amounts from the tool were bare JSON numbers (F19) | Low | fixed | The tool writes and reads integers exactly; the contract's views give u128 amounts as strings |
+
 ## Third review (code version v15, 2026-11-01): X1..X12
 
 Method: two research sessions built catalogs of current attack techniques from primary sources
@@ -85,13 +103,13 @@ data and position; no narrowing method widens anything for zero, `u128::MAX` or 
 | F16 | The long RLP branch is unverified | fixed: golden tests for 1 KB, 24 KB and 48 KB (N14) |
 | F17 | Supply chain: the RPC and the tool | partly: the tool compares the policy's bytes with viem before anything is signed; dependency versions are pinned. The RPC is still trusted for fees and receipts |
 | F18 | The borsh layout of the Read MPC payload is hard-coded | partly: a golden test on a pair Read MPC accepted live (`golden_payload_hash_of_the_confirmed_base_deploy`); it has to be rechecked when the MPC changes its format |
-| F19 | u128 values travel as bare JSON numbers | open (low): gas limits and fees in use stay far below 2^53 |
+| F19 | u128 values travel as bare JSON numbers | fixed in the tool (V7): exact integers both ways; the contract's views give u128 as strings |
 | F20 | Small things: payable methods, no `remove_code`, `allow_chain` does two jobs | fixed (v9, v11), see N16 |
 
 ## Not reviewed yet
 
-- The changes of v16 themselves were made after the third review and are covered by the tests named above.
-- The `keyfree` tool beyond its own tests and the review's probes.
+- The changes of v16 themselves were made after the third review; they are covered by the tests named above and
+  by the verification pass (V1..V7), which was not done by an independent reviewer.
 
 ## Requirements referred to in the code (R-ids)
 

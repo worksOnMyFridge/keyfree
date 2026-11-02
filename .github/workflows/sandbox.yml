@@ -1,0 +1,82 @@
+# The policy in a real NEAR runtime. A local nearcore sandbox runs the exact wasm of the live policy, rebuilt
+# reproducibly from the commit it was built from and checked against its sha256, next to a stand-in MPC
+# contract (sandbox/mock-mpc). Real accounts and access keys, gas, storage, promises, callbacks and batches;
+# nothing on testnet, no secrets. The run writes evidence/sandbox.md (uploaded as an artifact).
+name: sandbox
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["contract/**", "sandbox/**", "package.json", "package-lock.json", ".github/workflows/sandbox.yml"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_NEAR_VERSION: "0.22.0"
+  # The commit the live policy (build v16) was built from, and the sha256 of that wasm.
+  LIVE_COMMIT: e818bdcc706e356f0667c7235c183e55c30b6a3b
+  LIVE_SHA256: ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304
+  KF_BUILD: "v16"
+  NEAR_RPC_TIMEOUT_SECS: "120"
+
+jobs:
+  sandbox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install cargo-near (release binary, checksum verified)
+        run: |
+          base="https://github.com/near/cargo-near/releases/download/cargo-near-v${CARGO_NEAR_VERSION}"
+          file="cargo-near-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL -o "$file" "$base/$file"
+          curl -sSfL -o "$file.sha256" "$base/$file.sha256"
+          sha256sum -c "$file.sha256"
+          mkdir -p "$HOME/.local/bin" /tmp/cargo-near
+          tar -xzf "$file" -C /tmp/cargo-near
+          install "$(find /tmp/cargo-near -type f -name cargo-near | head -n1)" "$HOME/.local/bin/"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: live
+        with:
+          path: live-wasm
+          key: keyfree-policy-${{ env.LIVE_COMMIT }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.live.outputs.cache-hit != 'true'
+        with:
+          persist-credentials: false
+          ref: ${{ env.LIVE_COMMIT }}
+          path: live
+      - name: The live policy's wasm, built reproducibly from its commit
+        if: steps.live.outputs.cache-hit != 'true'
+        # Outside the workspace, so cargo-near sees the live commit's repository and not this one around it.
+        run: |
+          mv live /tmp/live
+          cd /tmp/live/contract
+          git -C /tmp/live log -1 --format='%H %s'
+          cargo near build reproducible-wasm
+          mkdir -p "$GITHUB_WORKSPACE/live-wasm"
+          cp target/near/keyfree_policy.wasm "$GITHUB_WORKSPACE/live-wasm/"
+      - name: The wasm under test is the live one
+        run: echo "$LIVE_SHA256  live-wasm/keyfree_policy.wasm" | sha256sum -c -
+      - name: Stand-in MPC contract
+        working-directory: sandbox/mock-mpc
+        run: cargo near build non-reproducible-wasm --locked
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - name: Sandbox tests
+        env:
+          POLICY_WASM: live-wasm/keyfree_policy.wasm
+          MOCK_WASM: sandbox/mock-mpc/target/near/mock_mpc.wasm
+        run: npm run test:sandbox
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: sandbox-evidence
+          path: evidence/sandbox.md
+          if-no-files-found: warn

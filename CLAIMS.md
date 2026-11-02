@@ -78,8 +78,9 @@ Deploys through the factory (each landed at the address the policy promised befo
 | What | Count | Run |
 |---|---|---|
 | Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 53 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
-| Policy contract unit tests (Rust) | 156 | `cd contract && cargo test -- --test-threads=1` |
-| keyfree package tests (5 unit, 8 attacks on the tool and the MCP server) | 13 | `cd packages/keyfree && npm test` |
+| Policy contract tests (Rust): unit, golden, 400 random transactions against viem, 3 property tests | 160 | `cd contract && cargo test -- --test-threads=1` |
+| The live wasm in a local nearcore node with a stand-in MPC: access matrix, flows, upgrade, retirement, faults | 16 | `sandbox` workflow (`evidence/sandbox.md`) |
+| keyfree package tests (unit, command-line checks, attacks on the tool and the MCP server) | 37 | `cd packages/keyfree && npm test` |
 | MCP self-check against the live policy | 1 script | `cd packages/keyfree && npm run smoke` |
 
 ## 7. A treasury upgrade: only the one the council allowed
@@ -137,7 +138,7 @@ and how many transactions it signs. Run: `v14/budget.mjs`, log `evidence/v14.log
 - Only testnets: NEAR testnet, Base Sepolia and Ethereum Sepolia. Nothing on mainnet.
 - Journal confirmation on Ethereum: NEAR Read MPC does not read Ethereum yet (8.4).
 - Arbitrum: the contract knows the chain, but no deploy there has been run.
-- `resign_proxy_upgrade`, `release`, `retry` and `confirm_stuck` are covered by unit tests only; the live runs had no MPC or network failure to recover from. `resign` ran live once (9.5).
+- `resign_proxy_upgrade`, `release`, `retry` and `confirm_stuck` never ran on testnet: the live runs had no MPC or network failure to recover from. `retry` and `release` ran in a local nearcore node against a stand-in MPC that failed on purpose (`evidence/sandbox.md`); the other two are covered by unit tests. `resign` ran live once (9.5).
 - Calls other than `upgradeTo` on a proxy: the policy cannot sign them at all.
-- Retiring a policy (`sweep`, `finish_retire`) is covered by unit tests only; the live policy is kept for review.
+- Retiring a policy (`sweep`, `finish_retire`) never ran on testnet, the live policy is kept for review; it ran end to end in a local nearcore node (`evidence/sandbox.md`).
 - In the live run the owner key sat on the same laptop as the agent. See SECURITY.md.

@@ -6,13 +6,15 @@
   "description": "Keyfree: rules in a NEAR contract, NEAR MPC signs, no private key anywhere. Scripts only; the packages live in packages/.",
   "scripts": {
     "attacks": "node attacks/run.mjs",
-    "test:factory": "node --test factory/factory.test.mjs"
+    "test:factory": "node --test factory/factory.test.mjs",
+    "test:sandbox": "node --test sandbox/policy.test.mjs"
   },
   "devDependencies": {
     "@ethereumjs/evm": "10.1.3",
     "@ethereumjs/util": "10.1.3",
     "binaryen": "132.0.0",
     "near-api-js": "7.3.1",
+    "near-sandbox": "0.3.4",
     "solc": "0.8.28",
     "viem": "2.57.11"
   }
