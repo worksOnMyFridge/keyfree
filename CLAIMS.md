@@ -131,6 +131,17 @@ and how many transactions it signs. Run: `v14/budget.mjs`, log `evidence/v14.log
 | 9.5 | A re-sign keeps the nonce and the content, and counts against the budget. | The day's first signature (journal line 13) was never broadcast. `resign` gave the same nonce, code and salt with fresh fees ([2B6QQ5jy…](https://testnet.nearblocks.io/txns/2B6QQ5jyyUJ7jqE72JV2Y7VBRDByvnJqxPXdiAWp7nEd)); it landed as [0xb22a858d…](https://sepolia.basescan.org/tx/0xb22a858d71c6c341f0c64fa876f231a091b980ba56f179f3e5f84191008ff1bf), Counter(1) at the promised `0x5fa0…f57d`, and the budget showed 2 transactions used. |
 | 9.6 | The fixes of the third security review run live, installed the same way. | The `build` workflow at commit `e818bdc`: 383 323 bytes, sha256 `ee660188…d304`; proposed [ACh6bvaL…](https://testnet.nearblocks.io/txns/ACh6bvaLmugXXTHYtat1Fq7CCYajoB9Za5XhRRW44D3K), applying early refused, installed by [AV3zHMa6…](https://testnet.nearblocks.io/txns/AV3zHMa6Qi33te13WkWvSYL4kCogX5SCHSGZgrZf6qCh): build `v16`, version 6, keys `[]`; rules, nonces and the day's budget (2 of 10 used) kept. |
 
+## 10. Someone else's policy, from nothing
+
+A fresh testnet account with no link to the demo (`kf-outsider-494bd7.testnet`, 10 NEAR from the testnet
+helper) followed "Run your own policy" in the README with `setup/policy.mjs`, then used the `keyfree` tool.
+
+| # | Claim | Evidence |
+|---|---|---|
+| 10.1 | It runs the live policy's code, installed keyless. | `setup/policy.mjs wasm` took the code from `policy13` and matched sha256 `ee660188…d304`; `policy.kf-outsider-494bd7.testnet` has 0 access keys, build `v16`, version 1 (`keyfree status`). Its ETH address `0x4ca9…031d` came from the MPC. |
+| 10.2 | Its rules waited the delay; its council worked from the tool. | Rules 0–4 applied after the 60 s delay; the council CLI's early `apply` was refused `rule delay not over`. |
+| 10.3 | Its agent deployed the factory and then Counter(1) without any key. | Factory [0x7069d601…](https://sepolia.basescan.org/tx/0x7069d6014e740d7a96478df721837be8262e35789621b14d38690b925b9ac8a7) ([NEAR](https://testnet.nearblocks.io/txns/8DKGFPi2rJ4WZgrFnNnApWojb2sW1uq2cMzyS3YJ2By1)) at `0x7716…b766`, serving only the policy's address; rule 5 set it after the delay. `keyfree deploy` with the agent's function-call key: Counter(1) [0xbd514782…](https://sepolia.basescan.org/tx/0xbd514782ec5127efcf4b740f2a1c8df5fe6abc3fc11d656459ddcfa045e5878c) ([NEAR](https://testnet.nearblocks.io/txns/w3i2zLjA84LvvotEUwhG1CM4eyB5cPn5rmQNNN7RxRf)) at `0xa413…3169`, `number()` = 1. Counter(999): `REFUSED code not on the allow list`, exit code 2. |
+
 ## Not claimed (yet)
 
 - Not every journal line is confirmed. Read MPC confirmation is a separate call made for the runs above; Base nonce 11 (the second treasury proxy) and all Ethereum lines stay `signed`, the Ethereum ones because Read MPC does not read Ethereum yet (8.4).
