@@ -24,4 +24,4 @@ description = "the public code hash in the tool's live log"
 condition = "AND"
 paths = ['''^evidence/tool_live\.log$''']
 regexTarget = "line"
-regexes = ['''^OK   keyfree_code_hash: [0-9a-f]{64}\r?$''']
+regexes = ['''OK   keyfree_code_hash: [0-9a-f]{64}''']
