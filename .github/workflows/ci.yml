@@ -1,5 +1,6 @@
 # Offline checks on every push and pull request: the policy's unit tests and the attack bench (both run the
-# real contract code on near-sdk's mocked chain), the tool's tests, and the factory on an in-process EVM.
+# real contract code on near-sdk's mocked chain), the tool's tests, and the factory on an in-process EVM;
+# then the dependency audits and a secret scan of the whole history.
 # No secrets, no network calls to NEAR or EVM chains. Actions are pinned to full commit hashes.
 name: ci
 
@@ -61,3 +62,19 @@ jobs:
           cd contract && cargo audit
       - name: npm audit (production dependencies of the keyfree package)
         run: npm audit --omit=dev --prefix packages/keyfree
+
+  secrets:
+    # gitleaks over the whole history, with its default rules plus NEAR keys (.gitleaks.toml).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: gitleaks 8.30.1 (release archive checked against its published sha256)
+        run: |
+          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git --config .gitleaks.toml --redact --no-banner --exit-code 1 .

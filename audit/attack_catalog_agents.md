@@ -217,7 +217,7 @@ Core frameworks used throughout:
 **G39. Slopsquatting:** the agent installs a hallucinated package name that an attacker has registered.
 - Test: log every `npm install`/`pip install` the agent proposes. Require an allowlist or human approval for new deps. Check suggested names against the registry age.
 - Severity here: High.
-- Sources: https://labs.cloudsecurityalliance.org/research-rb/csa-research-note-slopsquatting-ai-coding-assistant-supply-c/ (Spracklen et al., USENIX Security 2025: ~19.7% hallucinated package names, 43% repeat every run; figures from secondary summaries)
+- Sources: https://www.usenix.org/conference/usenixsecurity25/presentation/spracklen (Spracklen et al., USENIX Security 2025: ~19.7% hallucinated package names, 43% repeat every run)
 
 **G40. A compromised AI tool or extension release** (the agent tool itself ships a malicious prompt).
 - Test: pin agent CLI/extension versions in CI. Verify publisher signatures. Never run with all-tools-trusted flags in an environment that holds keys.

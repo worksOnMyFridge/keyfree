@@ -211,12 +211,12 @@ moves the policy to a reproducible build without a key, and `v14/budget.mjs` set
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
 | `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
-| `.github/workflows/` | `ci`: tests and the attack bench on every push; `build`: the reproducible build of the policy |
+| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push; `build`: the reproducible build of the policy |
 | `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
 
 ## Security
 
-Read [SECURITY.md](SECURITY.md) and, for every finding of the two security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
+Read [SECURITY.md](SECURITY.md) and, for every finding of the three security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
 council members plus the delay, or the owner plus the delay while the other two stay silent. Keep the
 council keys on separate devices, never where the agent runs; `keyfree status` warns when a council key is on
 the machine it runs on.
@@ -233,7 +233,7 @@ is one: run it on a schedule (cron, a scheduled CI job) and send the alert to th
   is no earlier Keyfree code.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
-- **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Two security reviews were
+- **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Three security reviews were
   done by separate AI reviewer sessions; their findings are fixed with tests.
 - **License.** Apache-2.0 ([LICENSE](LICENSE)). The Solidity contracts (`factory/`, `packages/keyfree/demo/`)
   carry `SPDX-License-Identifier: MIT`: the header is part of their bytecode metadata, so changing it would

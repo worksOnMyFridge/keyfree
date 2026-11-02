@@ -43,7 +43,7 @@ try {
   check(missing.length === 0, `every method the live code exports is still there (${oldNames.size} -> ${newNames.size})${missing.length ? `, missing: ${missing}` : ""}`);
   const imports = WebAssembly.Module.imports(new WebAssembly.Module(B)).map((i) => i.name);
   check(imports.includes("panic_utf8") && B.includes("code not on the allow list"), "refusals keep their text (panic_utf8 imported, messages present)");
-  check(!/Users[\\/]|la1wo|\/home\/runner/.test(B.toString("latin1")), "no machine path inside the wasm");
+  check(!/[A-Za-z]:\\|Users[\\/]|\/home\/runner/.test(B.toString("latin1")), "no machine path inside the wasm");
   if (fails) throw new Error("offline checks failed, nothing proposed");
 
   const before = { status: await view(P, "get_status"), rules: await view(P, "get_rules"), base: await view(P, "get_next_nonce", { chain_id: 84532 }), eth: await view(P, "get_next_nonce", { chain_id: 11155111 }) };

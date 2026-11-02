@@ -49,9 +49,9 @@ only as safe as that place.
   journal can lie. Keyfree adds rules in front of it; it does not remove that trust.
 - **The EVM RPC** the tool talks to: the tool checks what the policy built against viem and what MPC signed
   against what it checked, so a lying RPC can make a deploy fail or look pending, not change what is signed.
-- **The policy code.** It is open and tested (156 unit tests, golden tests against viem, an attack bench of 63 attacks: `npm run attacks`, three AI security reviews in AUDIT.md). During development
-  it went through two security reviews, each done by a separate AI reviewer session that did not write the
-  code; their findings were fixed with tests. It has not had a professional human audit.
+- **The policy code.** It is open and tested (156 unit tests, golden tests against viem, an attack bench of 63 attacks: `npm run attacks`). During development
+  it went through three security reviews, each done by a separate AI reviewer session that did not write the
+  code; their findings were fixed with tests (AUDIT.md). It has not had a professional human audit.
 
 ## Known limits
 
@@ -80,7 +80,7 @@ only as safe as that place.
 - **Reproducible from v14.1 on.** The live code is a `cargo near` reproducible build (README, "Check which
   code the live policy runs"). Versions up to v14 were built on a laptop and cannot be rebuilt byte for byte.
 - Testnets only so far (Base Sepolia, Ethereum Sepolia); Arbitrum not run yet; see "Not claimed" in
-  CLAIMS.md. The findings of the two security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
+  CLAIMS.md. The findings of the three security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
 
 ## Reporting
 

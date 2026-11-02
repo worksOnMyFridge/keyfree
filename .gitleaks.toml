@@ -1,0 +1,11 @@
+# gitleaks rules for this repository: the default set plus NEAR account keys.
+# Public keys (about 44 base58 characters after "ed25519:") are fine to publish; a secret key is 64 bytes,
+# about 88 characters, and must never appear.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "near-ed25519-secret-key"
+description = "NEAR ed25519 secret key"
+regex = '''ed25519:[1-9A-HJ-NP-Za-km-z]{80,90}'''
+keywords = ["ed25519:"]

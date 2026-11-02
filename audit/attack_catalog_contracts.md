@@ -19,7 +19,7 @@ Legend:
 2. **C2 No automatic rollback across receipts.** State written before the `sign` / `verify_foreign_transaction` call (reserved nonce, budget spent, pending entry) persists if the MPC call fails. Only the callback can undo it.
    - Test: in sandbox, point the signer at a mock that fails, times out or returns garbage. Afterwards check the nonce, the daily budget and the pending map. Each must be restored or marked "stuck" deterministically.
    - Severity: High
-   - Sources: https://docs.near.org/smart-contracts/security/cross-contract-calls/callback-panics , https://docs.near.org/develop/contracts/crosscontract
+   - Sources: https://docs.near.org/smart-contracts/security/cross-contract-calls/callback-panics , https://docs.near.org/smart-contracts/anatomy/crosscontract
 
 3. **C3 Callback out-of-gas.** "Never panics" does not cover running out of gas. If the callback runs out of gas, its own state changes revert and the request stays pending forever with its nonce reserved.
    - Test: measure the callback's worst-case gas (ecrecover, plus RLP of the maximum-size init code, plus logs). Assert that the statically reserved callback gas is at least that plus a margin. Call the entry method with the minimum prepaid gas that still passes and confirm that the callback completes.
@@ -49,7 +49,7 @@ Legend:
 8. **C8 Function-call key allowance drain.** Gas spent through the agent's function-call key is paid from the contract's own balance up to the allowance, and the allowance is unlimited if omitted. A stolen key can burn that budget with failing calls and can push the account toward C7.
    - Test: inspect the access key: allowance finite and non-zero, receiver = self, exactly 8 methods. Spam failing calls in sandbox and measure the drain against the storage reserve.
    - Severity: Medium
-   - Sources: https://docs.near.org/protocol/accounts-contracts/access-keys , https://nomicon-pr-522-go05.onrender.com/DataStructures/AccessKey
+   - Sources: https://docs.near.org/protocol/accounts-contracts/access-keys , https://nomicon.io/DataStructures/AccessKey
 
 9. **C9 Privileged methods reachable with a function-call key.** Function-call keys cannot attach NEAR, so requiring 1 yoctoNEAR (`assert_one_yocto`) on owner, guardian and council methods makes them unreachable through any function-call key.
    - Test: sign each privileged method with the agent key and with a 0 deposit. Every call must fail.
@@ -64,7 +64,7 @@ Legend:
 11. **C11 Borsh layout break on self-upgrade.** New code that cannot deserialize `STATE` panics on every call. On a keyless account nobody can redeploy, so the contract is permanently bricked.
     - Test: in sandbox, deploy v(n), fill its state, then run the full upgrade with `migrate` to v(n+1). Also test a missing `migrate`, a failing `migrate`, and an old-layout enum variant. Confirm that `DeployContract` and `migrate` run as one batch, so a failure reverts both.
     - Severity: Critical
-    - Sources: https://docs.near.org/smart-contracts/anatomy/serialization , https://docs.near.org/develop/contracts/crosscontract
+    - Sources: https://docs.near.org/smart-contracts/anatomy/serialization , https://docs.near.org/smart-contracts/anatomy/crosscontract
 
 12. **C12 Staged wasm rejected by the runtime.** If the toolchain emits wasm features the NEAR VM does not accept, the deploy action fails and the upgrade path breaks.
     - Test: deploy the exact staged bytes to a scratch sandbox or testnet account before the delay ends. Build only with the pinned cargo-near reproducible image.
@@ -93,7 +93,7 @@ Legend:
 16. **C16 JSON integer precision.** u64/u128 values sent as JSON numbers lose precision above 2^53 in JavaScript clients (CLI, MCP, frontends). Caps, fees and nonces must be `U64`/`U128` strings.
     - Test: send 2^53+1 and very large fees through the CLI/MCP path and compare the value stored on-chain.
     - Severity: Medium
-    - Sources: https://docs.near.org/smart-contracts/anatomy/serialization , https://docs.near.org/smart-contracts/anatomy/serialization-protocols
+    - Sources: https://docs.near.org/smart-contracts/anatomy/serialization
 
 17. **C17 Timestamp and window assumptions.** `block_timestamp` is in nanoseconds. Daily budget windows and public delays built on it can suffer unit mix-ups (ms vs ns), off-by-one at the day rollover, and small producer-controlled drift.
     - Test: unit tests at each window boundary (t-1, t, t+1 ns) for the budget reset and for delay expiry.
