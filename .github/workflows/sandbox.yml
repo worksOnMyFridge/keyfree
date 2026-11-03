@@ -14,10 +14,10 @@ permissions:
 
 env:
   CARGO_NEAR_VERSION: "0.22.0"
-  # The commit the live policy (build v16) was built from, and the sha256 of that wasm.
-  LIVE_COMMIT: e818bdcc706e356f0667c7235c183e55c30b6a3b
-  LIVE_SHA256: ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304
-  KF_BUILD: "v16"
+  # The commit the live policy (build v17) was built from, and the sha256 of that wasm.
+  LIVE_COMMIT: ff925fdd05d09ddeba95dc7b9a1789752860fa97
+  LIVE_SHA256: 3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3
+  KF_BUILD: "v17"
   NEAR_RPC_TIMEOUT_SECS: "120"
 
 jobs:

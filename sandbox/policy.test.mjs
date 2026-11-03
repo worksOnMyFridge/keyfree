@@ -124,10 +124,11 @@ async function applyRules(ids, by = acc.guardian, policy = POL) {
   for (const id of ids) await passed(call(by, policy, "apply_rule", { id }), `apply_rule ${id}`);
 }
 // A second policy for the fault tests, so the main run's nonces and budget stay as counted: installed, its
-// address derived, chain 84532 open from nonce 0, the given codes allowed. Returns its ETH address.
+// address derived, chain 84532 open from nonce 0 with a budget, the given codes allowed. Returns its ETH address.
 async function prepare(policy, codes) {
   const eth = (await passed(call(acc.owner, policy, "setup", {}, { gas: "100" }), "setup")).value;
-  const ids = [await propose({ AllowChain: { chain_id: CHAIN, next_nonce: 0, min_fee_per_gas: FLOOR } }, policy)];
+  const ids = [await propose({ AllowChain: { chain_id: CHAIN, next_nonce: 0, min_fee_per_gas: FLOOR } }, policy),
+    await propose({ SetBudget: { chain_id: CHAIN, max_wei_per_day: BIG_BUDGET, max_tx_per_day: 100 } }, policy)];
   for (const code of codes) ids.push(await propose({ AllowCode: { code_hash: hashOf(code) } }, policy));
   await applyRules(ids, acc.guardian, policy);
   return eth;
@@ -185,12 +186,12 @@ test("install: deploy + init + key deletion in one transaction leave a keyless p
   POL = await install("policy");
   assert.equal((await provider.viewAccessKeyList({ accountId: POL })).keys.length, 0);
   const st = await view(POL, "get_status");
-  assert.equal(st.build, "v16");
+  assert.equal(st.build, "v17");
   assert.equal(st.version, 1);
   assert.equal((await provider.viewAccount({ accountId: POL })).code_hash, b58encode(sha256(POLICY)));
   await refused(call(acc.stranger, POL, "new", { owner: ID("stranger"), agent: ID("agent"), guardian: ID("guardian"), reserve: ID("reserve"), mpc: ID("mpc"), path: "x", ...DELAYS }), "only the contract account");
   await refused(call(acc.owner, POL, "new", { owner: ID("owner"), agent: ID("agent"), guardian: ID("guardian"), reserve: ID("reserve"), mpc: ID("mpc"), path: "x", ...DELAYS }), "only the contract account");
-  note(`installed ${POL} in one transaction: 0 access keys, code hash = the wasm under test, build v16; init again refused for every account`);
+  note(`installed ${POL} in one transaction: 0 access keys, code hash = the wasm under test, build v17; init again refused for every account`);
 });
 
 test("access matrix: every method x every role on a fresh policy", async () => {
@@ -298,6 +299,17 @@ test("rules: the owner proposes, any council member applies, only after the dela
   assert.equal((await view(POL, "get_budget", { chain_id: CHAIN })).max_wei_per_day, String(BIG_BUDGET));
   assert.equal(await view(POL, "get_next_nonce", { chain_id: CHAIN }), 0);
   note(`rules: ${ids.length} proposed by the owner; refused for agent and guardian, refused before the delay, applied by the guardian after it; a budget of ${BIG_BUDGET} wei reads back exactly`);
+  // A chain open without a budget signs nothing (AUDIT.md, V1): the agent's request stops before the MPC is asked.
+  const OTHER = 11155111;
+  const asked = await signs();
+  await applyRules([await propose({ AllowChain: { chain_id: OTHER, next_nonce: 0, min_fee_per_gas: FLOOR } })]);
+  const noBudget = { ...deployArgs(factoryInit, 3_000_000), chain_id: OTHER };
+  await assert.rejects(view(POL, "preview", noBudget), /no daily budget on chain 11155111/);
+  await refused(call(acc.agentKey, POL, "request_deploy", noBudget), "no daily budget on chain 11155111");
+  assert.deepEqual(await signs(), asked, "the MPC was not asked");
+  assert.equal(await view(POL, "get_next_nonce", { chain_id: OTHER }), 0);
+  assert.equal(await view(POL, "get_entry", { chain_id: OTHER, nonce: 0 }), null);
+  note("a chain opened without a budget: preview and the agent's request refused with no daily budget on chain 11155111; the MPC was not asked, the nonce did not move, no journal line");
 });
 
 let FACTORY;
