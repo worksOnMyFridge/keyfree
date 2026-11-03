@@ -264,11 +264,12 @@ for (const [name, viewport] of [["phone", { width: 375, height: 812 }], ["small 
       assert.equal(wide, 0, "a panel leaves the window");
       assert.deepEqual(cut, [], "cut off at the panel's edge");
       if (viewport.width <= 640) {
-        // A phone shows every column as a labelled line; the label is CSS, so it is read from the computed style.
+        // A phone shows every column as a labelled line. The label is CSS attr(): browsers report its computed value
+        // differently, so the check is that a ::before exists on each cell and the cell carries the text.
         const labels = await page.evaluate(() => [...document.querySelectorAll("#chains tr:first-child td, #journal tr:first-child td")].map((td) => ({
-          label: getComputedStyle(td, "::before").content, right: td.getBoundingClientRect().right, stacked: getComputedStyle(td).display !== "table-cell",
+          label: td.dataset.label, before: getComputedStyle(td, "::before").content, right: td.getBoundingClientRect().right, stacked: getComputedStyle(td).display !== "table-cell",
         })));
-        assert.ok(labels.every((l) => l.stacked && l.right <= win), JSON.stringify(labels));
+        assert.ok(labels.every((l) => l.stacked && l.right <= win && !["none", "normal"].includes(l.before)), JSON.stringify(labels));
         for (const want of ["Daily budget", "ETH on the address", "Contract", "Transaction"]) assert.ok(labels.some((l) => l.label.includes(want)), `no "${want}" label`);
       }
       if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/${NAME}-${name.replace(" ", "_")}-${colorScheme}.png`, fullPage: true });

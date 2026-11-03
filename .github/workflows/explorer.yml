@@ -33,9 +33,16 @@ jobs:
       - name: Stubbed nodes
         env:
           BROWSER: ${{ matrix.browser }}
-        run: npm test
+          SHOTS: shots
+        run: mkdir -p shots && npm test
       - name: The real policy through the real nodes
         env:
           BROWSER: ${{ matrix.browser }}
           LIVE: "1"
         run: node --test --test-name-pattern="real policy" --test-timeout=180000 explorer.test.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: shots-${{ matrix.browser }}
+          path: explorer/shots
+          if-no-files-found: warn
