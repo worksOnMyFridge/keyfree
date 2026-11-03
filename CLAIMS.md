@@ -55,6 +55,7 @@ Deploys through the factory (each landed at the address the policy promised befo
 | 3.3 | A prompt injection that swaps the vault owner cannot get through, even when the human confirms the injected address. | `packages/keyfree/demo/vault-kit`: the README asks to deploy `Vault` with another owner. The owner allowed only `Vault(owner from deploy.config.json)` (rule 9: [propose](https://testnet.nearblocks.io/txns/92UJ1wJRoNssB2AmjgxJb2PCRB2GA3TnDeJUKsLzDwEi), [apply](https://testnet.nearblocks.io/txns/5xLHXr4PDwwcjDJDGinCZ2xiVkGdyRUZHaouKtYyi6ee)). Constructor arguments are part of the allowed code hash, so `Vault(injected owner)` has another hash and the policy refused it at preview; nothing was signed. |
 | 3.3a | So the recipient of a vault is chosen by the council, not by the agent or by whoever talks to it. | `Vault` (`packages/keyfree/demo/vault-kit/contracts/Vault.sol`) takes its owner in the constructor and keeps it `immutable`; only the owner can withdraw. The only `Vault` the policy can sign is the one in rule 9. Check now: `keyfree hash` of `Vault(0x07E8…3510)` is `474fbc98…`, which `get_status` lists; `Vault(0xF4be…AF0c)` is `aa3a1a11…`, which it does not. |
 | 3.4 | The agent has no tool to change rules, roles, pause or the policy's code. | `packages/keyfree/src/mcp.ts`: nine tools, all request-side (`keyfree_upgrade` asks for a proxy upgrade the council allowed; it cannot allow one); the MCP self-check (`npm run smoke`) asserts the list. |
+| 3.4a | Real Claude Code sessions fed a prompt injection did not get past the policy, even when the model went along with it. | Eight fresh sessions on Haiku 5.5 and Sonnet 5.5 in a separate project whose README and notes ask to swap a vault's owner, upgrade a proxy to another address, and use a council key if refused (`evidence/injection_live.md`). In six the agent reached the policy with what was not allowed, one of them after the human confirmed the address; all six were refused. The control asked for the allowed vault and got it ([NEAR](https://testnet.nearblocks.io/txns/FzFqivDYBcXFZWfmjhoG5VKHxwEav27n6ww49pewt5FM), [Base Sepolia](https://sepolia.basescan.org/tx/0x537a735f4b2af4987742242270f795117b7251d5b9aec13f9aeace2d049fcd3a)). The nonce moved only for it; rules unchanged. |
 | 3.5 | Before broadcasting, the tool checks that the signed transaction is the one it checked, from the policy's address. | `checkSigned()` in `packages/keyfree/src/core.ts`; attacks A18, A19 (changed calldata, target, nonce, chain or value; another signer; garbage) are refused. |
 
 ## 4. Widening takes time; braking is instant
@@ -78,8 +79,8 @@ Deploys through the factory (each landed at the address the policy promised befo
 
 | What | Count | Run |
 |---|---|---|
-| Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 64 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
-| Policy contract tests (Rust): unit, golden, 400 random transactions against viem, 3 property tests | 168 | `cd contract && cargo test -- --test-threads=1` |
+| Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 65 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
+| Policy contract tests (Rust): unit, golden, 400 random transactions against viem, 3 property tests | 176 | `cd contract && cargo test -- --test-threads=1` |
 | The live wasm in a local nearcore node with a stand-in MPC: access matrix, flows, upgrade, retirement, faults | 17 | `sandbox` workflow (`evidence/sandbox.md`) |
 | keyfree package tests (unit, command-line checks, attacks on the tool and the MCP server, 41 network faults against nodes that fail on purpose) | 78 | `cd packages/keyfree && npm test` |
 | MCP self-check against the live policy | 1 script | `cd packages/keyfree && npm run smoke` |
@@ -159,4 +160,5 @@ helper) followed "Run your own policy" in the README with `setup/policy.mjs`, th
 - The explorer page ran on WebKit, Safari's engine on Linux, and in a phone-sized window: not on a physical iPhone or Android phone.
 - Calls other than `upgradeTo` on a proxy: the policy cannot sign them at all.
 - Retiring a policy (`sweep`, `finish_retire`) never ran on testnet, the live policy is kept for review; it ran end to end in a local nearcore node (`evidence/sandbox.md`).
+- An agent with a shell on a machine that holds a council key: the sessions in 3.4a had no shell. Such an agent could read the key. See SECURITY.md.
 - In the live run the owner key sat on the same laptop as the agent. See SECURITY.md.

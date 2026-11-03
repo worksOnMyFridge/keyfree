@@ -867,9 +867,10 @@ impl Keyfree {
     }
 
     // A request that got no signature: a new deploy stays bound to its nonce (`stuck`); a re-sign of an
-    // already signed line opens nothing, because that line keeps its nonce and content anyway.
+    // already signed line opens nothing, because that line keeps its nonce and content anyway. So does one whose
+    // line Read MPC confirmed while it ran (review finding Y1): that nonce has landed.
     fn park(&mut self, p: Pending, why: &str) {
-        let resign = self.line(&key(p.chain_id, p.nonce)).map(|(s, _)| s) == Some(SIGNED);
+        let resign = matches!(self.line(&key(p.chain_id, p.nonce)), Some((SIGNED | CONFIRMED, _)));
         if resign {
             env::log_str(&format!("keyfree: re-sign of nonce {} {why}; the signed deploy stays as it was", p.nonce));
         } else {
@@ -895,6 +896,12 @@ impl Keyfree {
             Ok(raw_hex) => {
                 let next = self.next_nonce.get(&p.chain_id).copied().unwrap_or(0).max(p.nonce + 1);
                 self.next_nonce.insert(p.chain_id, next);
+                // Read MPC confirmed this line while the re-sign ran: the nonce is spent, this signature can never
+                // land, and a proved fact is not overwritten (review finding Y1).
+                if matches!(self.line(&key(p.chain_id, p.nonce)), Some((CONFIRMED, _))) {
+                    env::log_str(&format!("keyfree: re-sign of nonce {} dropped: the line is already confirmed", p.nonce));
+                    return None;
+                }
                 let tx_hash = env::keccak256_array(&hex::decode(&raw_hex[2..]).unwrap_or_default());
                 self.set_line(&key(p.chain_id, p.nonce), Some(tx_hash), SIGNED);
                 env::log_str(&format!("keyfree: signed chain {} nonce {} tx 0x{}", p.chain_id, p.nonce, hex::encode(tx_hash)));
@@ -918,7 +925,7 @@ impl Keyfree {
         let (status, tx_hash) = self.line(&k).unwrap_or_else(|| env::panic_str("no such deploy"));
         require!(status == SIGNED, "deploy is not waiting for confirmation");
         self.read_mpc(chain_id, &k, tx_hash, &log, &finality)
-            .then(Self::ext(env::current_account_id()).with_static_gas(Gas::from_tgas(10)).on_confirmed(chain_id, nonce))
+            .then(Self::ext(env::current_account_id()).with_static_gas(Gas::from_tgas(10)).on_confirmed(chain_id, nonce, hex::encode(tx_hash)))
     }
 
     // A stuck request whose late signature landed anyway: the agent hands over that signature as it appears on
@@ -986,10 +993,12 @@ impl Keyfree {
     }
 
     #[private]
-    pub fn on_confirmed(&mut self, chain_id: u64, nonce: u64) -> bool {
+    pub fn on_confirmed(&mut self, chain_id: u64, nonce: u64, tx_hash: String) -> bool {
         // The MPC contract already matched its answer to expected_payload_hash; never panic here.
         let ok = callback_json().is_ok();
-        if ok { self.set_line(&key(chain_id, nonce), None, CONFIRMED); }
+        // The hash bound when the proof was asked for: a re-sign may have changed the line's latest variant since.
+        let proved = hex::decode(&tx_hash).ok().and_then(|b| <[u8; 32]>::try_from(b).ok());
+        if ok { self.set_line(&key(chain_id, nonce), proved, CONFIRMED); }
         env::log_str(&format!("keyfree: chain {chain_id} nonce {nonce} {}", if ok { "CONFIRMED by Read MPC" } else { "not confirmed (timeout or mismatch), can retry" }));
         ok
     }

@@ -210,7 +210,7 @@ test("access matrix: every method x every role on a fresh policy", async () => {
     ["migrate (private)", "migrate", {}, NONE],
     ["on_derived (private)", "on_derived", {}, NONE],
     ["on_signed (private)", "on_signed", {}, NONE],
-    ["on_confirmed (private)", "on_confirmed", { chain_id: 1, nonce: 0 }, NONE],
+    ["on_confirmed (private)", "on_confirmed", { chain_id: 1, nonce: 0, tx_hash: "00" }, NONE],
     ["on_stuck_confirmed (private)", "on_stuck_confirmed", { chain_id: 1, nonce: 0, tx_hash: "00" }, NONE],
     ["propose_role (guardian, reserve, owner, retire)", "propose_role", { role: "Guardian", account: ID("newguardian") }, C3],
     ["propose_role (a new agent)", "propose_role", { role: "Agent", account: ID("newagent") }, ["owner"]],

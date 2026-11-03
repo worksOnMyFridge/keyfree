@@ -1,8 +1,8 @@
 # Security reviews
 
-Three security reviews were done by separate AI reviewer sessions that had no part in writing the code: two
-on 2026-10-25, and a third on 2026-11-01 against catalogs of current attack techniques (108 items, with
-sources). Each one read the code, ran its own probe tests and listed findings with a way to break them. This
+Four security reviews were done by separate AI reviewer sessions that had no part in writing the code: two
+on 2026-10-25, a third on 2026-11-01 against catalogs of current attack techniques (108 items, with
+sources), and a fourth on 2026-11-03 by another model, Claude Fable 5.1. Each one read the code, ran its own probe tests and listed findings with a way to break them. This
 page lists every finding, what was changed, and the test that now shows the fix. **This is not a
 professional audit.**
 
@@ -11,6 +11,20 @@ Status words: **fixed** (changed, with a test), **partly** (the dangerous part i
 
 Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 `(cd contract && cargo test -- --test-threads=1)`. Versions are in [`contract/CHANGELOG.md`](contract/CHANGELOG.md).
+
+## Fourth review (code version v17, 2026-11-03): Y1..Y5
+
+Method: a session on another model, with a clean clone and no keys, read the code and formed its own view before
+reading these documents, then proved each suspicion with a probe test. Read-only toward the chains. Its report,
+with what it tried and could not break and what it did not cover: [`audit/review_2026-11-03.md`](audit/review_2026-11-03.md).
+
+| Id | Finding | Severity | Status | What changed / test |
+|---|---|---|---|---|
+| Y1 | A `confirm` and a re-sign of one line can overlap. A late signature turned a confirmed line back into signed, naming a transaction that can never land; a failed or released re-sign made a landed nonce stuck, which holds every chain. The agent could do this alone | Medium | fixed (v18) | The answer of a re-sign changes nothing on a confirmed line and opens nothing. Checked here on the way: when the proof answered last, the line named the re-sign and not the transaction proved; now it names the one proved. `a_late_signature_does_not_overwrite_a_confirmed_line`, `a_signature_answered_first_does_not_take_the_confirmed_transactions_place`, `a_failed_resign_after_confirmation_opens_nothing`, `a_released_resign_after_confirmation_opens_nothing`, `a_failed_confirmation_changes_nothing_while_a_resign_runs` |
+| Y2 | A stuck request blocks all chains; with a brake on what it needs, `retry` is refused and only a widening through the delay gets out | Medium | by design, stated | A stuck slot per chain would change the layout and the tool's calls for a case that needs an MPC failure and a brake together; pausing stops signing without it. SECURITY.md, "One stuck request". `a_braked_stuck_request_cannot_be_retried`, `a_stuck_request_holds_new_requests_on_every_chain` |
+| Y3 | No brake recalls an issued signature; removing a proxy upgrade is moot after the request; a held-back signature holds later nonces | Medium | by design, stated | The reviewer proposed a council brake that burns the nonce with a self-transfer. Not added: it would be a second kind of content on a nonce and a new signing path, and whoever holds the signature can see it coming on NEAR and land first, so it promises more than it gives. SECURITY.md, "A signature cannot be recalled". `no_brake_recalls_a_proxy_upgrade_already_requested` |
+| Y4 | A chain whose nonce is ahead of the policy's can be repaired only by an upgrade; the tool said "tell the council" as if the council had a method | Low | by design, stated | The nonce never moves by hand (R18). The tool's message and SECURITY.md say what the way out is |
+| Y5 | The explorer's "Source commit" is what the wasm says about itself, and `setup` compares with a number in this repository, not a rebuild | Info | fixed | The page compares the account's code hash with the hash of the reproducible build and says so; the README's wording says what `setup` checks |
 
 ## Verification pass (code version v16, 2026-11-01): V1..V7
 
@@ -136,8 +150,10 @@ data and position; no narrowing method widens anything for zero, `u128::MAX` or 
 
 - The changes of v16 themselves were made after the third review; they are covered by the tests named above and
   by the verification pass (V1..V7), which was not done by an independent reviewer.
-- The same holds for v17 (V1), the one contract change since: a refusal on the signing path, with tests in the
-  contract and in a local nearcore node, and a live check (CLAIMS 9.7).
+- v17 was seen by the fourth review. v18 (Y1) came after it: a few lines in the signing callback, with tests in the
+  contract and a local nearcore node, not reviewed by anyone else.
+- The fourth review did not run the nearcore sandbox, a rebuild of the wasm or the page in a browser, and read the
+  Read MPC payload's encoding only through the authors' golden tests.
 
 ## Requirements referred to in the code (R-ids)
 

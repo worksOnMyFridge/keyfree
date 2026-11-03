@@ -14,7 +14,7 @@ by four different accounts:
 
 Brakes are instant and need one council member (owner, guardian or reserve): pause, revoke the agent, remove
 code or an allowed proxy upgrade, disable a chain, remove a factory, lower caps, cancel an upgrade or a rule
-proposal.
+proposal. Brakes stop new signatures, not those already issued (see "Known limits").
 
 Anything that widens power waits, and the wait cannot be shortened, not even by two members together:
 
@@ -52,7 +52,7 @@ only as safe as that place.
 - **The NEAR RPC** the tool talks to: the contract decides on chain, whatever a node says. A lying node can stop the
   tool or show it a false state, including a false ETH address, so a report of success is only as good as the node;
   `keyfree_confirm` and the explorers are the check. A retry's transaction is compared with its journal line too.
-- **The policy code.** It is open and tested (168 unit and property tests, golden and random-vector tests against viem, the live wasm in a local nearcore node, an attack bench of 64 attacks: `npm run attacks`). During development
+- **The policy code.** It is open and tested (176 unit and property tests, golden and random-vector tests against viem, the live wasm in a local nearcore node, an attack bench of 65 attacks: `npm run attacks`). During development
   it went through three security reviews, each done by a separate AI reviewer session that did not write the
   code; their findings were fixed with tests (AUDIT.md). It has not had a professional human audit.
 
@@ -66,6 +66,18 @@ only as safe as that place.
 - **A signed transaction is public.** The policy returns the signed raw transaction; anyone who sees it can
   broadcast it. That is sending, not a new signature: it can only spend the nonce on the content the rules
   allowed.
+- **A signature cannot be recalled.** An EVM transaction does not expire. A signature held back can land
+  whenever its holder likes, after a pause or a brake too, and later nonces wait behind it. Removing an allowed
+  proxy upgrade helps only before the agent asks for it. Burning the nonce with another transaction would not
+  settle it: the holder sees that coming and can land the signature first. So the council decides at the
+  moment it allows code or an upgrade, not after.
+- **One stuck request holds every chain.** A request the MPC did not sign blocks new requests on all chains until
+  it is retried. If the council then brakes what that request needs (its code, chain, factory or gas), `retry` is
+  refused too, and the way out is to allow it again through the rules delay, retry, and brake again. A stolen
+  council key waiting for an MPC failure could cause this. To stop signing without this effect, pause.
+- **A nonce that moved ahead.** If the address's nonce on a chain is ahead of the policy's (a wrong number in a
+  hand-made `AllowChain`), nothing can fix it but an upgrade of the policy: the nonce never moves by hand, on
+  purpose. `setup/policy.mjs` reads the real count.
 - **Deploys and one kind of call.** The policy signs contract creations (plain or through its own CREATE2
   factory) and `upgradeTo(implementation)` on a proxy, always with value 0. It signs no other call and no
   transfer.

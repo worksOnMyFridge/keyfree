@@ -1150,7 +1150,7 @@ fn odd_raw_answer_does_not_confirm_the_journal() {
     let mut c = idle();
     signed_line(&mut c, 2, SIGNED);
     ctx_answer(raw(b"not json"));
-    assert!(!c.on_confirmed(84532, 2));
+    assert!(!c.on_confirmed(84532, 2, hex::encode([1u8; 32])));
     assert_eq!(c.journal.get(&key(84532, 2)).unwrap().status, SIGNED);
 }
 
@@ -1451,13 +1451,17 @@ fn request_upgrade(c: &mut Keyfree, implementation: &str) {
 // A signature over the pending proxy upgrade that recovers to the policy's address: the golden R and s
 // recover to some key for any hash, so the test makes that key the policy's.
 fn sign_pending_as_the_policy(c: &mut Keyfree) {
+    the_golden_signature_is_the_policys(c);
+    assert!(c.handle_signed(answer(R, S, 0)).is_some());
+}
+
+fn the_golden_signature_is_the_policys(c: &mut Keyfree) {
     let hash = env::keccak256_array(&tx_of(c.pending.as_ref().unwrap()).build_for_signing());
     let mut rs = [0u8; 64];
     rs[..32].copy_from_slice(&hex::decode(R).unwrap());
     rs[32..].copy_from_slice(&hex::decode(S).unwrap());
     let pk = env::ecrecover(&hash, &rs, 0, true).unwrap();
     c.eth_address = Some(format!("0x{}", hex::encode(&env::keccak256_array(&pk)[12..])));
-    assert!(c.handle_signed(answer(R, S, 0)).is_some());
 }
 
 #[test]
@@ -1627,7 +1631,7 @@ fn read_mpc_answer_confirms_the_proxy_upgrade() {
     ctx("agent.testnet", 34);
     let _ = c.confirm(84532, 4, log_in(), "Safe".into());
     ctx_answer(raw(b"{\"payload_hash\":\"x\"}"));
-    assert!(c.on_confirmed(84532, 4));
+    assert!(c.on_confirmed(84532, 4, hex::encode(c.line(&key(84532, 4)).unwrap().1)));
     assert_eq!(c.get_entry(84532, 4).unwrap()["status"], "confirmed");
 }
 
@@ -1982,6 +1986,113 @@ fn migrate_reads_the_v14_layout() {
     let s = Keyfree::migrate();
     assert_eq!((s.version, s.allowed_code.len(), s.next_nonce.get(&84532).copied()), (4, codes, Some(4)));
     assert!(s.budgets.is_empty() && s.get_budget(84532).is_none());
+}
+
+// v18: review finding Y1. A confirm and a re-sign of the same line overlap: both start while the line is signed,
+// and their answers come in either order. What Read MPC proved stays proved, and names the transaction it proved.
+fn confirm_and_resign_in_flight() -> (Keyfree, [u8; 32]) {
+    let mut c = idle();
+    signed_line(&mut c, 2, SIGNED);
+    let (_, landed) = c.line(&key(84532, 2)).unwrap();
+    ctx("agent.testnet", 20);
+    let _ = c.confirm(84532, 2, log_in(), "Safe".into());
+    ctx("agent.testnet", 21);
+    let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
+    (c, landed)
+}
+
+#[test]
+fn a_late_signature_does_not_overwrite_a_confirmed_line() {
+    let (mut c, landed) = confirm_and_resign_in_flight();
+    ctx_answer(raw(b"{\"payload_hash\":\"x\"}"));
+    assert!(c.on_confirmed(84532, 2, hex::encode(landed)));
+    let e = c.get_entry(84532, 2).unwrap();
+    assert_eq!(e["status"], "confirmed");
+    the_golden_signature_is_the_policys(&mut c);
+    assert_eq!(c.handle_signed(answer(R, S, 0)), None, "a signature that can never land is not handed out");
+    assert!(c.pending.is_none());
+    let (status, tx) = c.line(&key(84532, 2)).unwrap();
+    assert_eq!((status, tx), (CONFIRMED, landed), "the fact stands");
+}
+
+#[test]
+fn a_signature_answered_first_does_not_take_the_confirmed_transactions_place() {
+    let (mut c, landed) = confirm_and_resign_in_flight();
+    sign_pending_as_the_policy(&mut c);
+    let (status, tx) = c.line(&key(84532, 2)).unwrap();
+    assert!(status == SIGNED && tx != landed, "the re-sign is the line's latest variant for now");
+    ctx_answer(raw(b"{\"payload_hash\":\"x\"}"));
+    assert!(c.on_confirmed(84532, 2, hex::encode(landed)));
+    assert_eq!(c.line(&key(84532, 2)).unwrap(), (CONFIRMED, landed), "the line names the transaction Read MPC proved");
+}
+
+#[test]
+fn a_failed_resign_after_confirmation_opens_nothing() {
+    let (mut c, landed) = confirm_and_resign_in_flight();
+    ctx_answer(raw(b"{\"payload_hash\":\"x\"}"));
+    assert!(c.on_confirmed(84532, 2, hex::encode(landed)));
+    ctx("keyfree.testnet", 22);
+    assert_eq!(c.handle_signed(Err(PromiseError::Failed)), None);
+    assert_eq!(c.get_open()["stuck"], Value::Null, "a landed, confirmed nonce is never stuck");
+    assert_eq!(c.line(&key(84532, 2)).unwrap(), (CONFIRMED, landed));
+}
+
+#[test]
+fn a_released_resign_after_confirmation_opens_nothing() {
+    let (mut c, landed) = confirm_and_resign_in_flight();
+    ctx_answer(raw(b"{\"payload_hash\":\"x\"}"));
+    assert!(c.on_confirmed(84532, 2, hex::encode(landed)));
+    ctx("agent.testnet", 21 + RELEASE_AFTER_BLOCKS + 1);
+    c.release();
+    assert_eq!(c.get_open()["stuck"], Value::Null);
+    assert_eq!(c.line(&key(84532, 2)).unwrap(), (CONFIRMED, landed));
+}
+
+#[test]
+fn a_failed_confirmation_changes_nothing_while_a_resign_runs() {
+    let (mut c, landed) = confirm_and_resign_in_flight();
+    sign_pending_as_the_policy(&mut c);
+    let before = c.line(&key(84532, 2)).unwrap();
+    ctx_answer(near_sdk::PromiseResult::Failed);
+    assert!(!c.on_confirmed(84532, 2, hex::encode(landed)));
+    assert_eq!(c.line(&key(84532, 2)).unwrap(), before);
+}
+
+// Review findings Y2 and Y3 are limits, kept and stated in SECURITY.md; these tests pin down what they are.
+#[test]
+#[should_panic(expected = "code not on the allow list")]
+fn a_braked_stuck_request_cannot_be_retried() {
+    let mut c = idle();
+    ctx("agent.testnet", 19);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    c.handle_signed(Err(PromiseError::Failed));
+    ctx("guardian.testnet", 20);
+    c.remove_code(pending().code_hash);
+    ctx("owner.testnet", 21);
+    let _ = c.retry(20_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "an earlier request did not finish")]
+fn a_stuck_request_holds_new_requests_on_every_chain() {
+    let mut c = contract();
+    c.handle_signed(Err(PromiseError::Failed));
+    c.next_nonce.insert(421614, 0);
+    c.fee_floor.insert(421614, 1);
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(421614, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+fn no_brake_recalls_a_proxy_upgrade_already_requested() {
+    let mut c = upgrade_allowed();
+    request_upgrade(&mut c, IMPL_V2);
+    sign_pending_as_the_policy(&mut c);
+    ctx("guardian.testnet", 31);
+    c.remove_proxy_upgrade(84532, PROXY.into(), IMPL_V2.into());
+    ctx("agent.testnet", 32);
+    let _ = c.resign_proxy_upgrade(84532, 4, 120_000, 30_000_000, 2_000_000);
+    assert_eq!(tx_of(c.pending.as_ref().unwrap()).input, upgrade_call(&addr20(IMPL_V2, "x")));
 }
 
 // v16: review findings X4 and X10.

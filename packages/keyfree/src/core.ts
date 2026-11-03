@@ -113,7 +113,7 @@ export class Keyfree {
       count = await c.getTransactionCount({ address, blockTag: "pending" });
     }
     if (count < nonce) throw new Error(`Nonce ${count} on ${chain.name} was signed but is not on chain, and anything newer would wait behind it. First ${RETRY_HOW}. Nothing was signed.`);
-    if (count > nonce) throw new Error(`The address's nonce on ${chain.name} (${count}) is ahead of the policy's next one (${nonce}): a signature for ${nonce} would be rejected. Nothing was signed; tell the policy's council.`);
+    if (count > nonce) throw new Error(`The address's nonce on ${chain.name} (${count}) is ahead of the policy's next one (${nonce}): a signature for ${nonce} would be rejected. Nothing was signed. The nonce never moves by hand: the council can only fix this with an upgrade of the policy.`);
   }
 
   private async rules(): Promise<Rules> {
