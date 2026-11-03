@@ -569,7 +569,9 @@ test("faults: two requests in the same moment never get one nonce twice", async 
 
 test("faults: a policy short of NEAR for its storage refuses the request before the MPC is asked; a top-up from anyone fixes it", async () => {
   const blob = toHexBytes(49_152, (i) => (i * 7 + 3) & 0xff);
-  const P = await install("lean", 3.9);
+  // Enough for the code and a little state at 10^-5 NEAR a byte, short of what the blob needs.
+  const lean = Math.ceil((POLICY.length / 1e5 + 0.06) * 100) / 100;
+  const P = await install("lean", lean);
   const eth = await prepare(P, [blob]);
   await assert.rejects(view(P, "preview", deployArgs(`${blob}00`, 3_000_000)), /init code too large/);
   const args = deployArgs(blob, 3_000_000);
@@ -585,7 +587,7 @@ test("faults: a policy short of NEAR for its storage refuses the request before 
   const r = await passed(call(acc.agent, P, "request_deploy", args), "request after the top-up");
   await checkRaw(r.value, pv.unsigned, eth);
   ev.gas.push(["request_deploy + MPC sign + on_signed (the largest allowed code, 49 152 bytes)", r.gas]);
-  note(`storage: a policy with 3.9 NEAR could not store a 49 152-byte request (LackBalanceForState): nothing changed and the MPC was never asked; 1 NEAR sent by a stranger, and the same request was signed (${tgas(r.gas)} Tgas); 49 153 bytes is refused`);
+  note(`storage: a policy with ${lean} NEAR could not store a 49 152-byte request (LackBalanceForState): nothing changed and the MPC was never asked; 1 NEAR sent by a stranger, and the same request was signed (${tgas(r.gas)} Tgas); 49 153 bytes is refused`);
 });
 
 test("the tool on the real contract: no MPC answer, a failed broadcast, a lost upgrade; retry recovers each with the same content", async () => {
