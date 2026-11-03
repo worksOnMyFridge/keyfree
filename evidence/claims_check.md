@@ -3,7 +3,7 @@
 Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the
 repository: every linked transaction and address, the live policy, every count, every quoted log line.
 
-Result: 113 of 114 checks agree, **1 do not**.
+Result: 114 of 114 checks agree.
 
 | | Check | Result |
 |---|---|---|
@@ -99,7 +99,7 @@ Result: 113 of 114 checks agree, **1 do not**.
 | ok | sandbox tests in CLAIMS.md | docs 17, repository 17 |
 | ok | offline attacks in README.md | docs 64, repository 64 |
 | ok | offline attacks in SECURITY.md | docs 64, repository 64 |
-| **FAIL** | offline attacks in CLAIMS.md | docs 63, repository 64 |
+| ok | offline attacks in CLAIMS.md | docs 64, repository 64 |
 | ok | live-only attacks in CLAIMS.md | docs 1, repository 1 |
 | ok | public methods in README.md | docs 47, repository 47 |
 | ok | random vectors in README.md | docs 400, repository 400 |
