@@ -1,5 +1,5 @@
 // The EVM side: read chains, check what the policy built against viem, broadcast what it signed.
-import { createPublicClient, http, keccak256, toHex, type Hex, type PublicClient } from "viem";
+import { createPublicClient, fallback, http, keccak256, toHex, type Hex, type PublicClient } from "viem";
 import type { ChainConfig } from "./config.js";
 
 export const FACTORY_ABI = [
@@ -30,10 +30,13 @@ export const ADMIN_SLOT = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a
 export const slotAddress = (word: Hex | undefined) => (word ? `0x${word.slice(-40)}`.toLowerCase() : null);
 
 const clients = new Map<number, PublicClient>();
-export function evm(chain: ChainConfig): PublicClient {
+export function evm(chain: ChainConfig, timeout = 20_000): PublicClient {
   let c = clients.get(chain.chain_id);
   if (!c) {
-    c = createPublicClient({ transport: http(chain.rpc, { timeout: 30_000 }) });
+    // Two retries at most, so a silent node is called dead within a minute; a fallback is tried instead of retrying.
+    const more = chain.rpc_fallbacks ?? [];
+    const node = (url: string) => http(url, { timeout, retryCount: more.length ? 0 : 2 });
+    c = createPublicClient({ transport: more.length ? fallback([chain.rpc, ...more].map(node)) : node(chain.rpc) });
     clients.set(chain.chain_id, c);
   }
   return c;

@@ -45,7 +45,7 @@ test("contract panics become the policy's own reason", () => {
   const k = asRefusal(new Error("Access key does not allow method propose_rule"));
   assert.ok(k instanceof PolicyRefusal, "a function-call key refusal is a refusal too");
   assert.match(asRefusal(new Error("Not enough allowance for access key x")).message, /allowance is too small/);
-  assert.equal(asRefusal(new Error("socket hang up")).message, "socket hang up");
+  assert.match(asRefusal(new Error("socket hang up")).message, /NEAR node failed.*socket hang up/);
 });
 
 test("chains by name or id, unknown ones listed", () => {

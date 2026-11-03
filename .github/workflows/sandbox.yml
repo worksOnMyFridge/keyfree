@@ -7,7 +7,7 @@ name: sandbox
 on:
   workflow_dispatch:
   push:
-    paths: ["contract/**", "sandbox/**", "package.json", "package-lock.json", ".github/workflows/sandbox.yml"]
+    paths: ["contract/**", "sandbox/**", "packages/keyfree/src/**", "packages/keyfree/test/fake_chains.mjs", "package.json", "package-lock.json", ".github/workflows/sandbox.yml"]
 
 permissions:
   contents: read
@@ -68,7 +68,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npm ci --ignore-scripts
+      - run: |
+          npm ci --ignore-scripts
+          npm ci --ignore-scripts --prefix packages/keyfree
+          npm run build --prefix packages/keyfree
       - name: Sandbox tests
         env:
           POLICY_WASM: live-wasm/keyfree_policy.wasm

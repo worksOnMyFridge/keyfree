@@ -5,9 +5,14 @@
 //   POLICY_WASM=<policy wasm> MOCK_WASM=<mock wasm> npm run test:sandbox
 // Linux x64/arm64 or macOS arm64 (the sandbox binaries); the sandbox workflow builds both wasm files first and
 // checks the policy's sha256 against the live build. Writes evidence/sandbox.md.
+// The last test drives the real tool (packages/keyfree, built) against this contract, with a failing EVM node.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import { Sandbox, DEFAULT_ACCOUNT_ID, DEFAULT_PRIVATE_KEY, DEFAULT_NEAR_SANDBOX_VERSION } from "near-sandbox";
 import { Account, JsonRpcProvider, KeyPair, actions, teraToGas } from "near-api-js";
@@ -569,4 +574,105 @@ test("faults: a policy short of NEAR for its storage refuses the request before 
   await checkRaw(r.value, pv.unsigned, eth);
   ev.gas.push(["request_deploy + MPC sign + on_signed (the largest allowed code, 49 152 bytes)", r.gas]);
   note(`storage: a policy with 3.9 NEAR could not store a 49 152-byte request (LackBalanceForState): nothing changed and the MPC was never asked; 1 NEAR sent by a stranger, and the same request was signed (${tgas(r.gas)} Tgas); 49 153 bytes is refused`);
+});
+
+test("the tool on the real contract: no MPC answer, a failed broadcast, a lost upgrade; retry recovers each with the same content", async () => {
+  const { fakeEvm } = await import("../packages/keyfree/test/fake_chains.mjs");
+  const CLI = fileURLToPath(new URL("../packages/keyfree/dist/cli.js", import.meta.url));
+  const ARTIFACT = fileURLToPath(new URL("../packages/keyfree/demo/out/Counter.sol/Counter.json", import.meta.url));
+  const FACTORY_ADDR = "0x4b78615d2ab691cf8e05fe0b7fca7ecb8c063e2f";
+  const PROXY = "0x2222222222222222222222222222222222222222";
+  const IMPL = "0x3333333333333333333333333333333333333333";
+  const P = await install("toolrun");
+  const eth = await prepare(P, [counter(1), counter(2)]);
+  await applyRules([
+    await propose({ SetFactory: { chain_id: CHAIN, factory_hex: FACTORY_ADDR } }, P),
+    await propose({ AllowProxyUpgrade: { chain_id: CHAIN, proxy_hex: PROXY, implementation_hex: IMPL } }, P),
+  ], acc.guardian, P);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keyfree-tool-"));
+  const fc = KeyPair.fromRandom("ed25519");
+  await passed(send(acc.agent, ID("agent"), [actions.addFunctionCallAccessKey(fc.getPublicKey(), P, AGENT_METHODS)]), "the agent's key for this policy");
+  const keyFile = path.join(dir, "agent_key.json");
+  fs.writeFileSync(keyFile, JSON.stringify({ private_key: fc.toString() }));
+  const evm = await fakeEvm({ factory: FACTORY_ADDR, proxy: PROXY, signer: eth });
+  evm.st.code.set(IMPL, "0x60");
+  const config = path.join(dir, "keyfree.json");
+  fs.writeFileSync(config, JSON.stringify({
+    near_network: "testnet", near_rpc: sandbox.rpcUrl, near_explorer: "https://near.example", policy: P, agent: ID("agent"), owner: ID("owner"), receipt_timeout_ms: 5000,
+    chains: [{ name: "base-sepolia", chain_id: CHAIN, rpc: evm.url, explorer: "https://evm.example" }],
+  }));
+  const tool = (...args) => new Promise((resolve) => {
+    const p = spawn(process.execPath, [CLI, ...args, "--config", config], { env: { ...process.env, HOME: dir, KEYFREE_AGENT_KEY: keyFile } });
+    let out = "", err = "";
+    p.stdout.on("data", (d) => { out += d; });
+    p.stderr.on("data", (d) => { err += d; });
+    p.on("close", (code) => resolve({ code, out, err, json: () => JSON.parse(out) }));
+  });
+  const CH = ["--chain", "base-sepolia"];
+  const code = (n) => ["--artifact", ARTIFACT, "--args", `[${n}]`];
+  try {
+    // 1) the MPC never answers: the deploy waits, retry says so, and after the timeout it releases and re-signs.
+    await setMode("hang");
+    const stalled = tool("deploy", ...CH, ...code(1));
+    await until("the request to reach the MPC", async () => (await view(P, "get_open")).pending === 0, 60);
+    let r = await tool("retry", ...CH);
+    assert.equal(r.code, 1, r.err);
+    assert.match(r.err, /still being signed/);
+    await rpc("sandbox_fast_forward", { delta_height: 260 });
+    await setMode("ok");
+    // Fees under the chain's floor on the way: the contract names the floor and the tool asks once more.
+    evm.st.prio = 1n;
+    evm.st.baseFee = 1n;
+    r = await tool("retry", ...CH);
+    assert.equal(r.code, 0, r.err);
+    const first = r.json();
+    assert.equal(first.nonce, 0);
+    assert.equal(evm.st.count, 1);
+    assert.equal((await tool("journal", ...CH)).json().lines[0].address, first.address);
+    assert.equal((await stalled).code, 1);
+    evm.st.prio = 1_000_000n;
+    evm.st.baseFee = 1_000_000n;
+
+    // 2) signed, then the node refuses the broadcast: a new deploy is stopped, retry takes only the same code.
+    evm.st.faults.eth_sendRawTransaction = 500;
+    r = await tool("deploy", ...CH, ...code(2));
+    assert.equal(r.code, 1, r.err);
+    assert.match(r.err, /Signed, but not on chain/);
+    delete evm.st.faults.eth_sendRawTransaction;
+    assert.equal(await view(P, "get_next_nonce", { chain_id: CHAIN }), 2);
+    const line = await view(P, "get_entry", { chain_id: CHAIN, nonce: 1 });
+    assert.equal(line.status, "signed");
+    const signsBefore = await signs();
+    r = await tool("deploy", ...CH, ...code(1));
+    assert.equal(r.code, 1, r.err);
+    assert.match(r.err, /Nonce 1 .*retry/);
+    r = await tool("retry", ...CH, ...code(1));
+    assert.equal(r.code, 1, r.err);
+    assert.match(r.err, /differs from line 1/);
+    assert.equal(await signs(), signsBefore, "no signature was spent on the refused attempts");
+    r = await tool("retry", ...CH, ...code(2));
+    assert.equal(r.code, 0, r.err);
+    assert.equal(r.json().nonce, 1);
+    assert.equal(r.json().address, line.address);
+    assert.equal(evm.st.count, 2);
+
+    // 3) the same for a proxy upgrade: the contract's resign_proxy_upgrade, no code needed.
+    evm.st.faults.eth_sendRawTransaction = "down";
+    r = await tool("upgrade", ...CH, "--proxy", PROXY, "--implementation", IMPL);
+    assert.equal(r.code, 1, r.err);
+    assert.match(r.err, /Signed, but not on chain/);
+    delete evm.st.faults.eth_sendRawTransaction;
+    r = await tool("retry", ...CH);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(r.json().nonce, 2);
+    assert.equal(evm.st.impl.toLowerCase(), IMPL);
+    r = await tool("retry", ...CH);
+    assert.equal(r.code, 1, r.err);
+    assert.match(r.err, /Nothing is stuck/);
+    note(`the real tool on this contract, with a local EVM node failing on purpose: no MPC answer (retry waits, then releases and re-signs, the contract naming its fee floor on the way); a refused broadcast of a deploy (a new deploy stopped, other code refused with no signature spent, resign lands the promised ${line.address}); the same for a proxy upgrade (resign_proxy_upgrade). All on the same nonces.`);
+  } finally {
+    await evm.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

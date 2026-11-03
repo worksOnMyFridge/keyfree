@@ -110,7 +110,7 @@ From the repository root:
 ```bash
 (cd contract && cargo test -- --test-threads=1)       # 160 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
-(cd packages/keyfree && npm test && npm run smoke)    # 37 tool tests; MCP self-check against the live policy
+(cd packages/keyfree && npm test && npm run smoke)    # 78 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
 

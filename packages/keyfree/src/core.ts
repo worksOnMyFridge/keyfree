@@ -1,14 +1,14 @@
 // The agent's flows: status, preview, deploy, proxy upgrade, retry, confirm, journal. Everything the policy builds is
 // checked against viem before it is signed, and everything it signs is checked again before it is broadcast.
 import {
-  decodeEventLog, encodeFunctionData, getAddress, getContractAddress, isAddress, parseTransaction, recoverTransactionAddress, serializeTransaction,
+  decodeEventLog, decodeFunctionData, encodeFunctionData, getAddress, getContractAddress, isAddress, keccak256, parseTransaction, recoverTransactionAddress, serializeTransaction,
   type Hex, type TransactionSerializableEIP1559,
 } from "viem";
 import { agentKey, findChain, hasLocalKey, type ChainConfig, type Config } from "./config.js";
 import { loadCode, type CodeInput } from "./code.js";
 import { evm, FACTORY_ABI, PROXY_ABI, ADMIN_SLOT, IMPLEMENTATION_SLOT, slotAddress, randomSalt, txLink, addressLink } from "./evm.js";
 import { KeyPair } from "near-api-js";
-import { Policy, PolicyRefusal, clean } from "./near.js";
+import { NearFault, Policy, PolicyRefusal, reason } from "./near.js";
 
 interface Preview { unsigned: Hex; hash: string; nonce: number; expected_address: string | null; min_gas: number }
 interface Entry {
@@ -21,6 +21,10 @@ export interface DeployInput extends CodeInput {
   chain: string | number;
   salt?: string;
   via_factory?: boolean;
+}
+
+export interface RetryInput extends CodeInput {
+  chain: string | number;
 }
 
 export interface UpgradeInput {
@@ -46,6 +50,8 @@ export interface DeployResult {
 // The request methods the agent's function-call key may call, and nothing else.
 const AGENT_METHODS = ["request_deploy", "request_proxy_upgrade", "resign", "resign_proxy_upgrade", "retry", "release", "confirm", "confirm_stuck"];
 const AGENT_GAS = 250; // Tgas for request_deploy / retry: 100 for the MPC, 50 for the callback, the rest for the build
+const ZERO_ADDRESS = `0x${"0".repeat(40)}`;
+const RETRY_HOW = "call keyfree_retry (CLI: keyfree retry --chain <chain>), for a deploy with the same artifact and arguments";
 
 export class Keyfree {
   readonly policy: Policy;
@@ -61,7 +67,7 @@ export class Keyfree {
     const key = agentKey(this.cfg);
     if (!this.agentChecked) {
       const pk = KeyPair.fromString(key as Parameters<typeof KeyPair.fromString>[0]).getPublicKey().toString();
-      const { keys } = await this.policy.provider.viewAccessKeyList({ accountId: this.cfg.agent });
+      const keys = await this.policy.accessKeys(this.cfg.agent);
       const found = keys.find((k) => k.public_key === pk);
       const perm = found?.access_key.permission as unknown;
       const fc = typeof perm === "object" && perm !== null ? (perm as { FunctionCall?: { receiver_id: string; method_names: string[] } }).FunctionCall : undefined;
@@ -76,6 +82,46 @@ export class Keyfree {
     return this.policy.account(this.cfg.agent, key);
   }
 
+  private evm(chain: ChainConfig) {
+    return evm(chain, this.cfg.rpc_timeout_ms);
+  }
+
+  // A request whose NEAR transaction may still be running when the node fails: it must not be repeated blindly.
+  private async request(method: string, args: Record<string, unknown>) {
+    const agent = await this.agent();
+    try {
+      return await this.policy.call<Hex>(agent, method, args, AGENT_GAS);
+    } catch (e) {
+      if (!(e instanceof NearFault)) throw e;
+      throw new Error(`${e.message} The request may still have gone through: do not send it again. keyfree_journal shows the line; if it stays unlanded, ${RETRY_HOW}.`);
+    }
+  }
+
+  private async chainReady(chain: ChainConfig) {
+    const id = await this.evm(chain).getChainId();
+    if (id !== chain.chain_id) throw new Error(`The RPC set for ${chain.name} answers as chain ${id}, not ${chain.chain_id}. Nothing was signed.`);
+  }
+
+  // Before a signature is asked for, the address's own nonce must be where the policy's next one is. Behind it,
+  // the new transaction would wait for ever behind the gap; ahead of it, the signed transaction would be rejected.
+  // "pending" counts what is in the mempool, and a public node can lag a block, so a gap is looked at twice.
+  private async nonceReady(chain: ChainConfig, address: Hex, nonce: number) {
+    const c = this.evm(chain);
+    let count = await c.getTransactionCount({ address, blockTag: "pending" });
+    if (count < nonce) {
+      await new Promise((r) => setTimeout(r, 4000));
+      count = await c.getTransactionCount({ address, blockTag: "pending" });
+    }
+    if (count < nonce) throw new Error(`Nonce ${count} on ${chain.name} was signed but is not on chain, and anything newer would wait behind it. First ${RETRY_HOW}. Nothing was signed.`);
+    if (count > nonce) throw new Error(`The address's nonce on ${chain.name} (${count}) is ahead of the policy's next one (${nonce}): a signature for ${nonce} would be rejected. Nothing was signed; tell the policy's council.`);
+  }
+
+  private async rules(): Promise<Rules> {
+    const r = await this.policy.view<Rules>("get_rules");
+    if (!Array.isArray(r?.allowed_code)) throw new Error("The NEAR node's answer to get_rules has no allow list. Nothing was signed.");
+    return r;
+  }
+
   async address(): Promise<Hex> {
     const a = await this.policy.view<string | null>("get_eth_address");
     if (!a) throw new Error(`The policy ${this.cfg.policy} has no ETH address yet: the owner runs setup first.`);
@@ -86,16 +132,19 @@ export class Keyfree {
     const [st, roles, rules, address] = await Promise.all([
       this.policy.view<Record<string, unknown>>("get_status"),
       this.policy.view<Record<string, unknown>>("get_roles"),
-      this.policy.view<Rules>("get_rules"),
+      this.rules(),
       this.policy.view<string | null>("get_eth_address"),
     ]);
-    const keys = (await this.policy.provider.viewAccessKeyList({ accountId: this.cfg.policy })).keys.length;
+    const keys = (await this.policy.accessKeys(this.cfg.policy)).length;
     const chains = await Promise.all(this.cfg.chains.map(async (c) => {
       const next = await this.policy.view<number | null>("get_next_nonce", { chain_id: c.chain_id });
-      const balance = address ? await evm(c).getBalance({ address: address as Hex }) : 0n;
+      // An EVM node being down must not hide the policy's state: the council reads this in an incident.
+      const funds = address
+        ? await this.evm(c).getBalance({ address: address as Hex }).then((b) => ({ balance_wei: b.toString() } as Record<string, unknown>), (e) => ({ balance_wei: null, rpc_error: reason(e) }))
+        : { balance_wei: "0" };
       // Daily budget and today's use (R8); a policy older than v15 has no get_budget.
       const budget = await this.policy.view<Record<string, unknown> | null>("get_budget", { chain_id: c.chain_id }).catch(() => null);
-      return { name: c.name, chain_id: c.chain_id, allowed: next !== null, next_nonce: next, balance_wei: balance.toString(), daily_budget: budget };
+      return { name: c.name, chain_id: c.chain_id, allowed: next !== null, next_nonce: next, ...funds, daily_budget: budget };
     }));
     // Agent and council are only as separate as their keys: say so when a council key is on this machine.
     const council = [roles.owner, roles.guardian, roles.reserve].filter((a): a is string => typeof a === "string");
@@ -110,24 +159,45 @@ export class Keyfree {
   }
 
   // Fees: viem's estimate x fee_multiplier, never under the chain's floor (the policy names the floor when it refuses).
-  private async fees(chain: ChainConfig, floor = 0n) {
-    const f = await evm(chain).estimateFeesPerGas();
+  // `over` = the fees of a transaction still in the mempool: a node takes a replacement only about 10 % above them.
+  private async fees(chain: ChainConfig, floor = 0n, over?: { max: bigint; prio: bigint }) {
+    const f = await this.evm(chain).estimateFeesPerGas();
     const mult = BigInt(Math.round((this.cfg.fee_multiplier ?? 1.2) * 100));
     let max = (f.maxFeePerGas * mult) / 100n;
     if (max < floor) max = floor;
-    const prio = f.maxPriorityFeePerGas < max ? f.maxPriorityFeePerGas : max;
+    let prio = f.maxPriorityFeePerGas < max ? f.maxPriorityFeePerGas : max;
+    if (over) {
+      const bump = (x: bigint) => (x * 112n) / 100n + 1n;
+      if (prio < bump(over.prio)) prio = bump(over.prio);
+      if (max < bump(over.max)) max = bump(over.max);
+      if (max < prio) max = prio;
+    }
+    // The fees travel as JSON numbers: above 2^53 they would be rounded, and no real fee is there.
+    if (max > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`The node's fee estimate on ${chain.name} (${max} wei per gas) is too large to be real. Nothing was signed.`);
     return { max_fee_per_gas: max, max_priority_fee_per_gas: prio };
+  }
+
+  // The chain's simulation from our address, +25 %, under the cap. Over the cap it would run out of gas on chain.
+  private async gasFor(chain: ChainConfig, account: Hex, to: Hex | undefined, data: Hex, cap: number, min: number, what: string) {
+    let est: bigint;
+    try {
+      est = await this.evm(chain).estimateGas({ account, to, data, value: 0n });
+    } catch (e) {
+      throw new Error(`The chain says this ${what} would fail (simulation): ${reason(e)}. Nothing was signed.`);
+    }
+    if (est > BigInt(cap)) throw new Error(`This ${what} needs about ${est} gas, over the policy's cap of ${cap}. Raising the cap is a decision for the human council. Nothing was signed.`);
+    return Math.min(cap, Math.max(min, Number((est * 125n) / 100n)));
   }
 
   private async previewWithFloor(args: Record<string, unknown>, chain: ChainConfig, method = "preview"): Promise<{ pv: Preview; args: Record<string, unknown> }> {
     try {
-      return { pv: await this.policy.view<Preview>(method, args), args };
+      return { pv: wellFormed(await this.policy.view<Preview>(method, args)), args };
     } catch (e) {
       const floor = /fee below the floor (\d+)/.exec(String((e as Error).message));
       if (!floor) throw asPreviewError(e);
       const f = await this.fees(chain, BigInt(floor[1]));
       const again = { ...args, max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) };
-      return { pv: await this.policy.view<Preview>(method, again).catch((e2) => { throw asPreviewError(e2); }), args: again };
+      return { pv: wellFormed(await this.policy.view<Preview>(method, again).catch((e2) => { throw asPreviewError(e2); })), args: again };
     }
   }
 
@@ -138,12 +208,13 @@ export class Keyfree {
     if (!isAddress(input.proxy) || !isAddress(input.implementation)) throw new Error("proxy and implementation must be 0x addresses.");
     const proxy = getAddress(input.proxy);
     const implementation = getAddress(input.implementation);
-    const [address, rules] = await Promise.all([this.address(), this.policy.view<Rules>("get_rules")]);
+    const [address, rules] = await Promise.all([this.address(), this.rules()]);
     const k = upgradeKey(chain.chain_id, proxy, implementation);
     if (!(rules.allowed_proxy_upgrades ?? []).includes(k)) {
       throw new PolicyRefusal(`proxy upgrade not on the allow list (${k}). Allowing it is a decision for the human council, outside this tool; it then waits ${rules.rules_delay_sec} s and any member can cancel it. Each allowance is used once.`);
     }
-    const c = evm(chain);
+    await this.chainReady(chain);
+    const c = this.evm(chain);
     const [admin, current, implCode] = await Promise.all([
       c.getStorageAt({ address: proxy, slot: ADMIN_SLOT }), c.getStorageAt({ address: proxy, slot: IMPLEMENTATION_SLOT }), c.getCode({ address: implementation }),
     ]);
@@ -154,13 +225,8 @@ export class Keyfree {
     const base = { chain_id: chain.chain_id, proxy_hex: proxy, implementation_hex: implementation, max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) };
     const data = encodeFunctionData({ abi: PROXY_ABI, functionName: "upgradeTo", args: [implementation] });
     const first = await this.previewWithFloor({ ...base, gas_limit: Math.min(cap, probeGas(data)) }, chain, "preview_proxy_upgrade");
-    let est: bigint;
-    try {
-      est = await c.estimateGas({ account: address, to: proxy, data, value: 0n });
-    } catch (e) {
-      throw new Error(`The chain says this upgrade would fail (simulation): ${clean(String((e as Error).message).split("\n")[0])}. Nothing was signed.`);
-    }
-    const gas = Math.min(cap, Math.max(first.pv.min_gas, Number((est * 125n) / 100n)));
+    await this.nonceReady(chain, address, first.pv.nonce);
+    const gas = await this.gasFor(chain, address, proxy, data, cap, first.pv.min_gas, "upgrade");
     const { pv, args } = await this.previewWithFloor({ ...first.args, gas_limit: gas }, chain, "preview_proxy_upgrade");
     const mine = serializeTransaction(this.fields(chain, pv.nonce, proxy, data, args));
     if (pv.unsigned !== mine) throw new Error("The transaction the policy built differs from viem's for the same fields. Not signing; report this.");
@@ -183,7 +249,7 @@ export class Keyfree {
 
   async upgradeProxy(input: UpgradeInput): Promise<DeployResult> {
     const p = await this.upgradePlan(input);
-    const res = await this.policy.call<Hex>(await this.agent(), "request_proxy_upgrade", p.args, AGENT_GAS);
+    const res = await this.request("request_proxy_upgrade", p.args);
     if (!res.value) {
       throw new Error(`The MPC did not sign in time (NEAR tx ${this.policy.tx(res.txHash)}). Nonce ${p.pv.nonce} stays bound to this exact upgrade; call keyfree_retry (later, with new fees). Nothing was broadcast.`);
     }
@@ -203,10 +269,11 @@ export class Keyfree {
   private async plan(input: DeployInput) {
     const chain = findChain(this.cfg, input.chain);
     const code = loadCode(input);
-    const [address, rules] = await Promise.all([this.address(), this.policy.view<Rules>("get_rules")]);
+    const [address, rules] = await Promise.all([this.address(), this.rules()]);
     if (!rules.allowed_code.includes(code.hash)) {
       throw new PolicyRefusal(`code not on the allow list (code hash ${code.hash}). Allowing it is a decision for the human council, outside this tool; it then waits ${rules.rules_delay_sec} s and any member can cancel it.`);
     }
+    await this.chainReady(chain);
     const viaFactory = input.via_factory ?? true;
     const salt = viaFactory ? ((input.salt as Hex | undefined) ?? randomSalt()) : null;
     const f = await this.fees(chain);
@@ -216,17 +283,12 @@ export class Keyfree {
     // 1) only to learn the nonce, the target (our factory) and the intrinsic minimum. The gas asked here must
     // pass the policy's minimum without inflating the day's budget, so it is an upper bound of that minimum.
     const first = await this.previewWithFloor({ ...base, gas_limit: Math.min(cap, probeGas(data)) }, chain);
-    const draft = parseTransaction(first.pv.unsigned);
+    const draft = parseSigned(first.pv.unsigned);
     const to = draft.to ?? undefined;
+    await this.nonceReady(chain, address, first.pv.nonce);
     if (viaFactory) await this.checkFactory(chain, to, address);
     // 2) real gas: ask the chain to simulate it from our address, +25 %
-    let est: bigint;
-    try {
-      est = await evm(chain).estimateGas({ account: address, to, data, value: 0n });
-    } catch (e) {
-      throw new Error(`The chain says this deploy would fail (simulation): ${clean(String((e as Error).message).split("\n")[0])}. Nothing was signed.`);
-    }
-    const gas = Math.min(cap, Math.max(first.pv.min_gas, Number((est * 125n) / 100n)));
+    const gas = await this.gasFor(chain, address, to, data, cap, first.pv.min_gas, "deploy");
     const { pv, args } = await this.previewWithFloor({ ...first.args, gas_limit: gas }, chain);
     // 3) the policy's bytes must equal viem's for the same fields, or we stop before signing
     const mine = serializeTransaction(this.fields(chain, pv.nonce, to, data, args));
@@ -237,7 +299,7 @@ export class Keyfree {
     }
     // 4) the address must hold gas_limit x max fee up front, or a signed nonce would wait forever
     const reserve = BigInt(gas) * BigInt(args.max_fee_per_gas as number);
-    const balance = await evm(chain).getBalance({ address });
+    const balance = await this.evm(chain).getBalance({ address });
     if (balance < reserve) {
       throw new Error(`Not enough ETH on ${address} for this deploy: needs ${reserve} wei up front (gas ${gas} x fee ${args.max_fee_per_gas}), has ${balance}. Fund the address; nothing was signed.`);
     }
@@ -254,44 +316,142 @@ export class Keyfree {
   // The factory must be a contract that serves exactly our keyless address.
   private async checkFactory(chain: ChainConfig, to: Hex | undefined, address: Hex) {
     if (!to) throw new Error("The policy built a deploy without a factory target.");
-    const served = await evm(chain).readContract({ address: to, abi: FACTORY_ABI, functionName: "keyfree" }).catch(() => null);
-    if (!served || served.toLowerCase() !== address.toLowerCase()) throw new Error(`The factory ${to} does not serve ${address}. Not signing.`);
+    let served: string;
+    try {
+      served = await this.evm(chain).readContract({ address: to, abi: FACTORY_ABI, functionName: "keyfree" });
+    } catch (e) {
+      throw new Error(`Could not read the factory ${to} on ${chain.name}: ${reason(e)}. Not signing.`);
+    }
+    if (served.toLowerCase() !== address.toLowerCase()) throw new Error(`The factory ${to} does not serve ${address}. Not signing.`);
   }
 
   async deploy(input: DeployInput): Promise<DeployResult> {
     const p = await this.plan(input);
-    const res = await this.policy.call<Hex>(await this.agent(), "request_deploy", p.args, AGENT_GAS);
+    const res = await this.request("request_deploy", p.args);
     if (!res.value) {
       throw new Error(`The MPC did not sign in time (NEAR tx ${this.policy.tx(res.txHash)}). Nonce ${p.pv.nonce} stays bound to this exact deploy; call keyfree_retry (later, with new fees). Nothing was broadcast.`);
     }
     return this.broadcast(p.chain, res.value, res.txHash, p.pv.nonce, p.code.hash, p.pv.expected_address, this.fields(p.chain, p.pv.nonce, p.to, p.data, p.args));
   }
 
-  // Re-sign the stuck request (same nonce and content, new fees) and broadcast it.
-  async retry(chainName: string | number) {
-    const open = await this.policy.view<{ pending: number | null; stuck: number | null; chain_id?: number | null }>("get_open");
-    if (open.stuck === null) throw new Error(open.pending !== null ? `Request ${open.pending} is still being signed; wait for it.` : "Nothing is stuck.");
-    // The stuck request's chain is the policy's word, not the caller's (review finding X10).
-    const chain = open.chain_id != null ? findChain(this.cfg, open.chain_id) : findChain(this.cfg, chainName);
-    if (String(chainName) !== chain.name && Number(chainName) !== chain.chain_id) {
-      throw new Error(`The stuck request is on ${chain.name}, not ${chainName}. Nothing was signed.`);
+  // Everything that did not land, through one door. A request the MPC never signed is re-signed by `retry`; one
+  // signed but not on chain (the broadcast failed, the answer was lost, or it sits under a low fee) by `resign`.
+  // Either way: the same nonce and content, new fees, and whichever variant lands makes the others invalid.
+  async retry(input: RetryInput) {
+    let open = await this.policy.view<{ pending: number | null; stuck: number | null; chain_id?: number | null }>("get_open");
+    if (open.pending !== null) {
+      // If the callback never ran, the request can be moved on once its timeout has passed; the contract decides.
+      try {
+        await this.policy.call(await this.agent(), "release", {}, 30);
+      } catch (e) {
+        if (e instanceof PolicyRefusal && /still waiting/.test(e.reason)) throw new Error(`Request ${open.pending} is still being signed; wait for it.`);
+        throw e;
+      }
+      open = await this.policy.view("get_open");
     }
-    const f = await this.fees(chain);
-    const res = await this.policy.call<Hex>(await this.agent(), "retry", { max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) }, AGENT_GAS);
+    return open.stuck !== null ? this.retryStuck(input, open.stuck, open.chain_id) : this.retryUnlanded(input);
+  }
+
+  private async retryStuck(input: RetryInput, nonce: number, chainId?: number | null) {
+    // The stuck request's chain is the policy's word, not the caller's (review finding X10).
+    const chain = chainId != null ? findChain(this.cfg, chainId) : findChain(this.cfg, input.chain);
+    if (String(input.chain) !== chain.name && Number(input.chain) !== chain.chain_id) {
+      throw new Error(`The stuck request is on ${chain.name}, not ${input.chain}. Nothing was signed.`);
+    }
+    await this.chainReady(chain);
+    const onChain = await this.evm(chain).getTransactionCount({ address: await this.address() });
+    if (onChain > nonce) throw new Error(`Nonce ${nonce} on ${chain.name} is already used on chain, so a new signature for it would be rejected (a late signature of this request landed?). Nothing was signed. The contract's confirm_stuck moves the journal on, with proof of that transaction.`);
+    const entry = await this.policy.view<Entry | null>("get_entry", { chain_id: chain.chain_id, nonce });
+    if (!entry) throw new Error(`No journal line for ${chain.name} nonce ${nonce}.`);
+    const res = await this.requestWithFloor(chain, "retry", {});
     if (!res.value) throw new Error(`Still not signed (NEAR tx ${this.policy.tx(res.txHash)}). Try again later.`);
-    const t = parseTransaction(res.value);
-    const entry = await this.policy.view<Entry | null>("get_entry", { chain_id: chain.chain_id, nonce: open.stuck });
-    const upgrade = entry?.kind === "proxy_upgrade" ? entry.implementation : undefined;
-    return this.broadcast(chain, res.value, res.txHash, open.stuck, entry?.code_hash ?? "", entry?.address && entry.address !== `0x${"0".repeat(40)}` ? entry.address : null,
-      { type: "eip1559", chainId: chain.chain_id, nonce: open.stuck, to: t.to ?? undefined, data: t.data, value: 0n, gas: t.gas!, maxFeePerGas: t.maxFeePerGas!, maxPriorityFeePerGas: t.maxPriorityFeePerGas! }, upgrade);
+    const t = parseSigned(res.value);
+    sameAsLine(t, entry);
+    return this.broadcast(chain, res.value, res.txHash, nonce, entry.code_hash ?? "", entry.address && entry.address !== ZERO_ADDRESS ? entry.address : null,
+      { type: "eip1559", chainId: chain.chain_id, nonce, to: t.to ?? undefined, data: t.data, value: 0n, gas: t.gas!, maxFeePerGas: t.maxFeePerGas!, maxPriorityFeePerGas: t.maxPriorityFeePerGas! },
+      entry.kind === "proxy_upgrade" ? entry.implementation : undefined);
+  }
+
+  private async retryUnlanded(input: RetryInput) {
+    const chain = findChain(this.cfg, input.chain);
+    await this.chainReady(chain);
+    const c = this.evm(chain);
+    const [address, rules, next] = await Promise.all([this.address(), this.rules(), this.policy.view<number | null>("get_next_nonce", { chain_id: chain.chain_id })]);
+    const nonce = await c.getTransactionCount({ address });
+    if (next === null || nonce >= next) throw new Error("Nothing is stuck.");
+    const entry = await this.policy.view<Entry | null>("get_entry", { chain_id: chain.chain_id, nonce });
+    if (!entry) throw new Error(`Nonce ${nonce} is not on ${chain.name} and has no journal line. Nothing was signed; tell the policy's council.`);
+    // The node may lag behind what already landed; then a new signature would only be rejected.
+    if (await c.getTransactionReceipt({ hash: entry.tx_hash as Hex }).catch(() => null)) throw new Error(`Nothing is stuck: ${entry.tx_hash} landed (the node's count is still catching up).`);
+
+    let to: Hex | undefined, data: Hex, method: string, base: Record<string, unknown>, expected: string | null = null;
+    if (entry.kind === "proxy_upgrade") {
+      to = entry.proxy as Hex;
+      data = encodeFunctionData({ abi: PROXY_ABI, functionName: "upgradeTo", args: [entry.implementation as Hex] });
+      method = "resign_proxy_upgrade";
+      base = { chain_id: chain.chain_id, nonce };
+    } else {
+      if (!input.artifact && !input.init_code_hex) throw new Error(`Line ${nonce} is a deploy that was signed but is not on chain. The journal holds only its code hash (${entry.code_hash}): pass the same artifact and arguments to retry. Nothing was signed.`);
+      const code = loadCode(input);
+      if (code.hash !== entry.code_hash) throw new Error(`That code (hash ${code.hash}) differs from line ${nonce} (hash ${entry.code_hash}). Pass the same artifact and arguments. Nothing was signed.`);
+      const viaFactory = entry.factory !== ZERO_ADDRESS;
+      to = viaFactory ? (entry.factory as Hex) : undefined;
+      data = viaFactory ? encodeFunctionData({ abi: FACTORY_ABI, functionName: "deploy", args: [entry.salt as Hex, code.init] }) : code.init;
+      method = "resign";
+      base = { chain_id: chain.chain_id, nonce, init_code_hex: code.init };
+      if (viaFactory) expected = entry.address ?? null;
+    }
+    const inPool = await c.getTransaction({ hash: entry.tx_hash as Hex }).catch(() => null);
+    const over = inPool?.maxFeePerGas != null ? { max: inPool.maxFeePerGas, prio: inPool.maxPriorityFeePerGas ?? 0n } : undefined;
+    const gas = await this.gasFor(chain, address, to, data, Number(rules.max_gas_limit), probeGas(data), entry.kind === "proxy_upgrade" ? "upgrade" : "deploy");
+    const res = await this.requestWithFloor(chain, method, { ...base, gas_limit: gas }, { gas, address, over });
+    if (!res.value) throw new Error(`Still not signed (NEAR tx ${this.policy.tx(res.txHash)}). Line ${nonce} stays as it was; try again later.`);
+    const t = parseSigned(res.value);
+    return this.broadcast(chain, res.value, res.txHash, nonce, entry.code_hash ?? "", expected,
+      { type: "eip1559", chainId: chain.chain_id, nonce, to, data, value: 0n, gas: BigInt(gas), maxFeePerGas: t.maxFeePerGas!, maxPriorityFeePerGas: t.maxPriorityFeePerGas! },
+      entry.kind === "proxy_upgrade" ? entry.implementation : undefined);
+  }
+
+  // Ask with fresh fees; if the chain's floor is above them, the policy names the floor and it is asked once more.
+  // With a gas limit, the address must hold gas x fee up front, or the signature would only fail at the node.
+  private async requestWithFloor(chain: ChainConfig, method: string, args: Record<string, unknown>, up?: { gas: number; address: Hex; over?: { max: bigint; prio: bigint } }) {
+    const attempt = async (floor: bigint) => {
+      const f = await this.fees(chain, floor, up?.over);
+      if (up) {
+        const reserve = BigInt(up.gas) * f.max_fee_per_gas;
+        const balance = await this.evm(chain).getBalance({ address: up.address });
+        if (balance < reserve) throw new Error(`Not enough ETH on ${up.address} to re-sign: needs ${reserve} wei up front (gas ${up.gas} x fee ${f.max_fee_per_gas}), has ${balance}. Fund the address; nothing was signed.`);
+      }
+      return this.request(method, { ...args, max_fee_per_gas: Number(f.max_fee_per_gas), max_priority_fee_per_gas: Number(f.max_priority_fee_per_gas) });
+    };
+    try {
+      return await attempt(0n);
+    } catch (e) {
+      const floor = e instanceof PolicyRefusal ? /fee below the floor (\d+)/.exec(e.reason) : null;
+      if (!floor) throw e;
+      return attempt(BigInt(floor[1]));
+    }
   }
 
   // `upgrade` = the implementation, for a proxy upgrade (its log is Upgraded, not Deployed).
   private async broadcast(chain: ChainConfig, raw: Hex, nearTx: string, nonce: number, codeHash: string, expected: string | null, want: TransactionSerializableEIP1559, upgrade?: string): Promise<DeployResult> {
     await checkSigned(raw, want, await this.address());
-    const c = evm(chain);
-    const hash = await c.sendRawTransaction({ serializedTransaction: raw });
-    const rc = await c.waitForTransactionReceipt({ hash, timeout: 180_000 });
+    const c = this.evm(chain);
+    const hash = keccak256(raw);
+    try {
+      await c.sendRawTransaction({ serializedTransaction: raw });
+    } catch (e) {
+      // The node may have taken it and lost the answer (or already hold it): only a transaction it cannot show is unsent.
+      if (!(await c.getTransaction({ hash }).catch(() => null))) {
+        throw new Error(`Signed, but not on chain: the node refused the broadcast (${reason(e)}). Nonce ${nonce} on ${chain.name} is bound to this content and nothing else can use it. When the node works again, ${RETRY_HOW}.`);
+      }
+    }
+    let rc;
+    try {
+      rc = await c.waitForTransactionReceipt({ hash, timeout: this.cfg.receipt_timeout_ms ?? 180_000 });
+    } catch (e) {
+      throw new Error(`Sent as ${hash}, but no receipt yet (${reason(e)}). It is still valid and may land: do not deploy it again. See ${txLink(chain, hash)}; if it stays pending (the fee may be too low), ${RETRY_HOW}.`);
+    }
     const log = rc.logs.find((l) => l.address.toLowerCase() === want.to?.toLowerCase());
     if (upgrade) {
       const links = { near: this.policy.tx(nearTx), evm: txLink(chain, hash), contract: addressLink(chain, want.to!) };
@@ -322,7 +482,7 @@ export class Keyfree {
     if (!e) throw new Error(`No journal line for ${chain.name} nonce ${nonce}.`);
     if (e.status === "confirmed") return { status: "confirmed", already: true, nonce };
     if (e.status !== "signed") throw new Error(`Line ${nonce} is "${e.status}", not waiting for confirmation.`);
-    const c = evm(chain);
+    const c = this.evm(chain);
     const rc = await c.getTransactionReceipt({ hash: e.tx_hash as Hex }).catch(() => null);
     if (!rc) return { status: "not_landed", nonce, next: `Transaction ${e.tx_hash} is not on ${chain.name} yet (or a re-signed variant landed instead).` };
     const emitter = (e.kind === "proxy_upgrade" ? e.proxy : e.factory)?.toLowerCase();
@@ -355,17 +515,45 @@ export class Keyfree {
 // What came back signed must be exactly what was checked (chain, nonce, target, data, no value), signed by
 // the policy's own address. Anything else is not broadcast.
 export async function checkSigned(raw: Hex, want: TransactionSerializableEIP1559, address: Hex): Promise<void> {
-  let got;
-  try {
-    got = parseTransaction(raw);
-  } catch {
-    throw new Error("The signed transaction does not parse. Not broadcasting.");
-  }
+  const got = parseSigned(raw);
   const same = got.chainId === want.chainId && got.nonce === want.nonce && (got.to ?? undefined)?.toLowerCase() === want.to?.toLowerCase()
     && got.data === want.data && (got.value ?? 0n) === 0n && got.type === "eip1559";
   if (!same) throw new Error("The signed transaction is not the one that was checked. Not broadcasting.");
   const from = (await recoverTransactionAddress({ serializedTransaction: raw as `0x02${string}` })).toLowerCase();
   if (from !== address.toLowerCase()) throw new Error(`The signed transaction is signed by ${from}, not by the policy's address. Not broadcasting.`);
+}
+
+// A node can answer anything: the fields the flow relies on are looked at before they are used.
+function wellFormed(pv: Preview): Preview {
+  if (typeof pv?.unsigned !== "string" || !Number.isInteger(pv.nonce)) throw new Error("The NEAR node's answer to the preview is not a preview. Nothing was signed.");
+  return pv;
+}
+
+function parseSigned(raw: Hex) {
+  try {
+    return parseTransaction(raw);
+  } catch {
+    throw new Error("The signed transaction does not parse. Not broadcasting.");
+  }
+}
+
+// A retry's transaction comes from the policy alone, so it is checked against the journal line it must repeat.
+function sameAsLine(t: ReturnType<typeof parseTransaction>, e: Entry) {
+  const to = t.to?.toLowerCase() ?? null;
+  let same = false;
+  try {
+    if (e.kind === "proxy_upgrade") {
+      const { args } = decodeFunctionData({ abi: PROXY_ABI, data: t.data as Hex });
+      same = to === e.proxy?.toLowerCase() && (args[0] as string).toLowerCase() === e.implementation?.toLowerCase();
+    } else if (e.factory && e.factory !== ZERO_ADDRESS) {
+      const { args } = decodeFunctionData({ abi: FACTORY_ABI, data: t.data as Hex });
+      const [salt, init] = args as readonly [Hex, Hex];
+      same = to === e.factory.toLowerCase() && salt === e.salt && keccak256(init).slice(2) === e.code_hash;
+    } else {
+      same = to === null && keccak256(t.data as Hex).slice(2) === e.code_hash;
+    }
+  } catch { /* other calldata: not the same */ }
+  if (!same) throw new Error("The signed transaction is not the journal's line. Not broadcasting.");
 }
 
 function asPreviewError(e: unknown): Error {

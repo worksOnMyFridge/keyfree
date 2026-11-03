@@ -7,12 +7,14 @@ export interface ChainConfig {
   name: string;
   chain_id: number;
   rpc: string;
+  rpc_fallbacks?: string[]; // tried in order when `rpc` fails
   explorer: string;
 }
 
 export interface Config {
   near_network: "testnet" | "mainnet";
   near_rpc: string;
+  near_rpc_fallbacks?: string[]; // tried in order when near_rpc fails: public nodes do go down
   near_explorer: string;
   policy: string;
   agent: string;
@@ -20,6 +22,9 @@ export interface Config {
   chains: ChainConfig[];
   // x the viem fee estimate; the address must hold gas_limit x max fee up front
   fee_multiplier?: number;
+  // How long one RPC request may take (default 60 s on NEAR, public testnet nodes can be that slow; 20 s on EVM), and the wait for a receipt (default 180 s).
+  rpc_timeout_ms?: number;
+  receipt_timeout_ms?: number;
 }
 
 export class ConfigError extends Error {}

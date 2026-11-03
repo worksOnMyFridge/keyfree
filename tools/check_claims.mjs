@@ -32,7 +32,7 @@ async function rpc(urls, method, params) {
   for (let i = 0; ; i++) {
     const url = [urls].flat()[i % [urls].flat().length];
     try {
-      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }), signal: AbortSignal.timeout(30000) });
       const j = await r.json();
       // a free public RPC: back off on rate limits and timeouts
       if (j.error && i < 5 && /timeout|limit|busy/i.test(JSON.stringify(j.error))) { await sleep(3000 * (i + 1)); continue; }

@@ -5,7 +5,7 @@
 import { councilKey, findChain, loadConfig, type Config } from "./config.js";
 import { loadCode } from "./code.js";
 import { Keyfree } from "./core.js";
-import { PolicyRefusal, clean } from "./near.js";
+import { PolicyRefusal, reason } from "./near.js";
 
 const HELP = `keyfree - deploy EVM contracts with no private key (rules in a NEAR contract, NEAR MPC signs)
 
@@ -16,7 +16,8 @@ agent (agent key):
   deploy  --chain <c> --artifact <file> [--args <json>] [--salt <hex>]
   upgrade-preview --chain <c> --proxy <addr> --implementation <addr>
   upgrade --chain <c> --proxy <addr> --implementation <addr>   one allowed upgradeTo on a proxy
-  retry   --chain <c>                     re-sign a stuck deploy or upgrade with new fees
+  retry   --chain <c> [--artifact <file> [--args <json>]]   re-sign what did not land, with new fees: the MPC did not
+                                          sign it, or it is signed but not on chain (then a deploy needs its code again)
   confirm --chain <c> --nonce <n>         journal line -> confirmed by Read MPC (needs a Safe block)
   journal --chain <c> [--limit <n>]
 
@@ -49,7 +50,7 @@ const FLAGS: Record<string, string[]> = {
   deploy: ["chain", "artifact", "args", "init", "salt", "config"],
   "upgrade-preview": ["chain", "proxy", "implementation", "config"],
   upgrade: ["chain", "proxy", "implementation", "config"],
-  retry: ["chain", "config"],
+  retry: ["chain", "artifact", "args", "init", "config"],
   confirm: ["chain", "nonce", "config"],
   journal: ["chain", "limit", "config"],
   roles: ["config"],
@@ -135,7 +136,7 @@ async function main() {
     case "deploy": return out(await kf.deploy({ chain: chain(), salt: f.salt, ...codeOf(f) }));
     case "upgrade-preview": return out(await kf.previewUpgrade({ chain: chain(), proxy: f.proxy, implementation: f.implementation }));
     case "upgrade": return out(await kf.upgradeProxy({ chain: chain(), proxy: f.proxy, implementation: f.implementation }));
-    case "retry": return out(await kf.retry(chain()));
+    case "retry": return out(await kf.retry({ chain: chain(), ...codeOf(f) }));
     case "confirm": return out(await kf.confirm(chain(), Number(u64("nonce", f.nonce))));
     case "journal": return out(await kf.journal(chain(), f.limit === undefined ? 10 : Number(int("limit", f.limit, 1000n))));
     case "roles": return out(await kf.policy.view("get_roles"));
@@ -191,6 +192,6 @@ function out(v: unknown) {
 
 // exitCode, not process.exit(): exiting while fetch sockets close trips a libuv assertion on Windows.
 main().catch((e) => {
-  console.error(e instanceof PolicyRefusal ? `REFUSED  ${e.reason}` : `ERROR  ${clean(String((e as Error).message ?? e))}`);
+  console.error(e instanceof PolicyRefusal ? `REFUSED  ${e.reason}` : `ERROR  ${reason(e)}`);
   process.exitCode = e instanceof PolicyRefusal ? 2 : 1;
 });

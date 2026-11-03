@@ -30,6 +30,21 @@ transactions are compared with viem.
 | V6 | Real-runtime limits were never measured | Info | done | In nearcore: a request with the largest allowed code (49 152 bytes) costs 83.5 Tgas end to end; a policy short of NEAR for that storage refuses with `LackBalanceForState` before the MPC is asked, and a top-up from anyone fixes it; a wasm without `migrate` cannot be applied and leaves the old code and the proposal (N17) |
 | V7 | u128 amounts from the tool were bare JSON numbers (F19) | Low | fixed | The tool writes and reads integers exactly; the contract's views give u128 amounts as strings |
 
+## Network faults (tool, 2026-11-03): V8..V13
+
+Method: the real CLI and MCP server against two local nodes that fail on purpose
+([`test/faults.test.mjs`](packages/keyfree/test/faults.test.mjs), 41 cases), then the real networks behind a proxy that breaks them
+([`evidence/tool_faults_live.log`](evidence/tool_faults_live.log)). First measured on the old tool: most of the cases failed. No contract change.
+
+| Id | Finding | Severity | Status | What changed / test |
+|---|---|---|---|---|
+| V8 | Signed, then the broadcast failed: dead end. The nonce was used on NEAR, nothing on chain, `retry` said "nothing is stuck" and the tool had no way to the contract's `resign`; every later deploy would wait behind the gap for ever | Medium | fixed | `retry` covers it (`resign`, `resign_proxy_upgrade`), same content only, fee above a pending transaction's; ran live with the real MPC. New work is stopped before signing while a gap exists |
+| V9 | An RPC address with an API key went into error messages, and through MCP to the model | Medium | fixed | Messages show only the host; every fault test checks the output for it |
+| V10 | The NEAR answer to a request lost by a node (it happened on the real testnet) lost the signature; another attempt spent the day's budget. near-api-js would also re-sign under a new nonce on a nonce error, which could run a call twice | Medium | fixed | The tool signs first, knows the hash, and looks the outcome up; a new nonce only when that transaction did not run |
+| V11 | A silent NEAR node held the tool for minutes; one node was a single point of failure (two public testnet nodes went down during this pass) | Low | fixed | Timeouts on every request, `near_rpc_fallbacks` and `rpc_fallbacks` |
+| V12 | Wasted signatures: a node of another chain burnt a nonce, gas over the cap was signed and would fail on chain, a stuck nonce already used was re-signed | Low | fixed | Each is stopped before signing, with a plain message |
+| V13 | A retry's transaction was compared only with itself; the policy's status view died with the EVM node; a fee estimate above 2^53 went on rounded; nonsense from a node surfaced as a JavaScript error | Low | fixed | The retry is compared with the journal line; `status` marks the balance unknown; the fee is refused; the answers are checked |
+
 ## Third review (code version v15, 2026-11-01): X1..X12
 
 Method: two research sessions built catalogs of current attack techniques from primary sources
