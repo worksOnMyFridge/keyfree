@@ -3,7 +3,7 @@
 Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the
 repository: every linked transaction and address, the live policy, every count, every quoted log line.
 
-Result: 101 of 101 checks agree.
+Result: 108 of 108 checks agree.
 
 | | Check | Result |
 |---|---|---|
@@ -68,9 +68,15 @@ Result: 101 of 101 checks agree.
 | ok | NEAR tx w3i2zLjA… CLAIMS.md:144 (claim 10.3) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9021283014a3401830f424083802c80830 |
 | ok | Base Sepolia tx 0x7069d601… CLAIMS.md:144 (claim 10.3) | block 53375859, status success, created 0x7716a4bd3547d36153ec7b24a93e8349157fb766 |
 | ok | Base Sepolia tx 0xbd514782… CLAIMS.md:144 (claim 10.3) | block 53376399, status success |
-| ok | NEAR tx HyVm3E3R… CLAIMS.md:145 (claim 10.4) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet confirm: success = true |
-| ok | Base Sepolia tx 0xe4e6d52a… CLAIMS.md:145 (claim 10.4) | block 53393627, status success |
-| ok | Base Sepolia tx 0x1343f4a9… CLAIMS.md:145 (claim 10.4) | block 53390721, status success |
+| ok | NEAR tx 2CMyxouf… CLAIMS.md:145 (claim 10.4) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet confirm: success = true |
+| ok | Base Sepolia tx 0xaeace1f9… CLAIMS.md:145 (claim 10.4) | block 53803395, status success |
+| ok | Base Sepolia tx 0xc6f61ffd… CLAIMS.md:145 (claim 10.4) | block 53803709, status success |
+| ok | NEAR tx BU6hgYTQ… CLAIMS.md:146 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign: success = "0x02f9021283014a3411830f424083802c80830 |
+| ok | NEAR tx 4HLejbtr… CLAIMS.md:146 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign_proxy_upgrade: success = "0x02f88f83014a3412830f424083802c8082d89 |
+| ok | NEAR tx 2A12tDfu… CLAIMS.md:146 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign: success = "0x02f9021283014a3410830f424083802c80830 |
+| ok | Base Sepolia tx 0x34dab71d… CLAIMS.md:146 (claim 10.5) | block 53799715, status success |
+| ok | Base Sepolia tx 0x71b7605e… CLAIMS.md:146 (claim 10.5) | block 53800376, status success |
+| ok | Base Sepolia tx 0x7fe60897… CLAIMS.md:146 (claim 10.5) | block 53798407, status success |
 | ok | policy13.keyfree-lab.testnet access keys | 0 (docs: 0) |
 | ok | live code sha256 | ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304 (README: ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304) |
 | ok | live code size | 383323 bytes (README: 383 323) |
@@ -81,10 +87,10 @@ Result: 101 of 101 checks agree.
 | ok | contract tests in README.md | docs 160, repository 160 |
 | ok | contract tests in CLAIMS.md | docs 160, repository 160 |
 | ok | contract tests in SECURITY.md | docs 160, repository 160 |
-| ok | tool tests in README.md | docs 37, repository 37 |
-| ok | tool tests in CLAIMS.md | docs 37, repository 37 |
+| ok | tool tests in README.md | docs 78, repository 78 |
+| ok | tool tests in CLAIMS.md | docs 78, repository 78 |
 | ok | factory tests in README.md | docs 6, repository 6 |
-| ok | sandbox tests in CLAIMS.md | docs 16, repository 16 |
+| ok | sandbox tests in CLAIMS.md | docs 17, repository 17 |
 | ok | offline attacks in README.md | docs 63, repository 63 |
 | ok | offline attacks in SECURITY.md | docs 63, repository 63 |
 | ok | offline attacks in CLAIMS.md | docs 63, repository 63 |
@@ -108,3 +114,4 @@ Result: 101 of 101 checks agree.
 | ok | CLAIMS.md:101 quotes v14.log | "Access key does not allow method propose_rule" |
 | ok | CLAIMS.md:103 quotes v14.log | "proxy upgrade not on the allow list" |
 | ok | CLAIMS.md:103 quotes v14.log | "the allowance is used up" |
+| ok | CLAIMS.md:146 quotes tool_faults_live.log | "gas price over the cap" |

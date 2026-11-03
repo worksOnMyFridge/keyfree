@@ -24,7 +24,7 @@ const COUNTER = path.join(root, "demo", "out", "Counter.sol", "Counter.json");
 const OWNER_KEY = process.env.KEYFREE_COUNCIL_KEY ?? path.join(os.homedir(), ".near-credentials", cfg.near_network, `${cfg.owner}.json`);
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "keyfree-live-faults-"));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const short = (s) => s.replaceAll(os.homedir(), "~").replace(/\s+/g, " ").slice(0, 260);
+const short = (s) => s.replaceAll(os.homedir(), "~").replace(/\s+/g, " ").replace(/ed25519:\w+/g, "ed25519:…").slice(0, 260);
 const evm = createPublicClient({ transport: viemHttp(CHAIN.rpc) });
 
 let fails = 0, steps = 0;

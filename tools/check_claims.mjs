@@ -16,7 +16,8 @@ const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
 const DOCS = ["README.md", "CLAIMS.md", "SECURITY.md", "AUDIT.md", "packages/keyfree/README.md"];
 // Two public archival nodes (old testnet transactions are gone from regular ones); a rate-limited call moves on.
 const NEAR = process.env.NEAR_ARCHIVAL_RPC ? [process.env.NEAR_ARCHIVAL_RPC] : ["https://archival-rpc.testnet.fastnear.com", "https://archival-rpc.testnet.near.org"];
-const EVM = { base: "https://sepolia.base.org", eth: "https://ethereum-sepolia-rpc.publicnode.com" };
+// A public node behind a load balancer can answer null for a transaction another node has: a receipt is looked for on each.
+const EVM = { base: ["https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com"], eth: ["https://ethereum-sepolia-rpc.publicnode.com", "https://ethereum-sepolia.gateway.tatum.io"] };
 const POLICY = "policy13.keyfree-lab.testnet";
 // Transactions a claim cites because they were refused or answered false.
 const EXPECTED_REFUSAL = { "9AKiRUEoe4BNaFt2qgaY8Nc6QMfL4H5kqkfheFyY3noD": "false" };
@@ -93,8 +94,8 @@ for (const { kind, id, where } of links.values()) {
     const url = kind.startsWith("base") ? EVM.base : EVM.eth;
     const chain = kind.startsWith("base") ? "Base Sepolia" : "Ethereum Sepolia";
     if (kind.endsWith("-tx")) {
-      const j = await rpc(url, "eth_getTransactionReceipt", [id]);
-      const rc = j.result;
+      let rc = null;
+      for (const node of url) { rc = (await rpc(node, "eth_getTransactionReceipt", [id])).result ?? null; if (rc) break; }
       const revert = EXPECTED_REVERT.has(id.toLowerCase());
       report(Boolean(rc) && (rc.status === "0x1") !== revert, `${chain} tx ${id.slice(0, 10)}… ${at}`, rc ? `block ${parseInt(rc.blockNumber, 16)}, status ${rc.status === "0x1" ? "success" : "reverted"}${rc.contractAddress ? `, created ${rc.contractAddress}` : ""}${revert ? " (cited as reverted)" : ""}` : "no receipt");
     } else if (id.toLowerCase() === policyEth) {
@@ -143,7 +144,7 @@ const count = (f, re) => (read(f).match(re) ?? []).length;
 const toolTests = (() => {
   const pkg = path.join(root, "packages", "keyfree");
   if (!fs.existsSync(path.join(pkg, "dist", "cli.js"))) return null;
-  const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", "test/unit.test.mjs", "test/cli.test.mjs", "test/attacks.test.mjs"], { cwd: pkg, encoding: "utf8" });
+  const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", "test/unit.test.mjs", "test/cli.test.mjs", "test/attacks.test.mjs", "test/faults.test.mjs"], { cwd: pkg, encoding: "utf8" });
   return Number(r.stdout.match(/^# tests (\d+)/m)?.[1] ?? NaN);
 })();
 const catalog = JSON.parse(read("attacks/catalog.json")).groups.flatMap((g) => g.attacks);

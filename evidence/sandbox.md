@@ -70,6 +70,7 @@ Read-only methods, callable by anyone without a transaction: `get_roles`, `get_s
 - no MPC answer: after a 260-block fast-forward, the request was parked on nonce 0 by the runtime's yield timeout (no signature, nonce unmoved), a new request was refused, and retry then signed exactly the previewed deploy
 - two requests sent at once (agent and owner): 1 signed with nonces 0, 1 refused as "another request is being signed"; never one nonce twice
 - storage: a policy with 3.9 NEAR could not store a 49 152-byte request (LackBalanceForState): nothing changed and the MPC was never asked; 1 NEAR sent by a stranger, and the same request was signed (83.5 Tgas); 49 153 bytes is refused
+- the real tool on this contract, with a local EVM node failing on purpose: no MPC answer (retry waits, then releases and re-signs, the contract naming its fee floor on the way); a refused broadcast of a deploy (a new deploy stopped, other code refused with no signature spent, resign lands the promised 0xd2e455dee19381a29ae0c5366135f500682045ed); the same for a proxy upgrade (resign_proxy_upgrade). All on the same nonces.
 
 ## Gas
 
