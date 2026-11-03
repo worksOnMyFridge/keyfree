@@ -45,6 +45,17 @@ Method: the real CLI and MCP server against two local nodes that fail on purpose
 | V12 | Wasted signatures: a node of another chain burnt a nonce, gas over the cap was signed and would fail on chain, a stuck nonce already used was re-signed | Low | fixed | Each is stopped before signing, with a plain message |
 | V13 | A retry's transaction was compared only with itself; the policy's status view died with the EVM node; a fee estimate above 2^53 went on rounded; nonsense from a node surfaced as a JavaScript error | Low | fixed | The retry is compared with the journal line; `status` marks the balance unknown; the fee is refused; the answers are checked |
 
+## Explorer page (2026-11-03): V14..V17
+
+Method: the page in real browsers against stubbed nodes that fail or lie ([`explorer/explorer.test.mjs`](explorer/explorer.test.mjs)), measured on the old page first (9 of 25 passed), then through the real nodes. The `explorer` workflow runs it in Chromium, Firefox and WebKit.
+
+| Id | Finding | Severity | Status | What changed / test |
+|---|---|---|---|---|
+| V14 | The page stated guesses as facts when a node failed: a network error was shown as "Refused by the policy", a failed read of the budget as "none set: per-transaction caps only", a failed journal line was dropped silently; with keys on the account the note still said "There is none" | Medium | fixed | A refusal and "no node answered" are separate; what could not be read is marked unknown; the note follows the count |
+| V15 | One NEAR node: when it failed, panels stayed on "loading…" for ever; a budget lowered to zero (a brake) stopped the page on a division | Medium | fixed | Three NEAR nodes and two per EVM chain, a timeout on each, a banner, a "Read again" button; a zero budget is shown |
+| V16 | Numbers: integers above 2^53 went through JavaScript numbers, a small amount was shown as 0.000000 ETH | Low | fixed | Exact integers in, amounts never shown as zero, the exact wei in a tooltip |
+| V17 | A `contract_source_metadata` link was made clickable whatever its scheme; on a phone the budget and the journal's links sat in a sideways-scrolling column nobody sees, and one row was cut off | Low | fixed | Only https links; on a phone a table becomes labelled lines; a Content-Security-Policy on the page |
+
 ## Third review (code version v15, 2026-11-01): X1..X12
 
 Method: two research sessions built catalogs of current attack techniques from primary sources

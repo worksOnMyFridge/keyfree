@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Keyfree Policy Explorer</title>
 <meta name="description" content="Read-only view of the live Keyfree policy on NEAR testnet: keys, rules, budgets, pending changes and the journal, read straight from public RPCs.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https:; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
 <style>
   :root {
     --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1f23; --muted: #626872; --line: #e3e4e0;
@@ -46,10 +49,25 @@
   button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
   button:hover { border-color: var(--accent); }
   .try { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+  button:disabled { opacity: 0.55; cursor: default; }
+  .banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; }
+  .banner[hidden] { display: none; }
   .answer { border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 14px; }
   footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
   .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
   .bar > i { display: block; height: 100%; background: var(--accent); }
+  .row.long > span:first-child { flex: 0 1 auto; }
+  /* On a phone a table turns into labelled lines: a hidden column is a column nobody reads. */
+  @media (max-width: 640px) {
+    .stack thead { display: none; }
+    .stack, .stack tbody, .stack tr, .stack td { display: block; width: 100%; }
+    .stack tr { border-top: 1px solid var(--line); padding: 8px 0; }
+    .stack tr:first-child { border-top: 0; }
+    .stack td { display: flex; justify-content: space-between; gap: 12px; border: 0; padding: 2px 0; text-align: right; }
+    .stack td::before { content: attr(data-label); color: var(--muted); flex: none; text-align: left; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .stack td.block { display: block; text-align: left; }
+    .stack td.block::before { display: block; }
+  }
 </style>
 </head>
 <body>
@@ -58,6 +76,10 @@
   <p class="lead">The live policy on NEAR testnet, read from public RPCs in your browser. Nothing here holds a key or
     signs anything. The policy is a NEAR contract with no access keys; NEAR MPC signs EVM transactions for its address
     only when the contract's rules allow them.</p>
+
+  <noscript><p class="banner warn">This page reads the policy with JavaScript in your browser. Without it, see the policy on
+    <a href="https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet">nearblocks</a>.</p></noscript>
+  <div id="banner" class="banner warn" role="status" hidden><span id="banner-text"></span></div>
 
   <div class="grid">
     <section class="panel">
@@ -89,7 +111,7 @@
       <h2>Chains</h2>
       <p class="muted" style="margin:-6px 0 10px">The same keyless address on every chain the council opened:
         <span id="eth" class="mono">…</span></p>
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table class="stack">
         <thead><tr><th>Chain</th><th>Next nonce</th><th>ETH on the address</th><th>Daily budget (UTC day)</th></tr></thead>
         <tbody id="chains"><tr><td colspan="4" class="muted">loading…</td></tr></tbody>
       </table></div>
@@ -111,14 +133,14 @@
         <button data-arg="1">Preview Counter(1) on Base Sepolia</button>
         <button data-arg="999">Preview Counter(999) on Base Sepolia</button>
       </div>
-      <div id="answer"></div>
+      <div id="answer" aria-live="polite"></div>
     </section>
 
     <section class="panel wide">
       <h2>Journal</h2>
       <p class="muted" style="margin:-6px 0 10px">One line per nonce, written when the agent asks. "confirmed" means NEAR
         Read MPC found the factory's or the proxy's log on the EVM chain itself.</p>
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table class="stack">
         <thead><tr><th>Chain</th><th>Nonce</th><th>Kind</th><th>Status</th><th>Contract</th><th>Transaction</th></tr></thead>
         <tbody id="journal"><tr><td colspan="6" class="muted">loading…</td></tr></tbody>
       </table></div>
@@ -126,130 +148,251 @@
 
     <section class="panel wide">
       <h2>Allowed</h2>
-      <div class="row"><span>Init code hashes (code + constructor arguments)</span><span id="codes">…</span></div>
+      <div class="row long"><span>Init code hashes (code + constructor arguments)</span><span id="codes">…</span></div>
       <div class="row"><span>Proxy upgrades waiting to be used</span><span id="upgrades">…</span></div>
       <div class="row"><span>Caps per transaction</span><span id="caps">…</span></div>
     </section>
   </div>
 
   <footer>
-    Read at <span id="when">…</span>. NEAR RPC <code>test.rpc.fastnear.com</code>; EVM RPCs from the chain table.
+    Read at <span id="when">…</span> from public nodes (<span id="nodes">…</span>); if one fails the next is asked.
+    <button id="reload">Read again</button>
     Explorers: <a href="https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet">nearblocks</a>.
   </footer>
 </main>
 
 <script>
 const POLICY = "policy13.keyfree-lab.testnet";
-const NEAR_RPC = "https://test.rpc.fastnear.com";
+// Public nodes do go down, and the page is the first thing a stranger sees: each list is tried in order, and the one
+// that answered stays in front. A node gets a few seconds, then the next one is asked.
+const NEAR_NODES = ["https://test.rpc.fastnear.com", "https://near-testnet.drpc.org", "https://rpc.testnet.near.org"];
 const CHAINS = [
-  { id: 84532, name: "Base Sepolia", rpc: "https://sepolia.base.org", scan: "https://sepolia.basescan.org" },
-  { id: 11155111, name: "Ethereum Sepolia", rpc: "https://ethereum-sepolia-rpc.publicnode.com", scan: "https://sepolia.etherscan.io" },
+  { id: 84532, name: "Base Sepolia", nodes: ["https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com"], scan: "https://sepolia.basescan.org" },
+  { id: 11155111, name: "Ethereum Sepolia", nodes: ["https://ethereum-sepolia-rpc.publicnode.com", "https://ethereum-sepolia.gateway.tatum.io"], scan: "https://sepolia.etherscan.io" },
 ];
+const NODE_TIMEOUT_MS = 8000;
 // Counter's init code without its one constructor argument (a uint256), from packages/keyfree/demo.
 const COUNTER = "0x6080604052348015600e575f5ffd5b50604051610114380380610114833981016040819052602b916031565b5f556047565b5f602082840312156040575f5ffd5b5051919050565b60c1806100535f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604d575b5f5ffd5b603b5f5481565b60405190815260200160405180910390f35b60536055565b005b5f805490806061836068565b9190505550565b5f60018201608457634e487b7160e01b5f52601160045260245ffd5b506001019056fea26469706673582212200c9626de9671bac324d6a6524734aaf238690d26f179b6773fda71d21013e53c64736f6c634300081c0033";
 
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const short = (s, n = 6) => (s && s.length > 2 * n + 3 ? `${s.slice(0, n + 2)}…${s.slice(-n)}` : s);
-const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
-const near = (a) => link(`https://testnet.nearblocks.io/address/${a}`, a);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const short = (s, n = 6) => { s = String(s); return s.length > 2 * n + 3 ? `${s.slice(0, n + 2)}…${s.slice(-n)}` : s; };
+const link = (href, text) => (/^https:\/\//.test(href) ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>` : esc(text));
+const near = (a) => link(`https://testnet.nearblocks.io/address/${encodeURIComponent(a)}`, a);
 const secs = (s) => (s >= 3600 ? `${(s / 3600).toFixed(1)} h` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`);
-const eth = (wei) => `${(Number(BigInt(wei) / 10n ** 9n) / 1e9).toFixed(6)} ETH`;
+const UNKNOWN = `<span class="pill warn">unknown</span>`;
 
-async function rpc(url, method, params) {
-  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-  const j = await r.json();
-  if (j.error) throw new Error(j.error.data || j.error.message || JSON.stringify(j.error));
-  return j.result;
+// Amounts are BigInts or decimal strings, never JavaScript numbers. Shown to four significant digits, cut rather than
+// rounded, so a small amount is never shown as zero; the exact value is in the tooltip.
+function units(amount, decimals) {
+  const digits = BigInt(amount).toString().padStart(decimals + 1, "0");
+  const whole = digits.slice(0, -decimals);
+  const frac = digits.slice(-decimals);
+  const first = frac.search(/[1-9]/);
+  const kept = (whole === "0" ? frac.slice(0, first + 4) : frac.slice(0, 4)).replace(/0+$/, "");
+  return kept ? `${whole}.${kept}` : whole;
 }
+const eth = (wei) => `<span title="${esc(BigInt(wei))} wei">${units(wei, 18)} ETH</span>`;
+
+// The policy writes u64 and u128 as plain JSON numbers: integers of 16 digits or more are read as exact strings.
+const parseExact = (text) => JSON.parse(text.replace(/"(?:[^"\\]|\\.)*"|-?\d{16,}/g, (m) => (m.startsWith('"') ? m : `"${m}"`)));
+
+class Refused extends Error {}   // the contract said no: its own words
+class NoAnswer extends Error {}  // no node answered: this says nothing about the policy
+
+const front = new Map();
+const used = {};
+async function ask(nodes, method, params) {
+  const start = front.get(nodes) ?? 0;
+  let why = "no node";
+  for (let i = 0; i < nodes.length; i++) {
+    const at = (start + i) % nodes.length;
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), NODE_TIMEOUT_MS);
+    try {
+      const r = await fetch(nodes[at], { method: "POST", signal: stop.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = parseExact(await r.text());
+      // A contract's panic can come as an RPC error too: that is an answer, and no other node would say otherwise.
+      const words = j.error && JSON.stringify(j.error);
+      if (words && /GuestPanic|panicked|CONTRACT_EXECUTION_ERROR/.test(words)) throw new Refused(words);
+      if (j.error) throw new Error(j.error.cause?.name ?? j.error.message ?? "RPC error");
+      if (!("result" in j)) throw new Error("not a JSON-RPC answer");
+      front.set(nodes, at);
+      used[nodes === NEAR_NODES ? "NEAR" : "EVM"] = nodes[at];
+      return j.result;
+    } catch (e) {
+      if (e instanceof Refused) throw e;
+      why = e.name === "AbortError" ? "no answer in time" : e.message;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new NoAnswer(why);
+}
+
 // A view call on the policy; a refusal comes back as an error with the contract's own words.
 async function view(method, args = {}) {
-  const res = await rpc(NEAR_RPC, "query", { request_type: "call_function", finality: "final", account_id: POLICY, method_name: method, args_base64: btoa(JSON.stringify(args)) });
-  if (res.error) throw new Error(res.error);
-  return JSON.parse(new TextDecoder().decode(new Uint8Array(res.result)) || "null");
+  const res = await ask(NEAR_NODES, "query", { request_type: "call_function", finality: "final", account_id: POLICY, method_name: method, args_base64: btoa(JSON.stringify(args)) });
+  if (res.error) throw new Refused(res.error);
+  try {
+    return parseExact(new TextDecoder().decode(new Uint8Array(res.result)) || "null");
+  } catch {
+    throw new NoAnswer("an answer that is not JSON");
+  }
 }
-const panicText = (e) => { const m = String(e.message || e).match(/panic_msg: "([^"]+)"|Smart contract panicked: (.+)/); return m ? (m[1] || m[2]) : String(e.message || e); };
+const panicText = (e) => { const m = String(e.message).match(/panic_msg: \\*"(.+?)\\*"|panicked: ([^"\\]+)/); return m ? (m[1] || m[2]) : String(e.message); };
+// The value, or null when it could not be read. `undefined` is never shown as a fact.
+const read = (p) => p.then((v) => v, () => null);
+const isObject = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
 
-async function load() {
+async function loadOnce() {
+  delete used.NEAR;
+  delete used.EVM;
   const [status, roles, rules, address, keys, account, source] = await Promise.all([
-    view("get_status"), view("get_roles"), view("get_rules"), view("get_eth_address"),
-    rpc(NEAR_RPC, "query", { request_type: "view_access_key_list", finality: "final", account_id: POLICY }),
-    rpc(NEAR_RPC, "query", { request_type: "view_account", finality: "final", account_id: POLICY }),
-    view("contract_source_metadata").catch(() => null),
+    read(view("get_status")), read(view("get_roles")), read(view("get_rules")), read(view("get_eth_address")),
+    read(ask(NEAR_NODES, "query", { request_type: "view_access_key_list", finality: "final", account_id: POLICY })),
+    read(ask(NEAR_NODES, "query", { request_type: "view_account", finality: "final", account_id: POLICY })),
+    read(view("contract_source_metadata")),
   ]);
-  const n = keys.keys.length;
-  $("keys").innerHTML = n === 0 ? `<span style="color:var(--ok)">0</span>` : `<span style="color:var(--no)">${n}</span>`;
+  const st = isObject(status) ? status : null;
+  const ro = isObject(roles) ? roles : null;
+  const ru = isObject(rules) && Array.isArray(rules.allowed_code) ? rules : null;
+  const eaddr = typeof address === "string" && /^0x[0-9a-fA-F]{40}$/.test(address) ? address : null;
+
+  if (Array.isArray(keys?.keys)) {
+    const n = keys.keys.length;
+    $("keys").innerHTML = `<span style="color:var(${n === 0 ? "--ok" : "--no"})">${n}</span>`;
+    $("keys-note").textContent = n === 0 ? "Anyone with a key could replace the code. There is none." : "Whoever holds these keys can replace the code: this policy does not keep its promise.";
+  } else {
+    $("keys").innerHTML = UNKNOWN;
+    $("keys-note").textContent = "Could not read the account. This says nothing about its keys.";
+  }
   $("account").innerHTML = near(POLICY);
-  $("build").textContent = `${status.build}, version ${status.version}`;
-  const commit = source && source.link ? source.link.split("/tree/")[1] : null;
-  $("source").innerHTML = commit ? link(source.link, short(commit, 4)) : `<span class="muted">not published</span>`;
-  $("codehash").textContent = short(account.code_hash, 8);
-  $("paused").innerHTML = status.paused ? `<span class="pill no">paused</span>` : `<span class="pill ok">running</span>`;
-  for (const r of ["owner", "guardian", "reserve", "agent"]) $(r).innerHTML = roles[r] ? near(roles[r]) : `<span class="muted">none</span>`;
-  $("rdelay").textContent = secs(rules.rules_delay_sec);
-  $("udelay").textContent = secs(status.upgrade_delay_sec);
-  $("eth").innerHTML = link(`${CHAINS[0].scan}/address/${address}`, address);
-  $("codes").textContent = rules.allowed_code.length;
-  $("upgrades").textContent = (rules.allowed_proxy_upgrades || []).length;
-  $("caps").textContent = `gas ${Number(rules.max_gas_limit).toLocaleString("en")}, fee ${Number(rules.max_fee_cap) / 1e9} gwei`;
+  $("build").innerHTML = st ? esc(`${st.build}, version ${st.version}`) : UNKNOWN;
+  const commit = typeof source?.link === "string" ? source.link.split("/tree/")[1] : null;
+  $("source").innerHTML = commit ? link(source.link, short(commit, 4)) : source ? `<span class="muted">not published</span>` : UNKNOWN;
+  $("codehash").innerHTML = account?.code_hash ? esc(short(account.code_hash, 8)) : UNKNOWN;
+  $("paused").innerHTML = !st ? UNKNOWN : st.paused ? `<span class="pill no">paused</span>` : `<span class="pill ok">running</span>`;
+  for (const r of ["owner", "guardian", "reserve", "agent"]) $(r).innerHTML = !ro ? UNKNOWN : ro[r] ? near(ro[r]) : `<span class="muted">none</span>`;
+  $("rdelay").innerHTML = ru ? esc(secs(ru.rules_delay_sec)) : UNKNOWN;
+  $("udelay").innerHTML = st ? esc(secs(st.upgrade_delay_sec)) : UNKNOWN;
+  $("eth").innerHTML = eaddr ? link(`${CHAINS[0].scan}/address/${eaddr}`, eaddr) : UNKNOWN;
+  $("codes").innerHTML = ru ? esc(ru.allowed_code.length) : UNKNOWN;
+  $("upgrades").innerHTML = ru ? esc((ru.allowed_proxy_upgrades || []).length) : UNKNOWN;
+  try {
+    $("caps").textContent = `gas ${BigInt(ru.max_gas_limit).toLocaleString("en")}, fee ${units(ru.max_fee_cap, 9)} gwei`;
+  } catch {
+    $("caps").innerHTML = UNKNOWN;
+  }
 
   // Chains: nonce in the policy, balance on the chain, the day's budget if one is set.
   const rows = await Promise.all(CHAINS.map(async (c) => {
     const [next, bal, budget] = await Promise.all([
-      view("get_next_nonce", { chain_id: c.id }), rpc(c.rpc, "eth_getBalance", [address, "latest"]).catch(() => null),
-      view("get_budget", { chain_id: c.id }).catch(() => null),
+      view("get_next_nonce", { chain_id: c.id }).catch(() => undefined),
+      eaddr ? ask(c.nodes, "eth_getBalance", [eaddr, "latest"]).catch(() => null) : null,
+      // A contract with no such method has no budgets; a node that did not answer tells nothing.
+      view("get_budget", { chain_id: c.id }).catch((e) => (e instanceof Refused ? null : undefined)),
     ]);
-    let b = `<span class="muted">none set: per-transaction caps only</span>`;
-    if (budget) {
-      const used = Number(BigInt(budget.used_wei_today) * 1000n / BigInt(budget.max_wei_per_day)) / 10;
-      b = `${budget.used_tx_today} of ${budget.max_tx_per_day} transactions, ${eth(budget.used_wei_today)} of ${eth(budget.max_wei_per_day)}<div class="bar"><i style="width:${Math.min(100, used)}%"></i></div>`;
-    }
-    return { c, next, row: `<tr><td>${esc(c.name)} <span class="muted">${c.id}</span></td><td>${next === null ? `<span class="pill no">not open</span>` : next}</td><td>${bal ? eth(BigInt(bal)) : "?"}</td><td>${b}</td></tr>` };
+    let money = UNKNOWN;
+    try { if (bal) money = eth(BigInt(bal)); } catch { /* not a number: stays unknown */ }
+    let b = budget === null ? `<span class="muted">none set: per-transaction caps only</span>` : UNKNOWN;
+    try {
+      if (budget) {
+        const [spent, max] = [BigInt(budget.used_wei_today), BigInt(budget.max_wei_per_day)];
+        const share = max === 0n ? 100 : Number((spent * 1000n) / max) / 10;
+        b = `${esc(budget.used_tx_today)} of ${esc(budget.max_tx_per_day)} transactions, ${eth(spent)} of ${eth(max)}<div class="bar"><i style="width:${Math.min(100, share)}%"></i></div>`;
+      }
+    } catch { b = UNKNOWN; }
+    const nonce = next === undefined ? UNKNOWN : next === null ? `<span class="pill no">not open</span>` : esc(next);
+    return { c, next, row: `<tr><td data-label="Chain"><span>${esc(c.name)} <span class="muted">${c.id}</span></span></td><td data-label="Next nonce">${nonce}</td><td data-label="ETH on the address">${money}</td><td data-label="Daily budget (UTC day)" class="block">${b}</td></tr>` };
   }));
   $("chains").innerHTML = rows.map((r) => r.row).join("");
 
-  // Pending widenings.
+  // Pending widenings: only said to be empty when all three sources were read.
   const now = Date.now() / 1000;
-  const items = [
-    ...(rules.proposals || []).map((p) => `rule ${p.id}: <code>${esc(JSON.stringify(p.change))}</code>, ready in ${secs(Math.max(0, Math.round(p.ready_at - now)))}`),
-    ...(roles.role_changes || []).map((r) => `role ${esc(r.role)} → ${esc(r.account)}, ${r.ready_at ? `ready in ${secs(Math.max(0, Math.round(r.ready_at - now)))}` : "waiting for a second approval"}`),
-    ...(status.proposed ? [`policy upgrade to code sha256 <code>${esc(short(status.proposed[0], 8))}</code>, ready in ${secs(Math.max(0, Math.round(status.proposed[1] - now)))}`] : []),
-  ];
-  $("pending").innerHTML = items.length ? `<ul style="margin:0;padding-left:18px">${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "Nothing is waiting.";
+  const after = (t) => `ready in ${secs(Math.max(0, Math.round(Number(t) - now)))}`;
+  if (st && ro && ru) {
+    const items = [
+      ...(ru.proposals || []).map((p) => `rule ${esc(p.id)}: <code>${esc(JSON.stringify(p.change))}</code>, ${esc(after(p.ready_at))}`),
+      ...(ro.role_changes || []).map((r) => `role ${esc(r.role)} → ${esc(r.account)}, ${r.ready_at ? esc(after(r.ready_at)) : "waiting for a second approval"}`),
+      ...(st.proposed ? [`policy upgrade to code sha256 <code>${esc(short(st.proposed[0], 8))}</code>, ${esc(after(st.proposed[1]))}`] : []),
+    ];
+    $("pending").innerHTML = items.length ? `<ul style="margin:0;padding-left:18px">${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "Nothing is waiting.";
+  } else {
+    $("pending").innerHTML = `${UNKNOWN} Could not read the proposals. This does not mean nothing is waiting.`;
+  }
 
-  // Journal: the newest lines of each open chain.
+  // Journal: the newest lines of each open chain. A line that could not be read is shown as such, not dropped.
   const lines = [];
   for (const { c, next } of rows) {
-    if (next === null) continue;
-    for (let k = next - 1; k >= Math.max(0, next - 6); k--) lines.push(view("get_entry", { chain_id: c.id, nonce: k }).then((e) => ({ c, k, e })).catch(() => ({ c, k, e: null })));
+    if (typeof next !== "number") continue;
+    for (let k = next - 1; k >= Math.max(0, next - 6); k--) lines.push(view("get_entry", { chain_id: c.id, nonce: k }).then((e) => ({ c, k, e }), () => ({ c, k, failed: true })));
   }
-  const got = (await Promise.all(lines)).filter((l) => l.e);
-  $("journal").innerHTML = got.length ? got.map(({ c, k, e }) => {
+  const got = await Promise.all(lines);
+  const unread = rows.some((r) => r.next === undefined);
+  const hex = (x) => typeof x === "string" && /^0x[0-9a-fA-F]+$/.test(x) && !/^0x0+$/.test(x);
+  const shown = got.filter((l) => l.failed || isObject(l.e));
+  $("journal").innerHTML = shown.map(({ c, k, e, failed }) => {
+    if (failed) return `<tr><td data-label="Chain">${esc(c.name)}</td><td data-label="Nonce">${k}</td><td colspan="4" class="muted">could not read this line</td></tr>`;
     const target = e.kind === "proxy_upgrade" ? e.proxy : e.address;
-    const st = e.status === "confirmed" ? "ok" : e.status === "signed" ? "warn" : "no";
-    return `<tr><td>${esc(c.name)}</td><td>${k}</td><td>${e.kind === "proxy_upgrade" ? "proxy upgrade" : "deploy"}</td><td><span class="pill ${st}">${esc(e.status)}</span></td>`
-      + `<td class="mono">${target && !/^0x0+$/.test(target) ? link(`${c.scan}/address/${target}`, short(target)) : `<span class="muted">plain CREATE</span>`}</td>`
-      + `<td class="mono">${e.tx_hash && !/^0x0+$/.test(e.tx_hash) ? link(`${c.scan}/tx/${e.tx_hash}`, short(e.tx_hash)) : "—"}</td></tr>`;
-  }).join("") : `<tr><td colspan="6" class="muted">no lines</td></tr>`;
+    const pill = e.status === "confirmed" ? "ok" : e.status === "signed" ? "warn" : "no";
+    return `<tr><td data-label="Chain">${esc(c.name)}</td><td data-label="Nonce">${k}</td><td data-label="Kind">${e.kind === "proxy_upgrade" ? "proxy upgrade" : "deploy"}</td><td data-label="Status"><span class="pill ${pill}">${esc(e.status)}</span></td>`
+      + `<td class="mono" data-label="Contract">${hex(target) ? link(`${c.scan}/address/${target}`, short(target)) : `<span class="muted">plain CREATE</span>`}</td>`
+      + `<td class="mono" data-label="Transaction">${hex(e.tx_hash) ? link(`${c.scan}/tx/${e.tx_hash}`, short(e.tx_hash)) : "—"}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="muted">${unread ? "could not read the journal" : "no lines"}</td></tr>`;
+
+  const everyPartRead = st && ro && ru && eaddr && keys && account;
+  $("banner").hidden = Boolean(everyPartRead);
+  if (!everyPartRead) {
+    const none = !st && !ro && !ru && !keys && !account;
+    $("banner-text").textContent = none
+      ? `None of the public NEAR nodes answered (${NEAR_NODES.map((u) => new URL(u).host).join(", ")}). Nothing below is known right now. The contract itself does not depend on them.`
+      : "Some of the policy could not be read from the public nodes. What could not be read is marked unknown.";
+  }
   $("when").textContent = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  $("nodes").textContent = [used.NEAR ? `NEAR ${new URL(used.NEAR).host}` : "no NEAR node answered", used.EVM ? `EVM ${new URL(used.EVM).host} and others` : "no EVM node answered"].join("; ");
+}
+
+let run = 0;
+async function load() {
+  const mine = ++run;
+  document.body.dataset.state = "reading";
+  $("reload").disabled = true;
+  try {
+    await loadOnce();
+  } catch (e) {
+    $("banner").hidden = false;
+    $("banner-text").textContent = `Could not read the policy: ${e.message || e}`;
+  }
+  if (mine === run) {
+    document.body.dataset.state = "done";
+    $("reload").disabled = false;
+  }
 }
 
 async function preview(arg) {
   const out = $("answer");
-  out.innerHTML = `<div class="answer muted">asking the policy…</div>`;
+  const buttons = document.querySelectorAll("button[data-arg]");
+  buttons.forEach((b) => { b.disabled = true; });
+  out.innerHTML = `<div class="muted">asking the policy…</div>`;
   const init = COUNTER + BigInt(arg).toString(16).padStart(64, "0");
   try {
     // Through the council's CREATE2 factory with a fresh salt, so the policy names the address in advance.
     const salt = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join("");
     const p = await view("preview", { chain_id: 84532, init_code_hex: init, gas_limit: 300000, max_fee_per_gas: 1000000000, max_priority_fee_per_gas: 1000000, salt_hex: salt, via_factory: true });
-    out.innerHTML = `<div class="answer ok">Allowed. The policy would sign nonce ${p.nonce}, a call to its factory; the contract would land at <code>${esc(p.expected_address)}</code>. Unsigned transaction hash <code>${esc(short(p.hash, 8))}</code>. Nothing was signed: this was a preview.</div>`;
+    out.innerHTML = `<div class="answer ok">Allowed. The policy would sign nonce ${esc(p.nonce)}, a call to its factory; the contract would land at <code>${esc(p.expected_address)}</code>. Unsigned transaction hash <code>${esc(short(p.hash, 8))}</code>. Nothing was signed: this was a preview.</div>`;
   } catch (e) {
-    out.innerHTML = `<div class="answer no">Refused by the policy: <strong>${esc(panicText(e))}</strong>. Nothing was built or signed.</div>`;
+    out.innerHTML = e instanceof Refused
+      ? `<div class="answer no">Refused by the policy: <strong>${esc(panicText(e))}</strong>. Nothing was built or signed.</div>`
+      : `<div class="answer warn">Could not ask: no public node answered (${esc(e.message)}). This says nothing about the policy; try again in a moment.</div>`;
   }
+  buttons.forEach((b) => { b.disabled = false; });
 }
 
 document.querySelectorAll("button[data-arg]").forEach((b) => b.addEventListener("click", () => preview(b.dataset.arg)));
-load().catch((e) => { $("pending").textContent = `Could not read the policy: ${e.message || e}`; });
+$("reload").addEventListener("click", load);
+load();
 </script>
 </body>
 </html>

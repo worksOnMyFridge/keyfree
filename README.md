@@ -246,7 +246,7 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `sandbox/` | the policy in a local nearcore node: the tests and a stand-in MPC contract (`mock-mpc`, test keys anyone can recompute) |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
-| `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
+| `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal), one file with no dependencies, tested in Chromium, Firefox and WebKit against nodes that fail on purpose (`explorer` workflow); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
 | `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy and `tools/check_claims.mjs` (every link, quoted log line and count in the docs), daily |
 | `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
 
