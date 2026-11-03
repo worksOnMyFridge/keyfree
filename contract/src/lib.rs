@@ -18,7 +18,8 @@
 //   Upgraded log in a Safe or Finalized block, bound with an expected payload hash computed here.
 // - Callbacks read the MPC answer as raw bytes and never panic, so no answer can freeze the contract.
 // - A daily budget per chain (R8): the most gas it may commit in one UTC day (gas limit x max fee of every
-//   signature, re-signs included) and how many transactions it signs; nothing is given back.
+//   signature, re-signs included) and how many transactions it signs; nothing is given back. A chain
+//   without a budget signs nothing.
 //
 // Who can do what
 // - agent: a function-call key on the request methods only (request_deploy, request_proxy_upgrade,
@@ -136,7 +137,8 @@ pub struct ProxyEntry {
 
 // Daily spend per chain (R8): how much gas the policy may commit on one chain in one UTC day, counted as
 // gas_limit x max_fee_per_gas of every transaction it signs (the most each can cost, re-signs included),
-// and how many transactions it signs. A chain without a budget has only the per-transaction caps.
+// and how many transactions it signs. A chain without a budget signs nothing: opening a chain and setting its
+// budget are two rules, and forgetting the second must not mean "no limit" (AUDIT.md, V1).
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Budget {
@@ -1014,8 +1016,8 @@ impl Keyfree {
 
     // What the chain will have used today once this transaction is signed, or a refusal (R8). Every signature
     // counts, a re-sign too: any of them may land, and the budget is about what can be spent.
-    fn spent_after(&self, p: &Pending) -> Option<Spent> {
-        let b = self.budgets.get(&p.chain_id).copied()?;
+    fn spent_after(&self, p: &Pending) -> Spent {
+        let b = self.budgets.get(&p.chain_id).copied().unwrap_or_else(|| env::panic_str(&format!("no daily budget on chain {}: the council sets one by a rule (SetBudget)", p.chain_id)));
         let day = now() / 86_400;
         let s = self.spent.get(&p.chain_id).copied().filter(|s| s.day == day).unwrap_or(Spent { day, wei: 0, txs: 0 });
         let cost = p.gas_limit.saturating_mul(p.max_fee_per_gas);
@@ -1025,11 +1027,12 @@ impl Keyfree {
         if s.wei.saturating_add(cost) > b.max_wei_per_day {
             env::panic_str(&format!("daily gas budget on chain {}: {} of {} wei used today, this one may cost {}", p.chain_id, s.wei, b.max_wei_per_day, cost));
         }
-        Some(Spent { day, wei: s.wei + cost, txs: s.txs + 1 })
+        Spent { day, wei: s.wei + cost, txs: s.txs + 1 }
     }
 
     fn sign(&mut self, mut p: Pending) -> Promise {
-        if let Some(s) = self.spent_after(&p) { self.spent.insert(p.chain_id, s); }
+        let s = self.spent_after(&p);
+        self.spent.insert(p.chain_id, s);
         p.since_block = env::block_height();
         let hash = env::keccak256_array(&tx_of(&p).build_for_signing());
         env::log_str(&format!("keyfree: signing chain {} nonce {} code {} expected {:?} hash {}", p.chain_id, p.nonce, p.code_hash, expected_address(&p), hex::encode(hash)));

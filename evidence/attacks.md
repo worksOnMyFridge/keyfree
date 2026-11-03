@@ -2,7 +2,7 @@
 
 Run: `npm run attacks` (offline).
 
-**63 of 63 attacks refused offline, 1 more refused live by the NEAR protocol.**
+**64 of 64 attacks refused offline, 1 more refused live by the NEAR protocol.**
 
 Contract attacks run the real policy code on near-sdk's mocked chain; tool attacks run the built keyfree package. "Seen live" points to the testnet run.
 
@@ -43,6 +43,7 @@ Contract attacks run the real policy code on near-sdk's mocked chain; tool attac
 | A31 | retry or re-sign a request after the council removed its code (signing past a brake) | refused | code not on the allow list | `retry_stops_when_the_code_was_removed` |  |
 | A32 | re-sign a signed deploy after its code was removed | refused | code not on the allow list | `resign_stops_when_the_code_was_removed` |  |
 | A33 | mark a journal line confirmed from a block that can still vanish (Latest) | refused | confirmation needs a Safe or Finalized block | `confirm_refuses_latest` |  |
+| A34 | ask for a signature on an open chain the council gave no daily budget | refused | no daily budget on chain | `a_chain_without_a_budget_signs_no_deploy` |  |
 
 ## A thief with one or two council keys
 

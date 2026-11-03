@@ -27,7 +27,8 @@ council (human key, --as <account>):
   rules                                   allow list, caps, open proposals
   rules allow-code <hash>                 widening: waits the rules delay, any council member may cancel
   rules allow-upgrade <chain> <proxy> <implementation>   one upgradeTo, used up by the request
-  rules allow-chain <chain> <nonce> <floor_wei> | rules enable-chain <chain> | rules set-factory <chain> <address>
+  rules allow-chain <chain> <nonce> <floor_wei>   an open chain signs nothing until its set-budget rule has passed
+  rules enable-chain <chain> | rules set-factory <chain> <address>
   rules set-limits <gas> <fee_wei>
   rules set-budget <chain> <wei_per_day> <tx_per_day>   a chain's daily budget (raising waits the delay)
   rules apply <id> | rules cancel <id>

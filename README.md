@@ -97,7 +97,7 @@ Reading and previewing need no key. Deploying needs the agent's key for this pol
 npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20+
 ```
 
-63 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
+64 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
 stranger, a broken or hostile MPC answer. Each one is a test that must end in a refusal with a stated reason;
 the bench prints `attack -> refusal` and writes the table to [`evidence/attacks.md`](evidence/attacks.md), with
 the testnet run where the same refusal was seen live. Contract attacks run the real policy code on near-sdk's
@@ -108,7 +108,7 @@ mocked chain; tool attacks run the built `keyfree` package.
 From the repository root:
 
 ```bash
-(cd contract && cargo test -- --test-threads=1)       # 160 tests of the policy (Rust, near-sdk 5.29);
+(cd contract && cargo test -- --test-threads=1)       # 168 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
 (cd packages/keyfree && npm test && npm run smoke)    # 78 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM

@@ -296,7 +296,7 @@ async function loadOnce() {
     ]);
     let money = UNKNOWN;
     try { if (bal) money = eth(BigInt(bal)); } catch { /* not a number: stays unknown */ }
-    let b = budget === null ? `<span class="muted">none set: per-transaction caps only</span>` : UNKNOWN;
+    let b = budget === null ? `<span class="muted">none set: this chain signs nothing</span>` : UNKNOWN;
     try {
       if (budget) {
         const [spent, max] = [BigInt(budget.used_wei_today), BigInt(budget.max_wei_per_day)];

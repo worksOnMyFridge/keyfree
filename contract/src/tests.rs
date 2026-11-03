@@ -49,6 +49,8 @@ fn contract() -> Keyfree {
     c.allowed_code.insert(pending().code_hash);
     c.next_nonce.insert(84532, 4);
     c.pending = Some(pending());
+    // A chain signs only under a budget; wide enough here that only the tests about budgets ever meet it.
+    for chain in [84532, 421614] { c.budgets.insert(chain, Budget { max_wei_per_day: u128::MAX, max_tx_per_day: u32::MAX }); }
     c
 }
 
@@ -1733,11 +1735,120 @@ fn spend(c: &mut Keyfree, secs: u64) {
     c.next_nonce.insert(84532, n + 1);
 }
 
+// v17: no budget, no signature (AUDIT.md, V1). Opening a chain and setting its budget are two rules, so one can
+// pass without the other; the chain then stays silent instead of signing without a daily limit.
+fn no_budget(mut c: Keyfree) -> Keyfree {
+    c.budgets.remove(&84532);
+    c
+}
+
 #[test]
-fn without_a_budget_only_the_caps_apply() {
+#[should_panic(expected = "no daily budget on chain 84532")]
+fn a_chain_without_a_budget_signs_no_deploy() {
+    let mut c = no_budget(idle());
+    ctx_at("agent.testnet", 30, 5_000, vec![]);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "no daily budget on chain 84532")]
+fn a_chain_without_a_budget_previews_no_deploy() {
+    let c = no_budget(idle());
+    ctx_at("agent.testnet", 30, 5_000, vec![]);
+    c.preview(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+}
+
+#[test]
+#[should_panic(expected = "no daily budget on chain 84532")]
+fn a_chain_without_a_budget_signs_no_proxy_upgrade() {
+    let mut c = no_budget(upgrade_allowed());
+    request_upgrade(&mut c, IMPL_V2);
+}
+
+#[test]
+#[should_panic(expected = "no daily budget on chain 84532")]
+fn a_chain_without_a_budget_previews_no_proxy_upgrade() {
+    let c = no_budget(upgrade_allowed());
+    ctx_at("agent.testnet", 30, 5_000, vec![]);
+    c.preview_proxy_upgrade(84532, PROXY.into(), IMPL_V2.into(), 200_000, 14_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "no daily budget on chain 84532")]
+fn a_chain_without_a_budget_retries_nothing() {
     let mut c = idle();
-    for _ in 0..5 { spend(&mut c, 5_000); }
-    assert!(c.get_budget(84532).is_none());
+    ctx_at("agent.testnet", 30, 5_000, vec![]);
+    let _ = c.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    c.handle_signed(Err(PromiseError::Failed));
+    let mut c = no_budget(c);
+    ctx_at("agent.testnet", 31, 5_000, vec![]);
+    let _ = c.retry(20_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "no daily budget on chain 84532")]
+fn a_chain_without_a_budget_resigns_no_deploy() {
+    let mut c = no_budget(idle());
+    let mut code_hash = [0u8; 32];
+    code_hash.copy_from_slice(&env::keccak256_array(&hex::decode(INIT).unwrap()));
+    c.journal.insert(key(84532, 2), Entry { code_hash, salt: [0; 32], factory: [0; 20], addr: [0; 20], tx_hash: [1; 32], status: SIGNED });
+    ctx_at("agent.testnet", 30, 5_000, vec![]);
+    let _ = c.resign(84532, 2, INIT.into(), 300_000, 20_000_000, 1_000_000);
+}
+
+#[test]
+#[should_panic(expected = "no daily budget on chain 84532")]
+fn a_chain_without_a_budget_resigns_no_proxy_upgrade() {
+    let mut c = no_budget(upgrade_allowed());
+    c.proxy_journal.insert(key(84532, 2), ProxyEntry { proxy: addr20(PROXY, "proxy"), implementation: addr20(IMPL_V2, "implementation"), tx_hash: [1; 32], status: SIGNED });
+    ctx_at("agent.testnet", 30, 5_000, vec![]);
+    let _ = c.resign_proxy_upgrade(84532, 2, 200_000, 20_000_000, 1_000_000);
+}
+
+// The whole path: a chain opened by its rule stays silent, the budget's own rule (through the delay) opens it.
+#[test]
+fn a_new_chain_signs_only_after_its_budget_rule() {
+    let mut c = idle();
+    let chain = 11155111;
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let open = c.propose_rule(RuleChange::AllowChain { chain_id: chain, next_nonce: 0, min_fee_per_gas: 1 });
+    ctx_at("guardian.testnet", 21, 1_000 + 1_800, vec![]);
+    c.apply_rule(open);
+    assert_eq!(c.get_next_nonce(chain), Some(0));
+    assert!(c.get_budget(chain).is_none());
+    ctx_at("agent.testnet", 22, 5_000, vec![]);
+    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.preview(chain, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None)));
+    assert!(refused.is_err(), "open but without a budget");
+    assert!(c.pending.is_none() && c.journal.get(&key(chain, 0)).is_none(), "nothing happened");
+    ctx_at("owner.testnet", 23, 5_000, vec![]);
+    let id = c.propose_rule(RuleChange::SetBudget { chain_id: chain, max_wei_per_day: ONE * 10, max_tx_per_day: 3 });
+    ctx_at("guardian.testnet", 24, 5_000 + 1_800, vec![]);
+    c.apply_rule(id);
+    ctx_at("agent.testnet", 25, 7_000, vec![]);
+    let _ = c.request_deploy(chain, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    assert_eq!(c.pending.as_ref().unwrap().chain_id, chain);
+    assert_eq!(c.get_budget(chain).unwrap()["used_tx_today"], 1);
+}
+
+// Upgrading onto v17 changes no state: a chain with a budget signs as before, one without stops.
+#[test]
+fn migrate_keeps_budgets_and_a_chain_without_one_stays_silent() {
+    let mut c = idle();
+    c.budgets.remove(&421614);
+    c.budgets.insert(84532, Budget { max_wei_per_day: ONE * 10, max_tx_per_day: 3 });
+    c.next_nonce.insert(421614, 7);
+    flush_all(&mut c);
+    env::state_write(&c);
+    ctx_at("keyfree.testnet", 30, 5_000, vec![]);
+    let mut m = Keyfree::migrate();
+    assert_eq!(m.budgets.get(&84532).copied(), Some(Budget { max_wei_per_day: ONE * 10, max_tx_per_day: 3 }));
+    assert_eq!(m.get_next_nonce(421614), Some(7));
+    assert!(m.get_budget(421614).is_none());
+    ctx_at("agent.testnet", 31, 5_000, vec![]);
+    let _ = m.request_deploy(84532, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None);
+    m.pending = None;
+    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| m.preview(421614, INIT.into(), 200_000, 14_000_000, 1_000_000, None, None)));
+    assert!(refused.is_err());
 }
 
 #[test]
@@ -1854,6 +1965,7 @@ fn the_agent_cannot_lower_or_touch_a_budget() {
 #[test]
 fn migrate_reads_the_v14_layout() {
     let mut c = idle();
+    c.budgets.clear(); // v14 had none
     flush_all(&mut c);
     let codes = c.allowed_code.len();
     let old = V14 {
@@ -2068,7 +2180,7 @@ fn prop_daily_budget_is_never_exceeded_and_refuses_only_when_it_must() {
             let fits = txs < max_tx && wei.checked_add(cost).is_some_and(|w| w <= max_wei);
             let got = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.spent_after(&p)));
             assert_eq!(got.is_ok(), fits, "budget {max_wei} wei / {max_tx} tx, used {wei} / {txs}, this one {cost}");
-            if let Ok(Some(s)) = got { c.spent.insert(84532, s); wei += cost; txs += 1; signed += 1; } else { refused += 1; }
+            if let Ok(s) = got { c.spent.insert(84532, s); wei += cost; txs += 1; signed += 1; } else { refused += 1; }
             let b = c.get_budget(84532).unwrap();
             assert_eq!((b["used_wei_today"].as_str().unwrap().parse::<u128>().unwrap(), b["used_tx_today"].as_u64().unwrap() as u32), (wei, txs), "get_budget agrees");
             assert!(wei <= max_wei && txs <= max_tx);

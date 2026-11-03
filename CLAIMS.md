@@ -79,7 +79,7 @@ Deploys through the factory (each landed at the address the policy promised befo
 | What | Count | Run |
 |---|---|---|
 | Attack bench: every attack in `evidence/attacks.md` must end in a refusal | 63 offline + 1 live | `npm run attacks` (writes `evidence/attacks.md`) |
-| Policy contract tests (Rust): unit, golden, 400 random transactions against viem, 3 property tests | 160 | `cd contract && cargo test -- --test-threads=1` |
+| Policy contract tests (Rust): unit, golden, 400 random transactions against viem, 3 property tests | 168 | `cd contract && cargo test -- --test-threads=1` |
 | The live wasm in a local nearcore node with a stand-in MPC: access matrix, flows, upgrade, retirement, faults | 17 | `sandbox` workflow (`evidence/sandbox.md`) |
 | keyfree package tests (unit, command-line checks, attacks on the tool and the MCP server, 41 network faults against nodes that fail on purpose) | 78 | `cd packages/keyfree && npm test` |
 | MCP self-check against the live policy | 1 script | `cd packages/keyfree && npm run smoke` |

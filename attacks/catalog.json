@@ -36,7 +36,8 @@
         { "id": "A30", "attack": "set or raise its own daily budget", "rust": "the_agent_cannot_set_a_budget", "refusal": "only owner" },
         { "id": "A31", "attack": "retry or re-sign a request after the council removed its code (signing past a brake)", "rust": "retry_stops_when_the_code_was_removed", "refusal": "code not on the allow list" },
         { "id": "A32", "attack": "re-sign a signed deploy after its code was removed", "rust": "resign_stops_when_the_code_was_removed", "refusal": "code not on the allow list" },
-        { "id": "A33", "attack": "mark a journal line confirmed from a block that can still vanish (Latest)", "rust": "confirm_refuses_latest", "refusal": "confirmation needs a Safe or Finalized block" }
+        { "id": "A33", "attack": "mark a journal line confirmed from a block that can still vanish (Latest)", "rust": "confirm_refuses_latest", "refusal": "confirmation needs a Safe or Finalized block" },
+        { "id": "A34", "attack": "ask for a signature on an open chain the council gave no daily budget", "rust": "a_chain_without_a_budget_signs_no_deploy", "refusal": "no daily budget on chain" }
       ]
     },
     {
