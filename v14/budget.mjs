@@ -4,6 +4,7 @@
 //   node v14/budget.mjs demo     the agent deploys Counter(1) through the keyfree tool; a second request the same UTC
 //                                 day is refused by the tool's preview and by the contract itself (tool bypassed)
 //   node v14/budget.mjs raise    a working budget through the delay, then another council member lowers it at once
+//   node v14/budget.mjs none     v17: a chain opened without a budget signs nothing; opened for this only, then closed
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { encodeDeployData, keccak256, toHex, createPublicClient, http, baseSepolia } from "../tools/evm.mjs";
@@ -93,6 +94,18 @@ try {
     await refused("second deploy today straight to the contract, tool bypassed",
       () => act("agent", "request_deploy", { chain_id: BASE, init_code_hex: init, gas_limit: 300_000, max_fee_per_gas: 10_000_000, max_priority_fee_per_gas: 1_000_000, salt_hex: salt, via_factory: true }, "250"),
       "daily limit on chain 84532");
+  } else if (stage === "none") {
+    const OPEN = 421614; // Arbitrum Sepolia: nothing is ever signed there, the chain is closed again at the end
+    if ((await view(P, "get_next_nonce", { chain_id: OPEN })) === null) await rules([{ AllowChain: { chain_id: OPEN, next_nonce: 0, min_fee_per_gas: 10_000_000 } }]);
+    check((await view(P, "get_next_nonce", { chain_id: OPEN })) === 0 && (await budget(OPEN)) === null, `chain ${OPEN} is open at nonce 0 and has no budget`);
+    const init = encodeDeployData({ abi: COUNTER.abi, bytecode: COUNTER.bytecode.object, args: [1n] });
+    const ask = { chain_id: OPEN, init_code_hex: init, gas_limit: 300_000, max_fee_per_gas: 10_000_000, max_priority_fee_per_gas: 1_000_000, salt_hex: null, via_factory: null };
+    await refused("preview of allowed code on it", () => view(P, "preview", ask), `no daily budget on chain ${OPEN}`);
+    await refused("the agent's request on it, straight to the contract", () => act("agent", "request_deploy", ask, "250"), `no daily budget on chain ${OPEN}`);
+    check((await view(P, "get_next_nonce", { chain_id: OPEN })) === 0 && (await view(P, "get_entry", { chain_id: OPEN, nonce: 0 })) === null, "nothing changed: nonce 0, no journal line");
+    const out = await act("guardian", "disable_chain", { chain_id: OPEN });
+    await wait(3);
+    await refused(`closed again by the guardian at once ${explorer(out.transaction.hash)}`, () => view(P, "preview", ask), "chain is disabled");
   } else if (stage === "raise") {
     await rules([{ SetBudget: { chain_id: BASE, max_wei_per_day: 1_000_000_000_000_000, max_tx_per_day: 20 } }]);
     let b = await budget(BASE);

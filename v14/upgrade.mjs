@@ -4,14 +4,15 @@
 // method the live code exports is still there, panic messages still reach the caller (panic_utf8), and no
 // machine path is inside. Then the owner stores the bytes, the guardian side reads them back from the chain
 // and compares the sha256, the delay runs, and the contract deploys exactly those bytes onto itself.
-// Results are appended to evidence/v14.log.
+// KF_CONFIG names another config ({ policy, lab: its owner, signers: { owner: "credentials" } }) to upgrade another
+// policy the same way. Results are appended to evidence/v14.log.
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { provider, explorer, view, teraToGas, actions, loadAccount, Account } from "../tools/near.mjs";
 
 const top = (f) => new URL(`../${f}`, import.meta.url);
 const here = (f) => new URL(`./${f}`, import.meta.url);
-const CFG = JSON.parse(fs.readFileSync(top(fs.existsSync(here("config.json")) ? "v14/config.json" : "v13/config.json")));
+const CFG = JSON.parse(fs.readFileSync(process.env.KF_CONFIG ?? top(fs.existsSync(here("config.json")) ? "v14/config.json" : "v13/config.json")));
 const P = CFG.policy;
 const [file, want] = process.argv.slice(2);
 if (!file || !/^[0-9a-f]{64}$/.test(want ?? "")) { console.log("usage: node v14/upgrade.mjs <wasm> <sha256>"); process.exit(2); }
@@ -22,7 +23,7 @@ const log = [];
 let oks = 0, fails = 0;
 const say = (s) => { console.log(s); log.push(s); };
 const check = (ok, s) => { ok ? oks++ : fails++; say(`${ok ? "OK  " : "FAIL"} ${s}`); return ok; };
-const save = () => fs.appendFileSync(top("evidence/v14.log"), `--- ${new Date().toISOString()} upgrade to a reproducible build (${oks} ok, ${fails} fail)\n${log.join("\n")}\n`);
+const save = () => fs.appendFileSync(top("evidence/v14.log"), `--- ${new Date().toISOString()} ${P}: upgrade to a reproducible build (${oks} ok, ${fails} fail)\n${log.join("\n")}\n`);
 const owner = () => (CFG.signers.owner ?? "local") === "credentials" ? loadAccount(CFG.lab)
   : new Account(CFG.lab, provider, JSON.parse(fs.readFileSync(top("v13/owner_key.json"))).private_key);
 const kfLogs = (out) => { for (const r of out.receipts_outcome) for (const l of r.outcome.logs) if (l.startsWith("keyfree")) say(`  log: ${l}`); };

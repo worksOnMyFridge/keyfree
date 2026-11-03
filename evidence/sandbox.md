@@ -2,7 +2,7 @@
 
 Run: `.github/workflows/sandbox.yml` (or `npm run test:sandbox` with POLICY_WASM and MOCK_WASM).
 
-The policy's wasm (sha256 `ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304`, 383323 bytes) in a local nearcore sandbox 2.13.4,
+The policy's wasm (sha256 `3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3`, 383389 bytes) in a local nearcore sandbox 2.13.4,
 next to a stand-in MPC contract (`sandbox/mock-mpc`). Real accounts and keys, gas, storage, promises and callbacks.
 
 ## Who may call what
@@ -54,10 +54,11 @@ Read-only methods, callable by anyone without a transaction: `get_roles`, `get_s
 
 ## Checks
 
-- installed policy.sandbox in one transaction: 0 access keys, code hash = the wasm under test, build v16; init again refused for every account
+- installed policy.sandbox in one transaction: 0 access keys, code hash = the wasm under test, build v17; init again refused for every account
 - access matrix: 37 rows x 5 accounts as real transactions, 11 read-only methods; every role check as designed (table above)
 - setup (anyone may call it): the policy derived 0x8a711a19d8cb5f0bd71702a7769bdcaa30a1ad77 for (its own account, keyfree-1); a second setup is refused
 - rules: 5 proposed by the owner; refused for agent and guardian, refused before the delay, applied by the guardian after it; a budget of 12345678901234567891 wei reads back exactly
+- a chain opened without a budget: preview and the agent's request refused with no daily budget on chain 11155111; the MPC was not asked, the nonce did not move, no journal line
 - plain deploy by the agent's function-call key: signed tx == preview == viem, low s, recovers to 0x8a711a19d8cb5f0bd71702a7769bdcaa30a1ad77; nonce 0 -> 1; journal line "signed" with the tx hash
 - factory deploy: expected address == viem CREATE2, tx goes to the factory with deploy(salt, code); the same salt+code is refused a second nonce; a failed Read MPC answer leaves "signed", a good one gives "confirmed" for the tx hash the policy signed
 - MPC answers panic, garbage, not_json, huge, other_key (a failure, garbage, not JSON, 20 KB, another key's signature): no callback panicked, nonce 2 stayed bound to the same deploy, a new request was refused meanwhile; a high-s answer is flipped and the retry signs exactly the previewed deploy
@@ -69,8 +70,8 @@ Read-only methods, callable by anyone without a transaction: `get_roles`, `get_s
 - late MPC answer (yield and resume, like the real contract): while it waited, another request and release were refused; a pause in between stopped new requests, and the answer that came after the pause still gave the previewed transaction, nonce 0 -> 1
 - no MPC answer: after a 260-block fast-forward, the request was parked on nonce 0 by the runtime's yield timeout (no signature, nonce unmoved), a new request was refused, and retry then signed exactly the previewed deploy
 - two requests sent at once (agent and owner): 1 signed with nonces 0, 1 refused as "another request is being signed"; never one nonce twice
-- storage: a policy with 3.9 NEAR could not store a 49 152-byte request (LackBalanceForState): nothing changed and the MPC was never asked; 1 NEAR sent by a stranger, and the same request was signed (83.5 Tgas); 49 153 bytes is refused
-- the real tool on this contract, with a local EVM node failing on purpose: no MPC answer (retry waits, then releases and re-signs, the contract naming its fee floor on the way); a refused broadcast of a deploy (a new deploy stopped, other code refused with no signature spent, resign lands the promised 0xd2e455dee19381a29ae0c5366135f500682045ed); the same for a proxy upgrade (resign_proxy_upgrade). All on the same nonces.
+- storage: a policy with 3.9 NEAR could not store a 49 152-byte request (LackBalanceForState): nothing changed and the MPC was never asked; 1 NEAR sent by a stranger, and the same request was signed (83.8 Tgas); 49 153 bytes is refused
+- the real tool on this contract, with a local EVM node failing on purpose: no MPC answer (retry waits, then releases and re-signs, the contract naming its fee floor on the way); a refused broadcast of a deploy (a new deploy stopped, other code refused with no signature spent, resign lands the promised 0x6de7447ba4710057f84f6bb1343179be18923bdf); the same for a proxy upgrade (resign_proxy_upgrade). All on the same nonces.
 
 ## Gas
 
@@ -79,8 +80,8 @@ Read-only methods, callable by anyone without a transaction: `get_roles`, `get_s
 | request_deploy + MPC sign + on_signed (factory, plain create, 836 bytes) | 20.1 |
 | request_deploy + MPC sign + on_signed (Counter through the factory) | 20.1 |
 | confirm + Read MPC + on_confirmed | 6.8 |
-| propose_upgrade (383323 bytes as the call input) | 47.0 |
-| apply_upgrade (deploy itself + migrate, one batch) | 55.7 |
+| propose_upgrade (383389 bytes as the call input) | 47.0 |
+| apply_upgrade (deploy itself + migrate, one batch) | 55.8 |
 | propose_upgrade of the stand-in | 23.4 |
 | finish_retire (transfer of the free NEAR) | 2.7 |
-| request_deploy + MPC sign + on_signed (the largest allowed code, 49 152 bytes) | 83.5 |
+| request_deploy + MPC sign + on_signed (the largest allowed code, 49 152 bytes) | 83.8 |
