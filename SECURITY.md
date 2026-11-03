@@ -75,6 +75,8 @@ only as safe as that place.
   proxy whose admin is the policy, a code change is an allowed upgrade or nothing: the council should allow
   only an implementation whose code it has read (best one it deployed through Keyfree, with an allowed
   hash). A proxy with another admin, or with a way to change its admin, is outside Keyfree.
+- **No budget, no signature.** A chain the council opened without a daily budget signs nothing until the
+  budget's rule has passed (from v17). The amount is the council's: a budget set too high limits little.
 - **The daily budget counts signatures.** Every signature counts with its most it can cost (gas limit x max
   fee), broadcast or not, by UTC day: around midnight two days' budget can be spent close together, and on
   Base the L1 data fee is charged on top of gas x fee. It bounds what the agent can start, not the exact bill.

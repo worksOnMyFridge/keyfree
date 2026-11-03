@@ -172,6 +172,8 @@ check(status().paused === false, "two votes: running again");
 say("\n[council: each brake at once; the order lets each refusal show, the tool checks the code before the contract]");
 const pv1 = ["preview", "--chain", CHAIN.name, "--artifact", COUNTER, "--args", "[1]"];
 const b0 = chainStatus().daily_budget;
+// The rest of the run signs too, and an earlier run the same UTC day counts: the budget refuses what is over it.
+const dayTxs = Math.max(b0.max_tx_per_day, b0.used_tx_today + 20);
 const lim0 = status();
 await write("lower-budget to what is used", ["lower-budget", CHAIN.name, b0.max_wei_per_day, String(b0.used_tx_today)], "reserve");
 refused("preview over the lowered budget", pv1, /daily limit/);
@@ -191,7 +193,7 @@ const DUMMY = [`0x${"11".repeat(20)}`, `0x${"22".repeat(20)}`];
 const ids = [];
 const counterMcp = keccak256(counterInit(MCP_COUNT)).slice(2);
 for (const [what, args] of [
-  ["set-budget", ["rules", "set-budget", CHAIN.name, b0.max_wei_per_day, "20"]],
+  ["set-budget", ["rules", "set-budget", CHAIN.name, b0.max_wei_per_day, String(dayTxs)]],
   ["set-factory", ["rules", "set-factory", CHAIN.name, FACTORY]],
   ["set-limits", ["rules", "set-limits", lim0.max_gas_limit, lim0.max_fee_cap]],
   ["allow-code Counter(1)", ["rules", "allow-code", keccak256(counterInit(1)).slice(2)]],
@@ -213,7 +215,7 @@ for (const [what, args] of [
 await settle();
 await applyAll(ids2);
 const after = chainStatus();
-check(after.allowed && after.daily_budget.max_tx_per_day === 20, `chain open again, budget ${after.daily_budget.max_tx_per_day} transactions a day`);
+check(after.allowed && after.daily_budget.max_tx_per_day === dayTxs, `chain open again, budget ${after.daily_budget.max_tx_per_day} transactions a day`);
 step("Counter(1) previews again", pv1);
 const dummyKey = `${CHAIN.chain_id}:${DUMMY[0]}:${DUMMY[1]}`;
 check(status().allowed_proxy_upgrades.includes(dummyKey), "the dummy upgrade is on the list");

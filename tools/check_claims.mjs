@@ -131,16 +131,21 @@ console.log("2/3 the live policy");
   const snap = JSON.stringify(meta);
   report(Boolean(commit) && snap.includes(commit), "NEP-330 metadata names the README's commit", `${commit ?? "?"} in ${meta.build_info?.source_code_snapshot ?? snap.slice(0, 80)}`);
   const st = await view("get_status");
-  const build = readme.match(/build `(v\d+)`/)?.[1] ?? "v16";
+  const build = readme.match(/build `(v\d+)`/)?.[1] ?? "v17";
   report(st.build === build, "get_status build", `${st.build}, version ${st.version}, paused ${st.paused} (docs: ${build})`);
   for (const [chain, id] of [["Base Sepolia", 84532], ["Ethereum Sepolia", 11155111]]) {
     const b = await view("get_budget", { chain_id: id });
-    report(Boolean(b), `daily budget on ${chain}`, b ? `${b.max_tx_per_day} transactions, ${b.max_wei_per_day} wei a day` : "none (AUDIT V1 says both open chains have one)");
+    report(Boolean(b), `daily budget on ${chain}`, b ? `${b.max_tx_per_day} transactions, ${b.max_wei_per_day} wei a day` : "none: this chain would sign nothing, and the docs say both have one");
   }
 }
 
 console.log("3/3 counts in the docs");
 const count = (f, re) => (read(f).match(re) ?? []).length;
+// The live runs: the logs end their run with "n/n steps ok", and the docs say that n.
+const stepsOf = (f) => read(f).match(/^(\d+)\/\1 steps ok$/m)?.[1];
+const [liveSteps, faultSteps] = [stepsOf("evidence/tool_live.log"), stepsOf("evidence/tool_faults_live.log")];
+report(Boolean(liveSteps) && read("CLAIMS.md").includes(`${liveSteps} of ${liveSteps} steps`) && read("README.md").includes(`${liveSteps} steps in`), "live run's steps in CLAIMS and README", `${liveSteps}`);
+report(Boolean(faultSteps) && read("CLAIMS.md").includes(`${faultSteps} of ${faultSteps} steps`), "live fault run's steps in CLAIMS", `${faultSteps}`);
 const toolTests = (() => {
   const pkg = path.join(root, "packages", "keyfree");
   if (!fs.existsSync(path.join(pkg, "dist", "cli.js"))) return null;

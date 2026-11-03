@@ -219,3 +219,49 @@ OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build
 OK   proposal cleared, policy still has 0 keys
 OK   state kept: 10 allowed codes, next nonce Base 14, Ethereum 3
 OK   a refusal still says why: code not on the allow list
+--- 2026-11-03T19:18:06.548Z policy.kf-outsider-494bd7.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 383389 bytes, sha256 3db9d3e217cb79a1... == the build workflow's
+OK   every method the live code exports is still there (50 -> 50)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v16, version 1, code sha256 ee66018871942c4c...
+  log: keyfree: upgrade to code sha256 3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3 (383389 bytes, readable now) proposed, ready at unix 1793733473
+  proposed https://testnet.nearblocks.io/txns/6tAbEvLQxhQRy7N9mDYgg15cAk4GMRq64tK7RDubXYqn
+OK   guardian reads the proposed code from the chain: 383389 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 175 s for the upgrade delay
+  log: keyfree: applying upgrade 3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3
+  log: keyfree: migrated to version 2
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v17, version 2  https://testnet.nearblocks.io/txns/3zWsU2qcpNYLWrKyu9CfuMNU2JHVb5Tf4uM7pfA1jaSp
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 26, Ethereum null
+OK   a refusal still says why: code not on the allow list
+--- 2026-11-03T19:21:38.589Z policy13.keyfree-lab.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 383389 bytes, sha256 3db9d3e217cb79a1... == the build workflow's
+OK   every method the live code exports is still there (50 -> 50)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v16, version 6, code sha256 ee66018871942c4c...
+  log: keyfree: upgrade to code sha256 3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3 (383389 bytes, readable now) proposed, ready at unix 1793733684
+  proposed https://testnet.nearblocks.io/txns/FtcwmXeqinzyjds8hCCiZb29XEiKV7EhjrTz7EyZhgrT
+OK   guardian reads the proposed code from the chain: 383389 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 177 s for the upgrade delay
+  log: keyfree: applying upgrade 3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3
+  log: keyfree: migrated to version 7
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v17, version 7  https://testnet.nearblocks.io/txns/DurhkhAvphDBNfLupxyfHdcujkk274UyDxMj6EDeZBAp
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 14, Ethereum 3
+OK   a refusal still says why: code not on the allow list
+--- 2026-11-03T19:23:20.034Z budget none (6 ok, 0 fail)
+  log: keyfree: rule 23 proposed: AllowChain { chain_id: 421614, next_nonce: 0, min_fee_per_gas: 10000000 }, ready at unix 1793733776
+proposed rules 23
+OK   apply before the rules delay -> Smart contract panicked: rule delay not over
+waiting 65 s for the rules delay
+  log: keyfree: rule 23 applied: AllowChain { chain_id: 421614, next_nonce: 0, min_fee_per_gas: 10000000 }
+OK   chain 421614 is open at nonce 0 and has no budget
+OK   preview of allowed code on it -> wasm execution failed with error: HostError(GuestPanic { panic_msg: "no daily budget on chain 421614: the council sets one by a rule (SetBudget)" })
+OK   the agent's request on it, straight to the contract -> Smart contract panicked: no daily budget on chain 421614: the council sets one by a rule (SetBudget)
+OK   nothing changed: nonce 0, no journal line
+  log: keyfree: chain 421614 disabled by guard13b.keyfree-lab.testnet
+OK   closed again by the guardian at once https://testnet.nearblocks.io/txns/391dsLWVeBMpYZpD5nSfzvjekVoLfAKX4FQ7MyBqNGZV -> wasm execution failed with error: HostError(GuestPanic { panic_msg: "chain is disabled" })

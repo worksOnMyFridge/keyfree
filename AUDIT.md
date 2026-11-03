@@ -136,6 +136,8 @@ data and position; no narrowing method widens anything for zero, `u128::MAX` or 
 
 - The changes of v16 themselves were made after the third review; they are covered by the tests named above and
   by the verification pass (V1..V7), which was not done by an independent reviewer.
+- The same holds for v17 (V1), the one contract change since: a refusal on the signing path, with tests in the
+  contract and in a local nearcore node, and a live check (CLAIMS 9.7).
 
 ## Requirements referred to in the code (R-ids)
 

@@ -3,11 +3,11 @@
 Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the
 repository: every linked transaction and address, the live policy, every count, every quoted log line.
 
-Result: 108 of 108 checks agree.
+Result: 113 of 114 checks agree, **1 do not**.
 
 | | Check | Result |
 |---|---|---|
-| ok | NEAR account policy13.keyfree-lab.testnet README.md:56 +1 | exists, code hash H3cFJqHC… |
+| ok | NEAR account policy13.keyfree-lab.testnet README.md:56 +1 | exists, code hash 59xDZHts… |
 | ok | NEAR tx 7iawPybU… README.md:58 +1 | policy13.keyfree-lab.testnet -> policy13.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
 | ok | Base Sepolia address 0x43e3cb8d… README.md:59 +1 | the policy's keyless address (get_eth_address), 14 transactions sent |
 | ok | README: nonces of the keyless address on Base Sepolia | docs 0..13, chain 0..13 |
@@ -64,36 +64,42 @@ Result: 108 of 108 checks agree.
 | ok | Base Sepolia tx 0xb22a858d… CLAIMS.md:132 (claim 9.5) | block 53218577, status success |
 | ok | NEAR tx ACh6bvaL… CLAIMS.md:133 (claim 9.6) | keyfree-lab.testnet -> policy13.keyfree-lab.testnet propose_upgrade: success |
 | ok | NEAR tx AV3zHMa6… CLAIMS.md:133 (claim 9.6) | keyfree-lab.testnet -> policy13.keyfree-lab.testnet apply_upgrade: success |
-| ok | NEAR tx 8DKGFPi2… CLAIMS.md:144 (claim 10.3) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9039e83014a3480830f424083d59f80830 |
-| ok | NEAR tx w3i2zLjA… CLAIMS.md:144 (claim 10.3) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9021283014a3401830f424083802c80830 |
-| ok | Base Sepolia tx 0x7069d601… CLAIMS.md:144 (claim 10.3) | block 53375859, status success, created 0x7716a4bd3547d36153ec7b24a93e8349157fb766 |
-| ok | Base Sepolia tx 0xbd514782… CLAIMS.md:144 (claim 10.3) | block 53376399, status success |
-| ok | NEAR tx 2CMyxouf… CLAIMS.md:145 (claim 10.4) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet confirm: success = true |
-| ok | Base Sepolia tx 0xaeace1f9… CLAIMS.md:145 (claim 10.4) | block 53803395, status success |
-| ok | Base Sepolia tx 0xc6f61ffd… CLAIMS.md:145 (claim 10.4) | block 53803709, status success |
-| ok | NEAR tx BU6hgYTQ… CLAIMS.md:146 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign: success = "0x02f9021283014a3411830f424083802c80830 |
-| ok | NEAR tx 4HLejbtr… CLAIMS.md:146 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign_proxy_upgrade: success = "0x02f88f83014a3412830f424083802c8082d89 |
-| ok | NEAR tx 2A12tDfu… CLAIMS.md:146 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign: success = "0x02f9021283014a3410830f424083802c80830 |
-| ok | Base Sepolia tx 0x34dab71d… CLAIMS.md:146 (claim 10.5) | block 53799715, status success |
-| ok | Base Sepolia tx 0x71b7605e… CLAIMS.md:146 (claim 10.5) | block 53800376, status success |
-| ok | Base Sepolia tx 0x7fe60897… CLAIMS.md:146 (claim 10.5) | block 53798407, status success |
+| ok | NEAR tx 3zWsU2qc… CLAIMS.md:134 (claim 9.7) | kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet apply_upgrade: success |
+| ok | NEAR tx FtcwmXeq… CLAIMS.md:134 (claim 9.7) | keyfree-lab.testnet -> policy13.keyfree-lab.testnet propose_upgrade: success |
+| ok | NEAR tx DurhkhAv… CLAIMS.md:134 (claim 9.7) | keyfree-lab.testnet -> policy13.keyfree-lab.testnet apply_upgrade: success |
+| ok | NEAR tx 391dsLWV… CLAIMS.md:134 (claim 9.7) | guard13b.keyfree-lab.testnet -> policy13.keyfree-lab.testnet disable_chain: success |
+| ok | NEAR tx 8DKGFPi2… CLAIMS.md:145 (claim 10.3) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9039e83014a3480830f424083d59f80830 |
+| ok | NEAR tx w3i2zLjA… CLAIMS.md:145 (claim 10.3) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9021283014a3401830f424083802c80830 |
+| ok | Base Sepolia tx 0x7069d601… CLAIMS.md:145 (claim 10.3) | block 53375859, status success, created 0x7716a4bd3547d36153ec7b24a93e8349157fb766 |
+| ok | Base Sepolia tx 0xbd514782… CLAIMS.md:145 (claim 10.3) | block 53376399, status success |
+| ok | NEAR tx 45Bnivpo… CLAIMS.md:146 (claim 10.4) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet confirm: success = true |
+| ok | Base Sepolia tx 0xb3bc88a6… CLAIMS.md:146 (claim 10.4) | block 54065800, status success |
+| ok | Base Sepolia tx 0xd5119ee6… CLAIMS.md:146 (claim 10.4) | block 54065983, status success |
+| ok | NEAR tx 6d4ST76D… CLAIMS.md:147 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign: success = "0x02f9021283014a3427830f424083802c80830 |
+| ok | NEAR tx 4qAe6pbc… CLAIMS.md:147 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign_proxy_upgrade: success = "0x02f88f83014a3428830f424083802c8082d89 |
+| ok | NEAR tx 2A12tDfu… CLAIMS.md:147 (claim 10.5) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet resign: success = "0x02f9021283014a3410830f424083802c80830 |
+| ok | Base Sepolia tx 0x82fffecf… CLAIMS.md:147 (claim 10.5) | block 54067307, status success |
+| ok | Base Sepolia tx 0xcefc9b71… CLAIMS.md:147 (claim 10.5) | block 54067894, status success |
+| ok | Base Sepolia tx 0x7fe60897… CLAIMS.md:147 (claim 10.5) | block 53798407, status success |
 | ok | policy13.keyfree-lab.testnet access keys | 0 (docs: 0) |
-| ok | live code sha256 | ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304 (README: ee66018871942c4ccf924283008866901d884d1ecd0c99869b68e639794da304) |
-| ok | live code size | 383323 bytes (README: 383 323) |
-| ok | NEP-330 metadata names the README's commit | e818bdcc706e356f0667c7235c183e55c30b6a3b in git+https://github.com/worksOnMyFridge/keyfree?rev=e818bdcc706e356f0667c7235c183e55c30b6a3b |
-| ok | get_status build | v16, version 6, paused false (docs: v16) |
+| ok | live code sha256 | 3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3 (README: 3db9d3e217cb79a1a0d440d30f856ac26f8eae2348ddabebfae76d4d956fcba3) |
+| ok | live code size | 383389 bytes (README: 383 389) |
+| ok | NEP-330 metadata names the README's commit | ff925fdd05d09ddeba95dc7b9a1789752860fa97 in git+https://github.com/worksOnMyFridge/keyfree?rev=ff925fdd05d09ddeba95dc7b9a1789752860fa97 |
+| ok | get_status build | v17, version 7, paused false (docs: v17) |
 | ok | daily budget on Base Sepolia | 10 transactions, 500000000000000 wei a day |
 | ok | daily budget on Ethereum Sepolia | 10 transactions, 10000000000000000 wei a day |
-| ok | contract tests in README.md | docs 160, repository 160 |
-| ok | contract tests in CLAIMS.md | docs 160, repository 160 |
-| ok | contract tests in SECURITY.md | docs 160, repository 160 |
+| ok | live run's steps in CLAIMS and README | 129 |
+| ok | live fault run's steps in CLAIMS | 31 |
+| ok | contract tests in README.md | docs 168, repository 168 |
+| ok | contract tests in CLAIMS.md | docs 168, repository 168 |
+| ok | contract tests in SECURITY.md | docs 168, repository 168 |
 | ok | tool tests in README.md | docs 78, repository 78 |
 | ok | tool tests in CLAIMS.md | docs 78, repository 78 |
 | ok | factory tests in README.md | docs 6, repository 6 |
 | ok | sandbox tests in CLAIMS.md | docs 17, repository 17 |
-| ok | offline attacks in README.md | docs 63, repository 63 |
-| ok | offline attacks in SECURITY.md | docs 63, repository 63 |
-| ok | offline attacks in CLAIMS.md | docs 63, repository 63 |
+| ok | offline attacks in README.md | docs 64, repository 64 |
+| ok | offline attacks in SECURITY.md | docs 64, repository 64 |
+| **FAIL** | offline attacks in CLAIMS.md | docs 63, repository 64 |
 | ok | live-only attacks in CLAIMS.md | docs 1, repository 1 |
 | ok | public methods in README.md | docs 47, repository 47 |
 | ok | random vectors in README.md | docs 400, repository 400 |
@@ -114,4 +120,4 @@ Result: 108 of 108 checks agree.
 | ok | CLAIMS.md:101 quotes v14.log | "Access key does not allow method propose_rule" |
 | ok | CLAIMS.md:103 quotes v14.log | "proxy upgrade not on the allow list" |
 | ok | CLAIMS.md:103 quotes v14.log | "the allowance is used up" |
-| ok | CLAIMS.md:146 quotes tool_faults_live.log | "gas price over the cap" |
+| ok | CLAIMS.md:147 quotes tool_faults_live.log | "gas price over the cap" |

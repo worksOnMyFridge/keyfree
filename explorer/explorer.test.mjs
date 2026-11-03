@@ -29,11 +29,11 @@ after(async () => { await browser?.close(); server?.close(); });
 
 // One line per journal entry, as the contract writes them. Budgets go out as raw JSON text so a long number stays long.
 const views = () => ({
-  get_status: `{"build":"v16","version":6,"paused":false,"upgrade_delay_sec":180,"proposed":null}`,
+  get_status: `{"build":"v17","version":7,"paused":false,"upgrade_delay_sec":180,"proposed":null}`,
   get_roles: `{"owner":"owner.testnet","guardian":"guard.testnet","reserve":"reserve.testnet","agent":"agent.testnet","retiring":false,"role_changes":[]}`,
   get_rules: `{"allowed_code":["aa","bb"],"allowed_proxy_upgrades":[],"max_gas_limit":10000000,"max_fee_cap":50000000000,"rules_delay_sec":60,"proposals":[]}`,
   get_eth_address: JSON.stringify(ETH_ADDR),
-  contract_source_metadata: `{"version":"v16","link":"https://github.com/worksOnMyFridge/keyfree/tree/e818bdcc706e356f0667c7235c183e55c30b6a3b"}`,
+  contract_source_metadata: `{"version":"v17","link":"https://github.com/worksOnMyFridge/keyfree/tree/ff925fdd05d09ddeba95dc7b9a1789752860fa97"}`,
   get_next_nonce: "2",
   get_budget: `{"max_wei_per_day":${BIG_WEI},"max_tx_per_day":10,"used_wei_today":1234567890123456789,"used_tx_today":3}`,
   get_entry: `{"kind":"deploy","status":"confirmed","tx_hash":"0x${"ab".repeat(32)}","address":"0x${"cd".repeat(20)}","factory":"0x${"ef".repeat(20)}","code_hash":"aa","salt":"0x00"}`,
@@ -107,7 +107,7 @@ test("all well: every panel is filled, numbers are exact, no script error", asyn
   const { page, problems, text } = await open(t);
   await noLoading(page);
   assert.equal(await text("keys"), "0");
-  assert.match(await text("build"), /v16, version 6/);
+  assert.match(await text("build"), /v17, version 7/);
   assert.match(await text("paused"), /running/);
   assert.match(await text("chains"), /Base Sepolia/);
   assert.match(await text("chains"), /3 of 10 transactions/);
@@ -295,8 +295,8 @@ test("the real policy through the real nodes", { skip: !process.env.LIVE }, asyn
   await page.waitForFunction(() => document.body.dataset.state === "done", null, { timeout: 90000 });
   await noLoading(page);
   assert.equal(await page.locator("#keys").innerText(), "0");
-  assert.match(await page.locator("#build").innerText(), /v16/);
-  assert.match(await page.locator("#source").innerText(), /e818bd/);
+  assert.match(await page.locator("#build").innerText(), /v17/);
+  assert.match(await page.locator("#source").innerText(), /ff925f/);
   assert.match(await page.locator("#journal").innerText(), /confirmed/);
   await page.locator("button[data-arg='1']").click();
   await page.waitForFunction(() => document.querySelector("#answer .ok, #answer .no, #answer .warn:not(.muted)"), null, { timeout: 60000 });
