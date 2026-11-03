@@ -265,3 +265,37 @@ OK   the agent's request on it, straight to the contract -> Smart contract panic
 OK   nothing changed: nonce 0, no journal line
   log: keyfree: chain 421614 disabled by guard13b.keyfree-lab.testnet
 OK   closed again by the guardian at once https://testnet.nearblocks.io/txns/391dsLWVeBMpYZpD5nSfzvjekVoLfAKX4FQ7MyBqNGZV -> wasm execution failed with error: HostError(GuestPanic { panic_msg: "chain is disabled" })
+--- 2026-11-03T21:42:44.598Z policy.kf-outsider-494bd7.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 384219 bytes, sha256 6ae5e63e37576ec6... == the build workflow's
+OK   every method the live code exports is still there (50 -> 50)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v17, version 2, code sha256 3db9d3e217cb79a1...
+  log: keyfree: upgrade to code sha256 6ae5e63e37576ec6522ed5e2bb38b1cff77d7f6598d282230affbc8624e86083 (384219 bytes, readable now) proposed, ready at unix 1793742151
+  proposed https://testnet.nearblocks.io/txns/GR96gEFN5L7i4DsCYTgYCoK41Z5xaP1WLWEwRhKEP6o3
+OK   guardian reads the proposed code from the chain: 384219 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 176 s for the upgrade delay
+  log: keyfree: applying upgrade 6ae5e63e37576ec6522ed5e2bb38b1cff77d7f6598d282230affbc8624e86083
+  log: keyfree: migrated to version 3
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v18, version 3  https://testnet.nearblocks.io/txns/B7aZj6dUz6wdmFDn9rAmsqKsU1Zks6ZYTQS5CMCZupUC
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 15 allowed codes, next nonce Base 42, Ethereum null
+OK   a refusal still says why: code not on the allow list
+--- 2026-11-03T21:46:03.532Z policy13.keyfree-lab.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 384219 bytes, sha256 6ae5e63e37576ec6... == the build workflow's
+OK   every method the live code exports is still there (50 -> 50)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v17, version 7, code sha256 3db9d3e217cb79a1...
+  log: keyfree: upgrade to code sha256 6ae5e63e37576ec6522ed5e2bb38b1cff77d7f6598d282230affbc8624e86083 (384219 bytes, readable now) proposed, ready at unix 1793742349
+  proposed https://testnet.nearblocks.io/txns/CqVtHL9oUEEEz2oAnzdwp8rG5NkCDgYn7xJiSfJh9K6P
+OK   guardian reads the proposed code from the chain: 384219 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 176 s for the upgrade delay
+  log: keyfree: applying upgrade 6ae5e63e37576ec6522ed5e2bb38b1cff77d7f6598d282230affbc8624e86083
+  log: keyfree: migrated to version 8
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v18, version 8  https://testnet.nearblocks.io/txns/8ZVyta6HiXXsvSRRuMuCv1BffnPjLZ1JjtPXwou8BjjL
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 14, Ethereum 3
+OK   a refusal still says why: code not on the allow list

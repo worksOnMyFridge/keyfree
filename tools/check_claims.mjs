@@ -131,7 +131,9 @@ console.log("2/3 the live policy");
   const snap = JSON.stringify(meta);
   report(Boolean(commit) && snap.includes(commit), "NEP-330 metadata names the README's commit", `${commit ?? "?"} in ${meta.build_info?.source_code_snapshot ?? snap.slice(0, 80)}`);
   const st = await view("get_status");
-  const build = readme.match(/build `(v\d+)`/)?.[1] ?? "v17";
+  const build = readme.match(/build `(v\d+)`/)?.[1] ?? "v18";
+  const pin = read("explorer/index.html").match(/const BUILD = \{ commit: "([0-9a-f]{40})", code_hash: "(\w+)" \}/);
+  report(Boolean(pin) && pin[1] === commit && readme.includes(`\`${pin[2]}\``), "the explorer's pinned build is the README's", `${pin?.[1]?.slice(0, 7) ?? "?"} ${pin?.[2] ?? "?"}`);
   report(st.build === build, "get_status build", `${st.build}, version ${st.version}, paused ${st.paused} (docs: ${build})`);
   for (const [chain, id] of [["Base Sepolia", 84532], ["Ethereum Sepolia", 11155111]]) {
     const b = await view("get_budget", { chain_id: id });

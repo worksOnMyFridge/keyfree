@@ -163,6 +163,9 @@
 
 <script>
 const POLICY = "policy13.keyfree-lab.testnet";
+// The reproducible build the README names: its commit and the code hash NEAR shows for those bytes. "Source commit" is
+// only what the code says about itself; this comparison is what ties the running code to the source.
+const BUILD = { commit: "d66c5d61bae1547da8c4d634f38ab6cdfc7053b1", code_hash: "8CHYL3wWaoVUmJ13yNLziF1Ppj3JPuAC1NnXskgDfj4W" };
 // Public nodes do go down, and the page is the first thing a stranger sees: each list is tried in order, and the one
 // that answered stays in front. A node gets a few seconds, then the next one is asked.
 const NEAR_NODES = ["https://test.rpc.fastnear.com", "https://near-testnet.drpc.org", "https://rpc.testnet.near.org"];
@@ -272,7 +275,9 @@ async function loadOnce() {
   $("build").innerHTML = st ? esc(`${st.build}, version ${st.version}`) : UNKNOWN;
   const commit = typeof source?.link === "string" ? source.link.split("/tree/")[1] : null;
   $("source").innerHTML = commit ? link(source.link, short(commit, 4)) : source ? `<span class="muted">not published</span>` : UNKNOWN;
-  $("codehash").innerHTML = account?.code_hash ? esc(short(account.code_hash, 8)) : UNKNOWN;
+  $("codehash").innerHTML = !account?.code_hash ? UNKNOWN : `${esc(short(account.code_hash, 8))} ${account.code_hash === BUILD.code_hash
+    ? `<span class="pill ok">the reproducible build of ${esc(short(BUILD.commit, 4))}</span>`
+    : `<span class="pill no">not the build the README names</span>`}`;
   $("paused").innerHTML = !st ? UNKNOWN : st.paused ? `<span class="pill no">paused</span>` : `<span class="pill ok">running</span>`;
   for (const r of ["owner", "guardian", "reserve", "agent"]) $(r).innerHTML = !ro ? UNKNOWN : ro[r] ? near(ro[r]) : `<span class="muted">none</span>`;
   $("rdelay").innerHTML = ru ? esc(secs(ru.rules_delay_sec)) : UNKNOWN;
