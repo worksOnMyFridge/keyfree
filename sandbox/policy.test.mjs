@@ -186,12 +186,12 @@ test("install: deploy + init + key deletion in one transaction leave a keyless p
   POL = await install("policy");
   assert.equal((await provider.viewAccessKeyList({ accountId: POL })).keys.length, 0);
   const st = await view(POL, "get_status");
-  assert.equal(st.build, "v17");
+  assert.equal(st.build, "v18");
   assert.equal(st.version, 1);
   assert.equal((await provider.viewAccount({ accountId: POL })).code_hash, b58encode(sha256(POLICY)));
   await refused(call(acc.stranger, POL, "new", { owner: ID("stranger"), agent: ID("agent"), guardian: ID("guardian"), reserve: ID("reserve"), mpc: ID("mpc"), path: "x", ...DELAYS }), "only the contract account");
   await refused(call(acc.owner, POL, "new", { owner: ID("owner"), agent: ID("agent"), guardian: ID("guardian"), reserve: ID("reserve"), mpc: ID("mpc"), path: "x", ...DELAYS }), "only the contract account");
-  note(`installed ${POL} in one transaction: 0 access keys, code hash = the wasm under test, build v17; init again refused for every account`);
+  note(`installed ${POL} in one transaction: 0 access keys, code hash = the wasm under test, build v18; init again refused for every account`);
 });
 
 test("access matrix: every method x every role on a fresh policy", async () => {
