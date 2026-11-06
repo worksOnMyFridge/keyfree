@@ -8,6 +8,10 @@ stolen laptop controls that key, and with it the contracts and the money behind 
 
 Keyfree removes the key. The agent asks; a contract on NEAR decides; NEAR MPC signs.
 
+This is not a spending limit on an agent's wallet. Keyfree guards a different moment: the deploy and the
+upgrade, where a contract learns who it pays and what its code may do. There is no EVM key for the agent to
+leak, because none exists.
+
 ```
 AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> NEAR MPC signature ──> Base, Ethereum
                    checks bytes       allow list, chains,        for the policy's        deploy through
@@ -26,6 +30,16 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
   records what happened on chain, not what was intended.
 
 Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
+
+## For judges: where to check each point
+
+| Point | Where to check it |
+|---|---|
+| Technical implementation | [CLAIMS.md](CLAIMS.md): every claim with its transaction, log line or test. `npm run attacks` (65 attacks, offline) and the tests in [Run the tests](#run-the-tests). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Four reviews and what changed after each: [AUDIT.md](AUDIT.md) |
+| Design and use | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy |
+| Impact | The problem: an agent that deploys holds a key that can be stolen or talked into anything. [Where the money goes](#where-the-money-goes): a live treasury upgraded only as the council allowed, and real Claude Code sessions that a poisoned README could not get past the policy ([evidence/injection_live.md](evidence/injection_live.md)). There are no users yet |
+| Originality | [How this differs](#how-this-differs-from-other-ways-to-keep-the-key-from-the-agent): one public contract on NEAR holds the rules for every EVM chain, signs only what it built itself, and upgrades itself without a key |
+| What it takes to use it | [Run your own policy](#run-your-own-policy): one script installs a policy on the same code. Apache-2.0. Before real money it needs a professional audit: [SECURITY.md](SECURITY.md) lists the known limits |
 
 ## Where the money goes
 
@@ -193,6 +207,7 @@ a list of methods. The live agent `agent14.keyfree-lab.testnet` has one key, for
 |---|---|---|---|
 | Private key in `.env` or CI secrets | nowhere | whoever reads the file | none |
 | Wallet services with policies in a TEE (Coinbase CDP, OutLayer agent custody) | the provider's service or enclave | the provider's infrastructure | limits on transfers and calls; no allow list of init code in their docs (checked 2026-11-01) |
+| Spending limits on an agent's wallet (a vault contract and a key that can only call it) | the vault contract | the vault's owner | none: they limit payments, not which code gets deployed |
 | Safe with modules | a contract on each chain | the Safe owners | per chain; the agent needs its own key for the module |
 | Keyfree | one public contract on NEAR, for every EVM chain it opens | nobody: the policy has no key, and NEAR MPC signs only what the contract built | the hash of the whole init code, exact proxy upgrades, a public delay for anything that widens power |
 
