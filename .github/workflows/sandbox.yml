@@ -14,10 +14,10 @@ permissions:
 
 env:
   CARGO_NEAR_VERSION: "0.22.0"
-  # The commit the live policy (build v19) is built from, and the sha256 of that wasm.
-  LIVE_COMMIT: c6177248ea30c3662a0603ac900d6c928faae936
-  LIVE_SHA256: ffa0edd847232186c4eed41abb1c21cc868b0bed1bb2fbd1af55c7fbe2bf10d0
-  KF_BUILD: "v19"
+  # The build under test: v20 (the live policies run v19 until v20 is installed), its commit and sha256.
+  LIVE_COMMIT: 29fa5c886b8d9838011cf80c3e4f082ca88fdc2e
+  LIVE_SHA256: 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c
+  KF_BUILD: "v20"
   NEAR_RPC_TIMEOUT_SECS: "120"
 
 jobs:
