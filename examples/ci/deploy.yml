@@ -28,7 +28,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: worksOnMyFridge/keyfree
-          ref: main # pin the commit you have read
+          # A commit of this repository you have read (here: the v19 tool). Never a branch: whoever can push to it
+          # would run code next to your agent key.
+          ref: c6177248ea30c3662a0603ac900d6c928faae936
           path: .keyfree
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

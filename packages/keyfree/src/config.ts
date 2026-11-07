@@ -72,17 +72,17 @@ export function hasLocalKey(cfg: Config, account: string): boolean {
 // file named by KEYFREE_COUNCIL_KEY, and *_key.json files next to the agent (the working folder and its setup/)
 // that name a council account. Only account names and where they were found, never a key.
 export function localCouncilKeys(cfg: Config, council: string[]): string[] {
+  // Places are written short (~/..., or relative to the working folder) so no user name reaches a log.
   const found: string[] = [];
-  for (const a of council) if (hasLocalKey(cfg, a)) found.push(`${a} in ${credentialsFile(cfg, a)}`);
-  const named = env("KEYFREE_COUNCIL_KEY");
-  if (named) found.push(`KEYFREE_COUNCIL_KEY is set (${named})`);
+  for (const a of council) if (hasLocalKey(cfg, a)) found.push(`${a} in ~/.near-credentials/${cfg.near_network}/`);
+  if (env("KEYFREE_COUNCIL_KEY")) found.push("KEYFREE_COUNCIL_KEY is set");
   for (const dir of [process.cwd(), path.join(process.cwd(), "setup")]) {
     let names: string[] = [];
     try { names = fs.readdirSync(dir).filter((n) => n.endsWith("_key.json")); } catch { continue; }
     for (const n of names) {
       try {
         const k = JSON.parse(fs.readFileSync(path.join(dir, n), "utf8")) as { account_id?: unknown };
-        if (typeof k.account_id === "string" && council.includes(k.account_id)) found.push(`${k.account_id} in ${path.join(dir, n)}`);
+        if (typeof k.account_id === "string" && council.includes(k.account_id)) found.push(`${k.account_id} in ${path.relative(process.cwd(), path.join(dir, n)).split(path.sep).join("/")}`);
       } catch { /* not a key file */ }
     }
   }

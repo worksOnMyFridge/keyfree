@@ -299,3 +299,44 @@ OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build
 OK   proposal cleared, policy still has 0 keys
 OK   state kept: 10 allowed codes, next nonce Base 14, Ethereum 3
 OK   a refusal still says why: code not on the allow list
+--- 2026-11-07T06:37:39.767Z policy13.keyfree-lab.testnet: upgrade to a reproducible build (4 ok, 1 fail)
+OK   new wasm 384853 bytes, sha256 ffa0edd847232186... == the build workflow's
+OK   every method the live code exports is still there (50 -> 51)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v18, version 8, code sha256 6ae5e63e37576ec6...
+FAIL stopped: Not enough balance for keyfree-lab.testnet (balance: 4102629528588950899999999, cost: 4162144598499174000000000)
+--- 2026-11-07T06:42:24.816Z policy13.keyfree-lab.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 384853 bytes, sha256 ffa0edd847232186... == the build workflow's
+OK   every method the live code exports is still there (50 -> 51)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v18, version 8, code sha256 6ae5e63e37576ec6...
+  log: keyfree: upgrade to code sha256 ffa0edd847232186c4eed41abb1c21cc868b0bed1bb2fbd1af55c7fbe2bf10d0 (384853 bytes, readable now) proposed, ready at unix 1794033732
+  proposed https://testnet.nearblocks.io/txns/GtE8rUyqbsvDzDrraQRaTfA6neEreZJXZPAAzp7dJhEk
+OK   guardian reads the proposed code from the chain: 384853 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 177 s for the upgrade delay
+  log: keyfree: applying upgrade ffa0edd847232186c4eed41abb1c21cc868b0bed1bb2fbd1af55c7fbe2bf10d0
+  log: keyfree: migrated to version 9
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v19, version 9  https://testnet.nearblocks.io/txns/GbcucxoJ2J5NXe82NBY79UW24SJK7M8EAAYmdPxDekzk
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 14, Ethereum 3
+OK   a refusal still says why: code not on the allow list
+--- 2026-11-07T06:45:59.316Z policy.kf-outsider-494bd7.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 384853 bytes, sha256 ffa0edd847232186... == the build workflow's
+OK   every method the live code exports is still there (50 -> 51)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v18, version 3, code sha256 6ae5e63e37576ec6...
+  log: keyfree: upgrade to code sha256 ffa0edd847232186c4eed41abb1c21cc868b0bed1bb2fbd1af55c7fbe2bf10d0 (384853 bytes, readable now) proposed, ready at unix 1794033946
+  proposed https://testnet.nearblocks.io/txns/4h2CPgLw1mgdPt1qGqQXWDuzakSezKs3phgbCRksGsmN
+OK   guardian reads the proposed code from the chain: 384853 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 177 s for the upgrade delay
+  log: keyfree: applying upgrade ffa0edd847232186c4eed41abb1c21cc868b0bed1bb2fbd1af55c7fbe2bf10d0
+  log: keyfree: migrated to version 4
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v19, version 4  https://testnet.nearblocks.io/txns/EkrN29qcsnJGBtm5FHevMNp4ftaJhG4KbnQ6jNmULZHf
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 17 allowed codes, next nonce Base 52, Ethereum null
+OK   a refusal still says why: code not on the allow list

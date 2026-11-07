@@ -37,7 +37,7 @@ Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet, Base Sepol
 
 | Point | Where to check it |
 |---|---|
-| Technical implementation | `npm run check:claims` (read-only, no keys) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Four security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
+| Technical implementation | `npm run check:claims` (read-only, no keys) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Five security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
 | Design and use | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy |
 | Impact | The problem: an agent that deploys holds a key that can be stolen or talked into anything. [`examples/ci`](examples/ci): a GitHub Actions job that deploys through the policy with no EVM key and fails before signing when a change asks for other code. [Where the money goes](#where-the-money-goes): a live treasury upgraded only as the council allowed, and real Claude Code sessions that a poisoned README could not get past the policy ([evidence/injection_live.md](evidence/injection_live.md)). There are no users yet |
 | Originality | [How this differs](#how-this-differs-from-other-ways-to-keep-the-key-from-the-agent): one public contract on NEAR holds the rules for every EVM chain, signs only what it built itself, and upgrades itself without a key |
@@ -74,7 +74,7 @@ Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, an
 | a prompt injection in what the agent reads | requests for allowed code with allowed constructor arguments, nothing else: other bytes have another hash and are refused before anything is signed | [CLAIMS 3.3](CLAIMS.md#3-an-ai-agent-deploys-and-cannot-be-talked-past-the-rules), [real Claude Code sessions](evidence/injection_live.md) |
 | the agent's NEAR key | the same; no rule, role or upgrade method; it can only spend its own account's NEAR on gas | CLAIMS 1.4 |
 | the guardian's or the reserve's key | pause and cancel; nothing that widens power; the other two replace it after the delay | CLAIMS 4.3 |
-| the owner's key | a widening that waits the public delay, which any other member cancels. Seen live: `keyfree pending` exited 3 and listed the rule, the guardian cancelled it, the code stayed refused ([`evidence/tool_live.log`](evidence/tool_live.log), "a widening waits") | [`watch`](.github/workflows/watch.yml) fails every hour while one waits |
+| the owner's key | a widening that waits the public delay, which any other member cancels. Seen live: `keyfree pending` exited 3 and listed the rule, the guardian cancelled it, the code stayed refused ([`evidence/tool_live.log`](evidence/tool_live.log), "a widening waits") | [`watch`](.github/workflows/watch.yml) fails every 15 minutes while one waits |
 | the owner's key, while the other two stay silent through the whole delay | full power: the widening applies. The protection is that someone watches | [SECURITY.md](SECURITY.md) |
 | two council keys | full power after the delay | [SECURITY.md](SECURITY.md) |
 | control of NEAR MPC | outside what Keyfree protects: it signs only what the policy built, but it trusts the MPC network | [SECURITY.md](SECURITY.md#what-is-trusted) |
@@ -136,9 +136,9 @@ mocked chain; tool attacks run the built `keyfree` package.
 From the repository root:
 
 ```bash
-(cd contract && cargo test -- --test-threads=1)       # 176 tests of the policy (Rust, near-sdk 5.29);
+(cd contract && cargo test -- --test-threads=1)       # 186 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
-(cd packages/keyfree && npm test && npm run smoke)    # 78 tool tests; MCP self-check against the live policy
+(cd packages/keyfree && npm test && npm run smoke)    # 83 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
 
@@ -146,12 +146,12 @@ The same checks, without the live smoke test, run in CI (`.github/workflows/ci.y
 
 The policy also runs in a real NEAR runtime: the `sandbox` workflow rebuilds the live wasm from its commit,
 checks its sha256, and runs it in a local nearcore node next to a stand-in MPC contract
-([`sandbox/`](sandbox/)): who may call each of the 47 methods, every flow end to end with real keys, gas,
+([`sandbox/`](sandbox/)): who may call each of the 48 methods, every flow end to end with real keys, gas,
 storage and callbacks, a failed upgrade batch, retirement, and faults (an MPC that fails, answers garbage,
 answers late or never, two requests at once, a policy short of NEAR). Results: [`evidence/sandbox.md`](evidence/sandbox.md).
 Locally (Linux or macOS arm64): `POLICY_WASM=<wasm> MOCK_WASM=<wasm> npm run test:sandbox`.
 
-Every CLI command and MCP tool also ran for real on a separate policy, with its refusals: 128 steps in
+Every CLI command and MCP tool also ran for real on a separate policy, with its refusals: 134 steps in
 [`evidence/tool_live.log`](evidence/tool_live.log) (`npm run live` in `packages/keyfree`). `npm audit` reports `tmp`
 through solc-js 0.8.28; the build only calls solc's `compile()`, not the command-line code that uses `tmp`, and
 another solc version would change the bytecode and with it the allowed code hashes.
@@ -168,21 +168,21 @@ when it must.
 
 The live policy runs a reproducible build: the same commit gives the same bytes on any machine with Docker.
 The policy says which commit itself: its `contract_source_metadata` view (NEP-330) returns the repository
-link, the commit `d66c5d61bae1547da8c4d634f38ab6cdfc7053b1`, the Docker image and the build command.
+link, the commit `c6177248ea30c3662a0603ac900d6c928faae936`, the Docker image and the build command.
 
 ```bash
-git checkout d66c5d61bae1547da8c4d634f38ab6cdfc7053b1
+git checkout c6177248ea30c3662a0603ac900d6c928faae936
 cd contract
 cargo near build reproducible-wasm         # cargo-near 0.22.0; Docker image pinned by digest in Cargo.toml
 sha256sum target/near/keyfree_policy.wasm
-# -> 6ae5e63e37576ec6522ed5e2bb38b1cff77d7f6598d282230affbc8624e86083  (384 219 bytes)
+# -> ffa0edd847232186c4eed41abb1c21cc868b0bed1bb2fbd1af55c7fbe2bf10d0  (384 853 bytes)
 ```
 
 NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
-`8CHYL3wWaoVUmJ13yNLziF1Ppj3JPuAC1NnXskgDfj4W` (`near state` or the RPC `view_account`). The commit is part of
+`JCsHndCJHwoJ256Dm4dARWsRDCwCjFY3k2meUq6wEMcB` (`near state` or the RPC `view_account`). The commit is part of
 the metadata inside the wasm, so every commit gives its own hash; the `build` workflow
 (`.github/workflows/build.yml`) builds each change to the contract and prints both hashes.
-The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1; v16, CLAIMS 9.6; v17, CLAIMS 9.7; v18, CLAIMS 9.8); earlier versions
+The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1; v16, CLAIMS 9.6; v17, CLAIMS 9.7; v18, CLAIMS 9.8; v19, CLAIMS 9.9); earlier versions
 were built on a laptop and their bytes carry that machine's paths, so they cannot be rebuilt elsewhere.
 
 ## Use it from Claude Code
@@ -240,7 +240,7 @@ npm install                                           # repository root
 cp setup/config.example.json setup/config.json        # put your account in "owner", sub-accounts for the rest
 node setup/policy.mjs plan                            # offline: what will happen
 node setup/policy.mjs wasm                            # the policy code, checked against the reproducible build
-node setup/policy.mjs accounts                        # policy, agent (function-call key only), guardian, reserve
+node setup/policy.mjs accounts                        # policy and agent (function-call key only); guardian and reserve must exist
 node setup/policy.mjs install                         # deploy + init + delete the key in one transaction; rules proposed
 node setup/policy.mjs apply                           # after the rules delay
 node setup/policy.mjs factory base-sepolia            # once the printed ETH address holds a little ETH
@@ -249,9 +249,11 @@ node setup/policy.mjs keyfree                         # writes setup/keyfree.jso
 ```
 
 The example config uses a one-hour rules delay and a one-day delay for upgrades and role changes; the demo
-policy's 60 s and 180 s are for watching a whole cycle. Each chain gets a daily budget from the start: a chain without one signs nothing. Keys of
-the accounts the script creates stay in `setup/*_key.json` (gitignored): move the guardian's and reserve's to
-other devices. Then allow your code with `keyfree rules allow-code <hash> --config setup/keyfree.json`
+policy's 60 s and 180 s are for watching a whole cycle. Each chain gets a daily budget from the start: a chain without one signs nothing.
+The guardian and the reserve are accounts their holders create on other devices: the script makes no council key
+where the agent will run (only `"demo_council_here": true` does, for a quick testnet trial, with a warning). Keys
+of the accounts it creates stay in `setup/*_key.json` (gitignored, readable only by you), and `setup check`
+confirms the policy signs through the network's MPC. Then allow your code with `keyfree rules allow-code <hash> --config setup/keyfree.json`
 (`keyfree hash` prints it) and give the agent `KEYFREE_AGENT_KEY=setup/agent_key.json`.
 
 How the demo policy itself got here, stage by stage, with logs: `v13/run.mjs` (install, rules, factory,
@@ -282,16 +284,18 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 
 ## Security
 
-Read [SECURITY.md](SECURITY.md) and, for every finding of the four security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
+Read [SECURITY.md](SECURITY.md) and, for every finding of the five security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
 council members plus the delay, or the owner plus the delay while the other two stay silent. Keep the
-council keys on separate devices, never where the agent runs; `keyfree status` warns when a council key is on
-the machine it runs on.
+council keys on separate devices, never where the agent runs; `keyfree status` warns when it finds a council key
+next to the agent, and checks that the policy's address is the one the network's MPC derives.
 
 The delay protects only if someone looks. The live demo policy uses short delays so a judge can watch a whole
 cycle: 60 s for rules, 180 s for upgrades and role changes; real use needs hours or days. `keyfree pending`
 lists every widening that waits its delay, with the command that cancels it, and exits with code 3 when there
 is one: run it on a schedule and send the alert to the council. The [`watch`](.github/workflows/watch.yml) workflow
-does that for the demo policy every hour; a fork watches its own policy by changing `keyfree.example.json`.
+does that for the demo policy every 15 minutes and can post to every council member (`KEYFREE_ALERT_WEBHOOK`); a
+fork watches its own policy by changing `keyfree.example.json`. A schedule can run late, so it guards delays of
+hours, not the demo's minutes.
 
 ## Disclosures
 
@@ -300,9 +304,9 @@ does that for the demo policy every hour; a fork watches its own policy by chang
   is no earlier Keyfree code.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
-- **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Four security reviews were
-  done by separate AI reviewer sessions, the fourth on another model (Claude Fable 5.1); none of them is a
-  professional audit. Their findings are fixed with tests or stated as limits ([AUDIT.md](AUDIT.md)).
+- **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Five security reviews were
+  done by separate AI reviewer sessions, the fourth on another model (Claude Fable 5.1), the fifth on the whole
+  lifecycle (install, setup, the alarm, CI); none of them is a professional audit. Their findings are fixed with tests or stated as limits ([AUDIT.md](AUDIT.md)).
 - **License.** Apache-2.0 ([LICENSE](LICENSE)). The Solidity contracts (`factory/`, `packages/keyfree/demo/`)
   carry `SPDX-License-Identifier: MIT`: the header is part of their bytecode metadata, so changing it would
   change the code hashes the live policy allows.

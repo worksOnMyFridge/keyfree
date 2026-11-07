@@ -29,11 +29,11 @@ after(async () => { await browser?.close(); server?.close(); });
 
 // One line per journal entry, as the contract writes them. Budgets go out as raw JSON text so a long number stays long.
 const views = () => ({
-  get_status: `{"build":"v18","version":8,"paused":false,"upgrade_delay_sec":180,"proposed":null}`,
+  get_status: `{"build":"v19","version":9,"paused":false,"upgrade_delay_sec":180,"proposed":null}`,
   get_roles: `{"owner":"owner.testnet","guardian":"guard.testnet","reserve":"reserve.testnet","agent":"agent.testnet","retiring":false,"role_changes":[]}`,
   get_rules: `{"allowed_code":["aa","bb"],"allowed_proxy_upgrades":[],"max_gas_limit":10000000,"max_fee_cap":50000000000,"rules_delay_sec":60,"proposals":[]}`,
   get_eth_address: JSON.stringify(ETH_ADDR),
-  contract_source_metadata: `{"version":"v18","link":"https://github.com/worksOnMyFridge/keyfree/tree/d66c5d61bae1547da8c4d634f38ab6cdfc7053b1"}`,
+  contract_source_metadata: `{"version":"v19","link":"https://github.com/worksOnMyFridge/keyfree/tree/c6177248ea30c3662a0603ac900d6c928faae936"}`,
   get_next_nonce: "2",
   get_budget: `{"max_wei_per_day":${BIG_WEI},"max_tx_per_day":10,"used_wei_today":1234567890123456789,"used_tx_today":3}`,
   get_entry: `{"kind":"deploy","status":"confirmed","tx_hash":"0x${"ab".repeat(32)}","address":"0x${"cd".repeat(20)}","factory":"0x${"ef".repeat(20)}","code_hash":"aa","salt":"0x00"}`,
@@ -70,7 +70,7 @@ function stubs(faults = {}, over = {}, previewAnswer) {
     }
     const p = body.params;
     if (p.request_type === "view_access_key_list") return answer(`{"jsonrpc":"2.0","id":1,"result":{"keys":${over.keys ?? "[]"},"block_hash":"x","block_height":1}}`);
-    if (p.request_type === "view_account") return answer(`{"jsonrpc":"2.0","id":1,"result":{"amount":"1","code_hash":"${over.code_hash ?? "8CHYL3wWaoVUmJ13yNLziF1Ppj3JPuAC1NnXskgDfj4W"}","block_hash":"x","block_height":1}}`);
+    if (p.request_type === "view_account") return answer(`{"jsonrpc":"2.0","id":1,"result":{"amount":"1","code_hash":"${over.code_hash ?? "JCsHndCJHwoJ256Dm4dARWsRDCwCjFY3k2meUq6wEMcB"}","block_hash":"x","block_height":1}}`);
     const name = p.method_name;
     if (name === "preview") {
       const a = previewAnswer ?? ((args) => (args.init_code_hex.endsWith("1")
@@ -107,7 +107,7 @@ test("all well: every panel is filled, numbers are exact, no script error", asyn
   const { page, problems, text } = await open(t);
   await noLoading(page);
   assert.equal(await text("keys"), "0");
-  assert.match(await text("build"), /v18, version 8/);
+  assert.match(await text("build"), /v19, version 9/);
   assert.match(await text("codehash"), /the reproducible build of d66c/);
   assert.match(await text("paused"), /running/);
   assert.match(await text("chains"), /Base Sepolia/);
@@ -303,9 +303,9 @@ test("the real policy through the real nodes", { skip: !process.env.LIVE }, asyn
   await page.waitForFunction(() => document.body.dataset.state === "done", null, { timeout: 90000 });
   await noLoading(page);
   assert.equal(await page.locator("#keys").innerText(), "0");
-  assert.match(await page.locator("#build").innerText(), /v18/);
+  assert.match(await page.locator("#build").innerText(), /v19/);
   assert.match(await page.locator("#codehash").innerText(), /the reproducible build of d66c/);
-  assert.match(await page.locator("#source").innerText(), /d66c5d/);
+  assert.match(await page.locator("#source").innerText(), /c61772/);
   assert.match(await page.locator("#journal").innerText(), /confirmed/);
   await page.locator("button[data-arg='1']").click();
   await page.waitForFunction(() => document.querySelector("#answer .ok, #answer .no, #answer .warn:not(.muted)"), null, { timeout: 60000 });

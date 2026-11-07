@@ -189,7 +189,8 @@ refused("preview of removed code", pv1, /code not on the allow list/);
 refused("allow-chain on an open chain: its nonce moves only by signing", ["rules", "allow-chain", CHAIN.name, "0", "1000000"], /chain already allowed/);
 
 say("\n[council: reopening is a widening, and the run's treasury goes through the same delay]");
-const DUMMY = [`0x${"11".repeat(20)}`, `0x${"22".repeat(20)}`];
+// An upgrade is allowed only to an address that already holds code (Z10): the dummy points at the factory.
+const DUMMY = [`0x${"11".repeat(20)}`, FACTORY];
 const ids = [];
 const counterMcp = keccak256(counterInit(MCP_COUNT)).slice(2);
 for (const [what, args] of [
@@ -208,16 +209,15 @@ const ids2 = [];
 for (const [what, args] of [
   ["allow-code TreasuryProxy", ["rules", "allow-code", keccak256(initPX).slice(2)]],
   [`allow-code Counter(${MCP_COUNT}) for the MCP run`, ["rules", "allow-code", counterMcp]],
-  ["allow-upgrade proxy -> v2", ["rules", "allow-upgrade", CHAIN.name, PROXY, addrV2]],
-  ["allow-upgrade proxy -> v1, for the MCP run", ["rules", "allow-upgrade", CHAIN.name, PROXY, addrV1]],
   ["allow-upgrade of a dummy, to remove it", ["rules", "allow-upgrade", CHAIN.name, ...DUMMY]],
 ]) ids2.push(step(what, args).json?.result);
+step("allow-upgrade to an address with no code (Z10): the tool stops it before any proposal", ["rules", "allow-upgrade", CHAIN.name, PROXY, `0x${"22".repeat(20)}`], { exit: 1, says: /has no code on/ });
 await settle();
 await applyAll(ids2);
 const after = chainStatus();
 check(after.allowed && after.daily_budget.max_tx_per_day === dayTxs, `chain open again, budget ${after.daily_budget.max_tx_per_day} transactions a day`);
 step("Counter(1) previews again", pv1);
-const dummyKey = `${CHAIN.chain_id}:${DUMMY[0]}:${DUMMY[1]}`;
+const dummyKey = `${CHAIN.chain_id}:${DUMMY[0]}:${DUMMY[1].toLowerCase()}`;
 check(status().allowed_proxy_upgrades.includes(dummyKey), "the dummy upgrade is on the list");
 await write("remove-upgrade at once", ["remove-upgrade", CHAIN.name, ...DUMMY], "guardian");
 check(!status().allowed_proxy_upgrades.includes(dummyKey), "and off it");
@@ -254,6 +254,18 @@ await settle();
 dep("TreasuryV2", V2.file, [OWNER_OF_TREASURY, String(LIMIT)], saltOf("v2"), addrV2);
 await settle();
 check((await version(PROXY)) === 1, "the proxy runs v1");
+// The upgrades are allowed now that both implementations hold code (Z10), through the rules delay.
+const ids3 = [];
+for (const [what, args] of [
+  ["allow-upgrade proxy -> v2", ["rules", "allow-upgrade", CHAIN.name, PROXY, addrV2]],
+  ["allow-upgrade proxy -> v1, for the MCP run", ["rules", "allow-upgrade", CHAIN.name, PROXY, addrV1]],
+]) {
+  const r3 = step(what, args);
+  check(/^0x[0-9a-f]{64}$/.test(r3.json?.implementation_code?.code_hash ?? ""), `${what}: shows the code there now, ${r3.json?.implementation_code?.bytes} bytes`);
+  ids3.push(r3.json?.result);
+}
+await settle();
+await applyAll(ids3);
 const up = ["--chain", CHAIN.name, "--proxy", PROXY, "--implementation", addrV2];
 const upv = step("upgrade-preview proxy -> v2", ["upgrade-preview", ...up]);
 check(upv.json?.matches_viem === true, `upgrade-preview: admin ok, matches viem, nonce ${upv.json?.nonce}`);
@@ -281,17 +293,22 @@ check(!ms.error && ms.data.policy_keys === 0, `keyfree_status: ${ms.data?.policy
 const mh = await tool("keyfree_code_hash", { artifact: COUNTER, constructor_args: [MCP_COUNT] });
 check(mh.data?.code_hash === counterMcp, `keyfree_code_hash: ${mh.data?.code_hash}`);
 const msalt = saltOf("mcp");
-const mpv = await tool("keyfree_preview", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT], salt: msalt });
-check(!mpv.error && mpv.data.matches_viem === true && mpv.data.expected_address === at(msalt, counterInit(MCP_COUNT)), `keyfree_preview: promises ${mpv.data?.expected_address}`);
+// The model chooses no salt (Z8): the tool draws one, and the address follows from it.
+const msalted = await tool("keyfree_preview", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT], salt: msalt });
+check(msalted.error && /salt|Unrecognized/.test(msalted.text), "keyfree_preview with a salt from the model: rejected before the handler (Z8)");
+const moutside = await tool("keyfree_code_hash", { artifact: path.resolve(path.dirname(CFG), "keyfree.json") });
+check(moutside.error && /must be inside this project's folder/.test(moutside.text), "keyfree_code_hash of a file outside the project: refused (Z9)");
+const mpv = await tool("keyfree_preview", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT] });
+check(!mpv.error && mpv.data.matches_viem === true && mpv.data.expected_address === at(mpv.data.salt, counterInit(MCP_COUNT)), `keyfree_preview: a random salt, and the address it gives: ${mpv.data?.expected_address}`);
 const mno = await tool("keyfree_preview", { chain: CHAIN.chain_id, artifact: COUNTER, constructor_args: [999] });
 check(mno.error && /code not on the allow list/.test(mno.text) && RULE.test(mno.text), "keyfree_preview of other code: refused, with the do-not-work-around rule");
 const mbad = await tool("keyfree_deploy", { chain: CHAIN.name, artifact: COUNTER, private_key: "0x1234" });
 check(mbad.error && /private_key|Unrecognized/.test(mbad.text), "keyfree_deploy with an extra argument: rejected before the handler");
-const md = await tool("keyfree_deploy", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT], salt: msalt });
-check(!md.error && md.data.address === mpv.data.expected_address, `keyfree_deploy: at the promised ${md.data?.address}: ${md.data?.links?.evm}`);
+const md = await tool("keyfree_deploy", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT] });
+check(!md.error && /^0x[0-9a-f]{40}$/.test(md.data.address ?? ""), `keyfree_deploy with a salt the tool drew: ${md.data?.address}: ${md.data?.links?.evm}`);
 await settle();
 const mag = await tool("keyfree_deploy", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT], salt: msalt });
-check(mag.error && /salt and code already used/.test(mag.text) && RULE.test(mag.text), "keyfree_deploy again: refused");
+check(mag.error && /salt|Unrecognized/.test(mag.text), "keyfree_deploy with a salt from the model: rejected before the handler (Z8)");
 const mup = { chain: CHAIN.name, proxy: PROXY, implementation: addrV1 };
 const mupv = await tool("keyfree_upgrade_preview", mup);
 check(!mupv.error && mupv.data.matches_viem === true, "keyfree_upgrade_preview: the allowed rollback, matches viem");

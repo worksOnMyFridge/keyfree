@@ -31,10 +31,10 @@ cancel (`keyfree rules allow-code <hash>`).
    (`keyfree hash` prints the hash; the council proposes it).
 2. In your repository: `keyfree.json` (the policy, the agent account, the chains; `setup/policy.mjs keyfree` writes
    it) and the compiled artifact.
-3. A GitHub environment named `testnet` with the secret `KEYFREE_AGENT_KEY`. Add a required reviewer there if a
-   person should approve each run.
-4. Copy `deploy.yml` to `.github/workflows/`, set `CHAIN` and `ARTIFACT`, and pin `ref` to a commit of this
-   repository you have read.
+3. A GitHub environment named `testnet` with the secret `KEYFREE_AGENT_KEY`. Protect it: allow deployments from
+   `main` only and add a required reviewer. Without those rules the secret reaches a workflow on any branch.
+4. Copy `deploy.yml` to `.github/workflows/`, set `CHAIN` and `ARTIFACT`, and keep `ref` on a commit of this
+   repository you have read (the file pins one), never on a branch.
 
 Keep the council's keys out of CI. Run [`watch.yml`](../../.github/workflows/watch.yml) next to it, so a widening
 that waits its delay raises an alarm while it can still be cancelled.

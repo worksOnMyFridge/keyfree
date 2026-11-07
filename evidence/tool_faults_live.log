@@ -1,4 +1,4 @@
---- 2026-11-03T21:57:18.835Z live faults on policy.kf-outsider-494bd7.testnet, base-sepolia
+--- 2026-11-07T07:45:02.491Z live faults on policy.kf-outsider-494bd7.testnet, base-sepolia
 
 [a dead or wrong node: nothing is signed, nothing moves]
 OK   preview, EVM node dead: exit 1, ERROR HTTP request failed. fetch failed
@@ -8,39 +8,39 @@ OK   status: policy and rules readable with the EVM node dead
 OK   journal, EVM node dead: exit 0
 OK   status, NEAR node dead: exit 1, ERROR The NEAR node did not answer get_status: fetch failed. Nothing was signed.
 OK   deploy, the node answers as another chain: exit 1, ERROR The RPC set for base-sepolia answers as chain 8453, not 84532. Nothing was signed.
-OK   the policy's nonce did not move: 49
+OK   the policy's nonce did not move: 76
 
 [a gas spike: the real contract refuses over its cap]
 OK   deploy at a base fee of 100 gwei: exit 2, REFUSED gas price over the cap
 
 [an agent with no NEAR, or too small an allowance: real answers of the protocol]
-OK   deploy by an agent with no NEAR: exit 1, ERROR broke1793743053431.kf-outsider-494bd7.testnet has too little NEAR to pay for this call (a call reserves its whole gas up front). Top up the account; nothing happened on the policy.
+OK   deploy by an agent with no NEAR: exit 1, ERROR broke1794037517492.kf-outsider-494bd7.testnet has too little NEAR to pay for this call (a call reserves its whole gas up front). Top up the account; nothing happened on the policy.
 OK   deploy by a key with too small an allowance: exit 1, ERROR The agent key's gas allowance is too small for this call. Give the agent a key without an allowance. (AccessKeyNotEnoughAllowanceActionError Not enough allowance for access key ed25519:… on account thr
 OK   the policy's nonce did not move
   the two temporary accounts are deleted, their NEAR back with the owner
 
 [signed, then the broadcast fails: a deploy]
-OK   deploy Counter(1), the broadcast refused: exit 1, ERROR Signed, but not on chain: the node refused the broadcast (HTTP request failed. "the proxy says no"). Nonce 49 on base-sepolia is bound to this content and nothing else can use it. When the node works agai
-OK   the policy moved to the next nonce, line 49 is signed and nothing is on chain
-OK   a new deploy would wait behind the gap: stopped before signing: exit 1, ERROR Nonce 49 on base-sepolia was signed but is not on chain, and anything newer would wait behind it. First call keyfree_retry (CLI: keyfree retry --chain <chain>), for a deploy with the
-OK   retry needs the code of a deploy line: exit 1, ERROR Line 49 is a deploy that was signed but is not on chain. The journal holds only its code hash (1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2): pass the same artifact and arguments to retry
-OK   retry takes only the same code: exit 1, ERROR That code (hash 36e6fa24b0d229f0388ba62718e1837b927542d482f99929e42cf651c2601f38) differs from line 49 (hash 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2). Pass the same artifact and arguments. 
+OK   deploy Counter(1), the broadcast refused: exit 1, ERROR Signed, but not on chain: the node refused the broadcast (HTTP request failed. "the proxy says no"). Nonce 76 on base-sepolia is bound to this content and nothing else can use it. When the node works agai
+OK   the policy moved to the next nonce, line 76 is signed and nothing is on chain
+OK   a new deploy would wait behind the gap: stopped before signing: exit 1, ERROR Nonce 76 on base-sepolia was signed but is not on chain, and anything newer would wait behind it. First call keyfree_retry (CLI: keyfree retry --chain <chain>), for a deploy with the
+OK   retry needs the code of a deploy line: exit 1, ERROR Line 76 is a deploy that was signed but is not on chain. The journal holds only its code hash (1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2): pass the same artifact and arguments to retry
+OK   retry takes only the same code: exit 1, ERROR That code (hash 36e6fa24b0d229f0388ba62718e1837b927542d482f99929e42cf651c2601f38) differs from line 76 (hash 1fa27a804d8eed04058fc03f9f4c48b8b098a8aeea1173e447f020b1553e3ed2). Pass the same artifact and arguments. 
 OK   retry with the code: contract's resign, real MPC: exit 0
-OK   landed at the promised 0x7175ae25d64d6144875a08fe2771f336e57c9dde: https://sepolia.basescan.org/tx/0x635dd6382c60bfdcd1e72490cd88043bbdae46b3865fcc6fdb251b036fb422e3
-OK   re-signed on NEAR: https://testnet.nearblocks.io/txns/C1WcHCYcHWtp6JZaJYBD85Pt3Czn86YwcKGRtZrQDGjv
+OK   landed at the promised 0x7ac61e61601d129707a027e84b475a7bc95f6fc7: https://sepolia.basescan.org/tx/0xd4028252abd53fbb2d949107bae867203e9884fbda59f100a155935c61a0dac3
+OK   re-signed on NEAR: https://testnet.nearblocks.io/txns/22DvQgfQxQDuycBrvJMrvZzTzJpHH46ehFw35xbhkNmx
 OK   number() = 1 on chain
 OK   nothing is stuck any more: exit 1, ERROR Nothing is stuck.
 
 [signed, then the broadcast fails: a proxy upgrade]
-OK   the treasury 0x0c3b522623bab4fd1fbbfc8a3422b0d48b3cb1c8 runs v1, going to 0x9bf2d1968a3c113fbc8a6889538bce2f982f9278
+OK   the treasury 0x534f60bce148c60a16ce31beb9e5cece05be312d runs v1, going to 0x434b9782b50adcbb9d1b174db280664053252db2
 OK   the council allows the upgrade: exit 0
-waiting 61 s for the rules delay
-OK   rule 91 applied: exit 0
-OK   upgrade, the broadcast refused: exit 1, ERROR Signed, but not on chain: the node refused the broadcast (HTTP request failed. "the proxy says no"). Nonce 50 on base-sepolia is bound to this content and nothing else can use it. When the node works again, call ke
+waiting 60 s for the rules delay
+OK   rule 141 applied: exit 0
+OK   upgrade, the broadcast refused: exit 1, ERROR Signed, but not on chain: the node refused the broadcast (HTTP request failed. "the proxy says no"). Nonce 77 on base-sepolia is bound to this content and nothing else can use it. When the node works again, call ke
 OK   the treasury still runs v1
 OK   retry: contract's resign_proxy_upgrade, real MPC, no code needed: exit 0
-OK   the treasury moved to v2: https://sepolia.basescan.org/tx/0x6c4c8c66dc1ce2c4df3fef4e16fd0401a180b3b141b4bbafd89b19eea9f186b2
-OK   re-signed on NEAR: https://testnet.nearblocks.io/txns/FtB6TX6QrwtoJ2yPdEdBbLGe2DyfD8EjzRxNZEs5uEhp
+OK   the treasury moved to v2: https://sepolia.basescan.org/tx/0xfe27bb1ff315bbfaa3d0208a2f7a46cbfaaf19e0b515a52d459a7a0d0f88011e
+OK   re-signed on NEAR: https://testnet.nearblocks.io/txns/CfyY2SVgkKNGbkWdHcnPGKxeH35y8CGWKf7dEdNsWiyd
 OK   nothing is stuck any more: exit 1, ERROR Nothing is stuck.
 
 31/31 steps ok

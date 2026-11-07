@@ -174,7 +174,8 @@ async function main() {
       if (sub === "allow-upgrade") {
         // Z10: the rule names an address; show what code is there now and refuse an empty address.
         const impl = await kf.implementationCode(String(a), addr("implementation", c));
-        return out({ implementation_code: impl, proposed: await council(cfg, kf, f.as, "propose_rule", { change }) });
+        const proposed = await council(cfg, kf, f.as, "propose_rule", { change });
+        return out({ ...(proposed && typeof proposed === "object" ? proposed : { result: proposed }), implementation_code: impl });
       }
       if (change) return out(await council(cfg, kf, f.as, "propose_rule", { change }));
       if (sub === "apply" || sub === "cancel") return out(await council(cfg, kf, f.as, `${sub}_rule`, { id: u32("id", a) }));

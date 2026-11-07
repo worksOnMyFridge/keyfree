@@ -89,6 +89,8 @@ test("Z1: council keys next to the agent are found by account name, the keys the
     assert.ok(found.some((f) => f.startsWith("guardian.you.testnet in ")));
     assert.ok(found.some((f) => f.startsWith("reserve.you.testnet in ")));
     assert.ok(!found.join(" ").includes("SECRET"), "no key in the report");
+    assert.ok(found.includes("guardian.you.testnet in setup/guardian_key.json") && found.includes("reserve.you.testnet in reserve_key.json"), found.join(" | "));
+    assert.ok(!found.join(" ").includes(os.tmpdir()) && !found.join(" ").includes(os.homedir()), "no full path, so no user name, in the report");
     process.env.KEYFREE_COUNCIL_KEY = "/somewhere/owner.json";
     assert.ok(localCouncilKeys(cfg, ["you.testnet"]).some((f) => f.startsWith("KEYFREE_COUNCIL_KEY is set")));
   } finally {

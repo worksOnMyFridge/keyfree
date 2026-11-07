@@ -1,0 +1,17 @@
+--- 2026-11-07T06:49:12.620Z v19 checks on policy13.keyfree-lab.testnet
+OK   build v19, version 9
+OK   get_config: MPC v1.signer-prod.testnet, path keyfree-1, delays 60 s / 180 s
+OK   the address v1.signer-prod.testnet derives for (policy13.keyfree-lab.testnet, keyfree-1) is the policy's: 0x43e3cb8d471680307f0c232e5ac190828681fcb0
+OK   factory deploy of Counter(1) at 50 000 gas refused before signing: "gas limit below the intrinsic minimum plus what this call surely spends: 66640"
+OK   at 300 000 gas the preview builds it and reports the same floor, min_gas 66640
+OK   owner proposes rule 25: AllowCode(f1a812f83a8a...), a code nobody needs https://testnet.nearblocks.io/txns/GbWwuA1siintpNigiVr19J6g1Asf44gzKYiVyuyCDZnL
+OK   guard13b.keyfree-lab.testnet pauses at once https://testnet.nearblocks.io/txns/7Tf82q6frSx2NConcCoDBesDQQze1naeunbMMruAQHSH
+  waiting 61 s for the rules delay
+OK   after the delay the owner cannot apply it while paused: "paused: no rule is applied while paused" (the contract refused the call with this message; the client gave back no transaction hash)
+OK   the code is not on the allow list
+OK   guard13b.keyfree-lab.testnet cancels rule 25 https://testnet.nearblocks.io/txns/6cqSYKNYzYJEdpEjCaNCk4N998Et7xrtaiY5AnTc1tCg
+OK   unpause, first vote: the owner https://testnet.nearblocks.io/txns/79do97xzhYAiDUcfGu1eeJbaTj2e11PBkxCFugX5q8Vj
+OK   unpause, second vote: reserve13.keyfree-lab.testnet https://testnet.nearblocks.io/txns/EqqxpK7FMUoVFk43hkJXzyanQztGWiu14xG43kYZx5hM
+OK   running again, no rule waiting: paused false, open proposals 0
+all v19 checks passed
+

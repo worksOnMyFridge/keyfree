@@ -174,7 +174,8 @@ data and position; no narrowing method widens anything for zero, `u128::MAX` or 
 - The changes of v16 themselves were made after the third review; they are covered by the tests named above and
   by the verification pass (V1..V7), which was not done by an independent reviewer.
 - v17 was seen by the fourth review, v18 (Y1) by the fifth, which found it correct. v19 (Z3..Z6) came after the
-  fifth review; its changes were checked afterwards by a separate session (below, when done).
+  fifth review: covered by the tests named above, the sandbox (17 of 17) and the live checks (CLAIMS 9.9), and
+  checked afterwards by a separate session (see the end of this section when it is done).
 - The fourth review did not run the nearcore sandbox, a rebuild of the wasm or the page in a browser, and read the
   Read MPC payload's encoding only through the authors' golden tests.
 
