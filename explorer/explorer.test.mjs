@@ -108,7 +108,7 @@ test("all well: every panel is filled, numbers are exact, no script error", asyn
   await noLoading(page);
   assert.equal(await text("keys"), "0");
   assert.match(await text("build"), /v19, version 9/);
-  assert.match(await text("codehash"), /the reproducible build of d66c/);
+  assert.match(await text("codehash"), /the reproducible build of c61772/);
   assert.match(await text("paused"), /running/);
   assert.match(await text("chains"), /Base Sepolia/);
   assert.match(await text("chains"), /3 of 10 transactions/);
@@ -304,7 +304,7 @@ test("the real policy through the real nodes", { skip: !process.env.LIVE }, asyn
   await noLoading(page);
   assert.equal(await page.locator("#keys").innerText(), "0");
   assert.match(await page.locator("#build").innerText(), /v19/);
-  assert.match(await page.locator("#codehash").innerText(), /the reproducible build of d66c/);
+  assert.match(await page.locator("#codehash").innerText(), /the reproducible build of c61772/);
   assert.match(await page.locator("#source").innerText(), /c61772/);
   assert.match(await page.locator("#journal").innerText(), /confirmed/);
   await page.locator("button[data-arg='1']").click();
