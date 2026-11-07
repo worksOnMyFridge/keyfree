@@ -33,7 +33,7 @@ const keep = () => fs.writeFileSync(stateFile, JSON.stringify(state, null, 1));
 const keyFile = (role) => here(`${role}_key.json`); // never printed
 // Key files are readable by you only (no effect on Windows, where the user profile already limits them).
 const writeKey = (role, body) => fs.writeFileSync(keyFile(role), body, { mode: 0o600 });
-// The network's MPC: a policy installed with any other account signs through whoever runs it (R3).
+// The network's MPC: a policy installed with any other account signs through whoever runs it (Z3).
 const REAL_MPC = { testnet: "v1.signer-prod.testnet", mainnet: "v1.signer" };
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const ethOfKey = (key) => {
@@ -117,7 +117,7 @@ try {
     // runs out on the first 250 Tgas request; the agent account's own balance is the cap).
     await make("agent", CFG.agent, CFG.agent_near, (pk) => actions.addFunctionCallAccessKey(pk, P, AGENT_METHODS));
     // Two of three council keys decide everything after the delay: on the agent's machine they are within its reach
-    // (R1). So the guardian and the reserve are made elsewhere, by the people who will hold them.
+    // (Z1). So the guardian and the reserve are made elsewhere, by the people who will hold them.
     for (const r of ["guardian", "reserve"]) {
       if (await exists(CFG[r])) { say(`  ${CFG[r]} exists, left as it is`); continue; }
       if (!CFG.demo_council_here) throw new Error(`${r} ${CFG[r]} does not exist. Create it on another device (its own wallet) and run this stage again; this script makes no council keys where the agent runs (set "demo_council_here": true only for a quick testnet trial)`);

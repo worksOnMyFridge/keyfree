@@ -68,7 +68,7 @@ export function hasLocalKey(cfg: Config, account: string): boolean {
   return fs.existsSync(credentialsFile(cfg, account));
 }
 
-// Every council key the agent's machine holds where the agent could read it (R1): the near-cli place, a key
+// Every council key the agent's machine holds where the agent could read it (Z1): the near-cli place, a key
 // file named by KEYFREE_COUNCIL_KEY, and *_key.json files next to the agent (the working folder and its setup/)
 // that name a council account. Only account names and where they were found, never a key.
 export function localCouncilKeys(cfg: Config, council: string[]): string[] {

@@ -82,7 +82,7 @@ export class Keyfree {
     return this.policy.account(this.cfg.agent, key);
   }
 
-  // R10: an upgrade is allowed by address. Before the council proposes one, the CLI shows the code that sits at
+  // Z10: an upgrade is allowed by address. Before the council proposes one, the CLI shows the code that sits at
   // that address now and refuses an address with no code: what lands there later would be someone's choice.
   async implementationCode(chainName: string, implementation: string): Promise<{ code_hash: string; bytes: number }> {
     const chain = findChain(this.cfg, chainName);
@@ -192,7 +192,7 @@ export class Keyfree {
     return { max_fee_per_gas: max, max_priority_fee_per_gas: prio };
   }
 
-  // R3: the policy signs through the MPC account and path it was installed with. Check both: the account is the
+  // Z3: the policy signs through the MPC account and path it was installed with. Check both: the account is the
   // network's real MPC, and the address the policy reports is the one that MPC derives for (this policy, path).
   // A look-alike MPC chosen at install would hold a key for the address while the policy shows 0 keys.
   private async mpcCheck(address: string | null): Promise<{ report: Record<string, unknown>; warning?: string }> {

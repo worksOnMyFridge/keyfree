@@ -481,7 +481,7 @@ impl Keyfree {
         }
         // Only this change is done. The others stay: their approvals are recounted against the council of
         // the moment they are applied, so an approval from a member who has just been replaced no longer
-        // counts. Clearing them all let any member wipe an approved replacement of a stolen key (R5).
+        // counts. Clearing them all let any member wipe an approved replacement of a stolen key (Z5).
         self.role_changes.retain(|x| x.proposer != c.proposer);
         self.unpause_votes.clear();
         env::log_str(&format!("keyfree: {:?} is now {}", c.role, c.account));
@@ -645,7 +645,7 @@ impl Keyfree {
     }
 
     // Which MPC signs for this policy and with which path: anyone can check that the policy's EVM address is
-    // the one the real MPC derives for (this account, path), so an install with a look-alike MPC shows (R3).
+    // the one the real MPC derives for (this account, path), so an install with a look-alike MPC shows (Z3).
     pub fn get_config(&self) -> Value {
         json!({ "mpc": self.mpc, "path": self.path, "rules_delay_sec": self.rules_delay_sec, "upgrade_delay_sec": self.upgrade_delay_sec })
     }
@@ -1291,7 +1291,7 @@ fn intrinsic_gas(tx: &EVMTransaction) -> u128 {
     (21_000 + 4 * tokens + create).max(21_000 + 10 * tokens)
 }
 
-// What a transaction of each kind surely spends beyond the intrinsic gas (R4). A gas limit under it can
+// What a transaction of each kind surely spends beyond the intrinsic gas (Z4). A gas limit under it can
 // only revert on chain, and a reverted request has used its nonce, a one-time proxy upgrade and a salt.
 // - upgradeTo on a proxy: reading the admin, writing the implementation slot and the Upgraded event. Our
 //   TreasuryProxy used 32 679 gas in all; 28 000 on top of the intrinsic gas (about 50 000) leaves room for

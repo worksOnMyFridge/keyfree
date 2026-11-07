@@ -2333,9 +2333,9 @@ fn random_transactions_encode_like_viem() {
     assert_eq!(cases.len(), 400);
 }
 
-// ---- v19: the fifth review (lifecycle red team), findings R3..R6 ----
+// ---- v19: the fifth review (lifecycle red team), findings Z3..Z6 ----
 
-// R3: the MPC account and the path are readable, so anyone can check the address against the real MPC.
+// Z3: the MPC account and the path are readable, so anyone can check the address against the real MPC.
 #[test]
 fn the_config_names_the_mpc_and_the_path() {
     let c = idle();
@@ -2346,7 +2346,7 @@ fn the_config_names_the_mpc_and_the_path() {
     assert_eq!(cfg["upgrade_delay_sec"], c.upgrade_delay_sec);
 }
 
-// R4: upgradeTo at the intrinsic minimum can only revert and would use up the one-time allowance.
+// Z4: upgradeTo at the intrinsic minimum can only revert and would use up the one-time allowance.
 #[test]
 #[should_panic(expected = "gas limit below the intrinsic minimum plus what this call surely spends")]
 fn an_upgrade_at_the_intrinsic_minimum_is_refused() {
@@ -2369,7 +2369,7 @@ fn an_upgrade_at_the_floor_has_room_for_a_real_upgrade() {
     assert_eq!(c.pending.as_ref().map(|p| p.gas_limit), Some(60_000));
 }
 
-// R4: a salted factory deploy under CREATE2's own cost can only revert and would burn that address.
+// Z4: a salted factory deploy under CREATE2's own cost can only revert and would burn that address.
 #[test]
 #[should_panic(expected = "gas limit below the intrinsic minimum plus what this call surely spends")]
 fn a_salted_deploy_under_the_create2_cost_is_refused() {
@@ -2395,7 +2395,7 @@ fn the_preview_reports_the_floor_it_enforces() {
     assert_eq!(v["min_gas"].as_u64().unwrap() as u128, min_gas(&p));
 }
 
-// R5: applying a ready agent change keeps an approved replacement of a stolen guardian key.
+// Z5: applying a ready agent change keeps an approved replacement of a stolen guardian key.
 #[test]
 fn applying_one_role_change_keeps_the_approved_replacement_of_a_stolen_key() {
     let mut c = idle();
@@ -2413,7 +2413,7 @@ fn applying_one_role_change_keeps_the_approved_replacement_of_a_stolen_key() {
     assert_eq!(c.guardian.as_str(), "guardian2.testnet");
 }
 
-// R5: an approval from a member who has since been replaced does not count when the change is applied.
+// Z5: an approval from a member who has since been replaced does not count when the change is applied.
 #[test]
 #[should_panic(expected = "needs 2 of 3 approvals")]
 fn an_approval_from_a_replaced_member_no_longer_counts() {
@@ -2433,7 +2433,7 @@ fn an_approval_from_a_replaced_member_no_longer_counts() {
     c.apply_role(acc("guardian.testnet")); // only the reserve's approval is from the current council
 }
 
-// R6: a pause stops a widening from being applied; replacing a member still works while paused.
+// Z6: a pause stops a widening from being applied; replacing a member still works while paused.
 #[test]
 #[should_panic(expected = "paused: no rule is applied while paused")]
 fn a_paused_policy_applies_no_rule() {

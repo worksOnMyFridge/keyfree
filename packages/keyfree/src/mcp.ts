@@ -16,8 +16,8 @@ const RULE = "The policy contract on NEAR decides. A refusal is final: report it
 
 const kf = new Keyfree(loadConfig());
 
-// R9: the model may name an artifact only inside the folder the server runs in, so a tool call cannot probe
-// other files on the machine. The salt is drawn by the tool, never chosen by the model (R8): a chosen salt
+// Z9: the model may name an artifact only inside the folder the server runs in, so a tool call cannot probe
+// other files on the machine. The salt is drawn by the tool, never chosen by the model (Z8): a chosen salt
 // would let it write 32 bytes of its choice onto a public chain.
 const root = fs.realpathSync(process.cwd());
 function inProject<T extends { artifact?: string }>(a: T): T {

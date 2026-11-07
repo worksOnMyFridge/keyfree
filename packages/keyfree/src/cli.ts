@@ -172,7 +172,7 @@ async function main() {
         sub === "allow-upgrade" ? { AllowProxyUpgrade: { chain_id: chainId(a), proxy_hex: addr("proxy", b), implementation_hex: addr("implementation", c) } } :
         sub === "set-budget" ? { SetBudget: { chain_id: chainId(a), max_wei_per_day: u128("wei_per_day", b), max_tx_per_day: u32("tx_per_day", c) } } : null;
       if (sub === "allow-upgrade") {
-        // R10: the rule names an address; show what code is there now and refuse an empty address.
+        // Z10: the rule names an address; show what code is there now and refuse an empty address.
         const impl = await kf.implementationCode(String(a), addr("implementation", c));
         return out({ implementation_code: impl, proposed: await council(cfg, kf, f.as, "propose_rule", { change }) });
       }

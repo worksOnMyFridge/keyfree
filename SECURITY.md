@@ -14,7 +14,9 @@ by four different accounts:
 
 Brakes are instant and need one council member (owner, guardian or reserve): pause, revoke the agent, remove
 code or an allowed proxy upgrade, disable a chain, remove a factory, lower caps, cancel an upgrade or a rule
-proposal. Brakes stop new signatures, not those already issued (see "Known limits").
+proposal. Brakes stop new signatures, not those already issued (see "Known limits"). From v19 a pause also stops
+any rule or policy upgrade from being applied; replacing a council member still works while paused, so the honest
+two can remove a stolen key that keeps pausing.
 
 Anything that widens power waits, and the wait cannot be shortened, not even by two members together:
 
@@ -46,23 +48,33 @@ only as safe as that place.
 
 - **NEAR MPC** (the chain-signatures network) signs for the policy's derived address and, through Read MPC,
   reports what happened on the EVM chain. If the MPC network colludes or is broken, both signing and the
-  journal can lie. Keyfree adds rules in front of it; it does not remove that trust.
+  journal can lie. Keyfree adds rules in front of it; it does not remove that trust. Which MPC a policy signs
+  through is fixed at install: from v19 `get_config` names it, and `keyfree status` and `setup check` say whether it
+  is the network's MPC and whether the policy's address is the one that MPC derives (a look-alike MPC would hold a
+  key for the address while the policy shows 0 keys).
 - **The EVM RPC** the tool talks to: the tool checks what the policy built against viem and what MPC signed
   against what it checked, so a lying RPC can make a deploy fail or look pending, not change what is signed.
 - **The NEAR RPC** the tool talks to: the contract decides on chain, whatever a node says. A lying node can stop the
   tool or show it a false state, including a false ETH address, so a report of success is only as good as the node;
   `keyfree_confirm` and the explorers are the check. A retry's transaction is compared with its journal line too.
 - **The policy code.** It is open and tested (176 unit and property tests, golden and random-vector tests against viem, the live wasm in a local nearcore node, an attack bench of 65 attacks: `npm run attacks`). During development
-  it went through four security reviews, each done by a separate AI reviewer session that did not write the
-  code, the fourth on another model; their findings were fixed with tests or stated as limits (AUDIT.md). It has not had a professional human audit.
+  it went through five security reviews, each done by a separate AI reviewer session that did not write the
+  code, the fourth on another model, the fifth on the whole lifecycle; their findings were fixed with tests or stated as limits (AUDIT.md). It has not had a professional human audit.
 
 ## Known limits
 
-- **Owner key on the agent's machine.** In the live run the owner key and the agent ran on the same laptop.
+- **Council keys on the agent's machine.** `setup/policy.mjs` makes no council key where the agent runs (the
+  guardian and the reserve are accounts made on other devices) unless a quick testnet trial asks for it, and
+  `keyfree status` names every council key it finds next to the agent. The demo policies are such trials: their
+  council keys sit on the laptop that ran them. In the live run the owner key and the agent ran on the same laptop.
   When asked for code that was not allowed, the Claude Code session itself noticed it could sign as the owner
   and offered to do it after asking. It did not, and the delay plus the other two members would still apply,
   but the separation between agent and owner is only as real as the separation between their keys. Keep the
   owner key on another device or a hardware wallet, never where the agent runs.
+- **The alarm.** A widening is safe only if someone sees it during its delay. The `watch` workflow checks every 15
+  minutes and can post to every council member (`KEYFREE_ALERT_WEBHOOK`); GitHub may run a schedule late or skip it
+  and turns it off after 60 days without activity, so a real policy needs delays of hours (setup warns under one
+  hour). The demo policies use 60 s and 180 s for testing, which no schedule can watch.
 - **A signed transaction is public.** The policy returns the signed raw transaction; anyone who sees it can
   broadcast it. That is sending, not a new signature: it can only spend the nonce on the content the rules
   allowed.
@@ -81,6 +93,8 @@ only as safe as that place.
 - **Deploys and one kind of call.** The policy signs contract creations (plain or through its own CREATE2
   factory) and `upgradeTo(implementation)` on a proxy, always with value 0. It signs no other call and no
   transfer.
+- **Money sent to the policy's address.** The policy signs only value-0 deploys and `upgradeTo`, so ETH or tokens sent
+  to its address can never leave it, not even at retirement, unless a future version of the policy adds a way.
 - **Money after the deploy.** Keyfree fixes who a contract pays at the moment it is deployed: an owner or a
   recipient passed to the constructor is part of the allowed hash. After that the contract obeys its own
   code and its owner. If the vault's owner key is stolen, Keyfree does not help. For a treasury behind a
@@ -97,7 +111,7 @@ only as safe as that place.
 - **Reproducible from v14.1 on.** The live code is a `cargo near` reproducible build (README, "Check which
   code the live policy runs"). Versions up to v14 were built on a laptop and cannot be rebuilt byte for byte.
 - Testnets only so far (Base Sepolia, Ethereum Sepolia); Arbitrum not run yet; see "Not claimed" in
-  CLAIMS.md. The findings of the four security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
+  CLAIMS.md. The findings of the five security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
 
 ## Reporting
 

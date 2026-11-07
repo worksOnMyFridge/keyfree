@@ -55,14 +55,14 @@ test("chains by name or id, unknown ones listed", () => {
   assert.throws(() => findChain(cfg, "arbitrum"), (e) => e instanceof ConfigError && /base-sepolia \(84532\)/.test(e.message));
 });
 
-// ---- v19 (fifth review): R1, R3, R9 ----
+// ---- v19 (fifth review): Z1, Z3, Z9 ----
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import { ethAddressOfKey } from "../dist/core.js";
 import { localCouncilKeys } from "../dist/config.js";
 
 import { b58 } from "./b58.mjs";
 
-test("R3: the EVM address of an MPC key is keccak of its point, the same as the account's address", () => {
+test("Z3: the EVM address of an MPC key is keccak of its point, the same as the account's address", () => {
   for (let i = 0; i < 5; i++) {
     const a = privateKeyToAccount(generatePrivateKey());
     assert.equal(ethAddressOfKey(`secp256k1:${b58(a.publicKey.slice(4))}`), a.address.toLowerCase());
@@ -71,7 +71,7 @@ test("R3: the EVM address of an MPC key is keccak of its point, the same as the 
   assert.equal(ethAddressOfKey("secp256k1:0OIl"), null, "not base58");
 });
 
-test("R1: council keys next to the agent are found by account name, the keys themselves are never shown", () => {
+test("Z1: council keys next to the agent are found by account name, the keys themselves are never shown", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kf-council-"));
   fs.mkdirSync(path.join(dir, "setup"));
   fs.writeFileSync(path.join(dir, "setup", "guardian_key.json"), JSON.stringify({ account_id: "guardian.you.testnet", private_key: "ed25519:SECRETGUARDIAN" }));
@@ -98,7 +98,7 @@ test("R1: council keys next to the agent are found by account name, the keys the
   }
 });
 
-test("R9: a file that is not an artifact gives a plain message, never a piece of its content", () => {
+test("Z9: a file that is not an artifact gives a plain message, never a piece of its content", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kf-"));
   const file = path.join(dir, ".env");
   fs.writeFileSync(file, "NEAR_PRIVATE_KEY=ed25519:SECRET\n");

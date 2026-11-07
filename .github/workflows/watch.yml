@@ -2,7 +2,7 @@
 # new rule, agent, role or policy upgrade) makes the run fail while there is still time for any council member to
 # cancel it. No keys: `pending` only reads.
 #
-# What this alarm can and cannot do (R2 of the fifth review):
+# What this alarm can and cannot do (Z2 of the fifth review, AUDIT.md):
 # - GitHub runs schedules late at busy times and may skip a run; a delay must be much longer than the interval.
 #   The live demo policy uses 60 s and 180 s delays for testing, which no schedule can catch; a real policy should
 #   use hours (setup/policy.mjs warns under 1 hour).

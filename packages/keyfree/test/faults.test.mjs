@@ -526,10 +526,10 @@ test("the MCP server reports a lost broadcast to the model, and keyfree_retry re
   }
 });
 
-// ---- v19 (fifth review): R3 the MPC check, R8 no salt from the model, R9 artifacts only in the project ----
+// ---- v19 (fifth review): Z3 the MPC check, Z8 no salt from the model, Z9 artifacts only in the project ----
 import { b58 } from "./b58.mjs";
 
-test("R3: status names the MPC and checks the policy's address against it; a look-alike MPC or address is called out", async (t) => {
+test("Z3: status names the MPC and checks the policy's address against it; a look-alike MPC or address is called out", async (t) => {
   const w = await world(t);
   const key = (pub) => `secp256k1:${b58(pub.slice(4))}`;
   w.near.st.faults["view:get_config"] = () => ({ mpc: "v1.signer-prod.testnet", path: "keyfree-1", rules_delay_sec: 60, upgrade_delay_sec: 180 });
@@ -551,7 +551,7 @@ test("R3: status names the MPC and checks the policy's address against it; a loo
   assert.equal(r.json().mpc.checked, false, "an older policy: said, not guessed");
 });
 
-test("R8 and R9: the MCP tools take no salt and no artifact outside the project", async (t) => {
+test("Z8 and Z9: the MCP tools take no salt and no artifact outside the project", async (t) => {
   const w = await world(t);
   const { Client } = await import("@modelcontextprotocol/client");
   const { getDefaultEnvironment, StdioClientTransport } = await import("@modelcontextprotocol/client/stdio");

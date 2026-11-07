@@ -1,8 +1,9 @@
 # Security reviews
 
-Four security reviews were done by separate AI reviewer sessions that had no part in writing the code: two
+Five security reviews were done by separate AI reviewer sessions that had no part in writing the code: two
 on 2026-10-25, a third on 2026-11-01 against catalogs of current attack techniques (108 items, with
-sources), and a fourth on 2026-11-03 by another model, Claude Fable 5.1. Each one read the code, ran its own probe tests and listed findings with a way to break them. This
+sources), a fourth on 2026-11-03 by another model, Claude Fable 5.1, and a fifth on 2026-11-06 that attacked
+the whole lifecycle: install, setup, the alarm, CI and what happens after a deploy. Each one read the code, ran its own probe tests and listed findings with a way to break them. This
 page lists every finding, what was changed, and the test that now shows the fix. **This is not a
 professional audit.**
 
@@ -11,6 +12,28 @@ Status words: **fixed** (changed, with a test), **partly** (the dangerous part i
 
 Tests are in [`contract/src/tests.rs`](contract/src/tests.rs); run them with
 `(cd contract && cargo test -- --test-threads=1)`. Versions are in [`contract/CHANGELOG.md`](contract/CHANGELOG.md).
+
+## Fifth review (code version v18, 2026-11-06): Z1..Z12
+
+Method: a red-team session with no part in the code attacked the lifecycle before, during and after Keyfree runs,
+proving each finding with a probe test or the exact lines. Read-only toward the chains. Its report, with what it
+checked and found safe and what it did not cover: [`audit/review_2026-11-06.md`](audit/review_2026-11-06.md). The
+contract changes are v19.
+
+| Id | Finding | Severity | Status | What changed / test |
+|---|---|---|---|---|
+| Z1 | Setup made the guardian's and the reserve's keys next to the agent (2 of 3), files not limited to the user; the "keys on this machine" warning looked in one place only | High | fixed (tool, setup) | `setup/policy.mjs` makes no council key unless `"demo_council_here": true` (a quick testnet trial, with a warning); the guardian and the reserve must already exist, made on other devices. Key files are written 0600 and the policy's temporary key file is removed after install. `keyfree status` and `setup check` name every council key found next to the agent: `~/.near-credentials`, `KEYFREE_COUNCIL_KEY`, `*_key.json` in the working folder and its `setup/`. Test: "Z1: council keys next to the agent are found by account name". The demo policies' own council keys still sit on the laptop that ran them; SECURITY.md says so |
+| Z2 | The alarm ran hourly against minute-long demo delays, could be late or switched off, and told one person | Medium | partly | `watch` runs every 15 minutes, can post to every council member (`KEYFREE_ALERT_WEBHOOK`), separates "a widening waits" from "the policy could not be read", and states its limits. `setup` warns on delays under an hour. The demo policies keep 60 s and 180 s delays for testing; no schedule protects those |
+| Z3 | No view named the MPC or the path, so a look-alike MPC chosen at install could hold a key while the policy shows 0 keys | Medium | fixed (v19, tool) | `get_config` returns the MPC account and the path. `keyfree status` and `setup check` compare the account with the network's MPC and the policy's address with the one that MPC derives; `setup install` refuses another MPC. Tests: `the_config_names_the_mpc_and_the_path`, "Z3: status names the MPC and checks the policy's address against it", "Z3: the EVM address of an MPC key". Both live policies checked: their addresses are the ones `v1.signer-prod.testnet` derives |
+| Z4 | Only the intrinsic gas was checked, so a transaction certain to revert could be signed and use up a one-time upgrade or a CREATE2 address | Low-medium | fixed (v19) | A floor per kind on top of the intrinsic gas: 28 000 for `upgradeTo` (about 50 000 in all; a real one used 32 679), CREATE2's 32 000 plus 8 per word for a factory deploy. The previews report the floor and the tool already takes the larger of it and the estimate. Tests: `an_upgrade_at_the_intrinsic_minimum_is_refused`, `an_upgrade_at_the_floor_has_room_for_a_real_upgrade`, `a_salted_deploy_under_the_create2_cost_is_refused`, `the_preview_reports_the_floor_it_enforces`. A plain creation's code deposit is still not known to the contract |
+| Z5 | Applying one role change cleared all others, including an approved replacement of a stolen key | Low | fixed (v19) | Only the applied change is removed; approvals are recounted at apply time against the council of that moment. Tests: `applying_one_role_change_keeps_the_approved_replacement_of_a_stolen_key`, `an_approval_from_a_replaced_member_no_longer_counts` |
+| Z6 | A pause did not stop an approved widening from being applied | Low | fixed (v19) | A paused policy applies no rule and no upgrade; replacing a council member still works, so the honest two can remove a thief who keeps pausing. Tests: `a_paused_policy_applies_no_rule`, `a_paused_policy_applies_no_upgrade`, `a_member_can_be_replaced_while_paused` |
+| Z7 | The CI example ran this repository at `main` and claimed more protection from an environment than it gives | Low | fixed | The example pins a commit of this repository and says to allow deployments from `main` only with a required reviewer |
+| Z8 | The MCP tools took a salt chosen by the model | Low | fixed (tool) | The salt is drawn by the tool; `keyfree_deploy` and `keyfree_preview` reject a `salt` argument (the CLI still takes one from a human). Test: "Z8 and Z9: the MCP tools take no salt and no artifact outside the project" |
+| Z9 | The model could probe any file through the artifact path and read its first characters in an error | Info | fixed (tool) | MCP artifacts must be inside the folder the server runs in; a file that is not an artifact gives a plain message without its content. Tests: the same, and "Z9: a file that is not an artifact gives a plain message" |
+| Z10 | An upgrade is allowed by address; the CLI accepted an address with no code | Low | partly (tool) | `keyfree rules allow-upgrade` refuses an address with no code and prints the code hash there now. The contract still binds the address, and the explorer does not show the implementation's code |
+| Z11 | Funds sent to the policy's address can never leave | Info | by design, stated | SECURITY.md, "Money sent to the policy's address" |
+| Z12 | Three documentation mistakes | Info | fixed | R29 below, the package README and the watch workflow corrected |
 
 ## Fourth review (code version v17, 2026-11-03): Y1..Y5
 
@@ -150,8 +173,8 @@ data and position; no narrowing method widens anything for zero, `u128::MAX` or 
 
 - The changes of v16 themselves were made after the third review; they are covered by the tests named above and
   by the verification pass (V1..V7), which was not done by an independent reviewer.
-- v17 was seen by the fourth review. v18 (Y1) came after it: a few lines in the signing callback, with tests in the
-  contract and a local nearcore node, not reviewed by anyone else.
+- v17 was seen by the fourth review, v18 (Y1) by the fifth, which found it correct. v19 (Z3..Z6) came after the
+  fifth review; its changes were checked afterwards by a separate session (below, when done).
 - The fourth review did not run the nearcore sandbox, a rebuild of the wasm or the page in a browser, and read the
   Read MPC payload's encoding only through the authors' golden tests.
 
@@ -171,4 +194,4 @@ data and position; no narrowing method widens anything for zero, `u128::MAX` or 
 | R17 | Any signed but unconfirmed line can be re-signed, a plain CREATE too |
 | R18 | The nonce is never moved down by hand |
 | R21 | Confirmation through Read MPC: our factory's `Deployed` log, payload hash computed in the contract |
-| R29 | Retire: 2 of 3 and the delay, then the contract deletes its own account |
+| R29 | Retire: 2 of 3 and the delay, then the state is swept and the NEAR goes to a council member who approved; the account is not deleted, so its name and EVM address can never be taken again (X1) |
