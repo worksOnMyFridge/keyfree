@@ -3,7 +3,7 @@
 Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the
 repository: every linked transaction and address, the live policy, every count, every quoted log line.
 
-Result: 120 of 120 checks agree.
+Result: 122 of 122 checks agree.
 
 | | Check | Result |
 |---|---|---|
@@ -86,6 +86,8 @@ Result: 120 of 120 checks agree.
 | ok | Base Sepolia tx 0x635dd638… CLAIMS.md:149 (claim 10.5) | block 54106221, status success |
 | ok | Base Sepolia tx 0x6c4c8c66… CLAIMS.md:149 (claim 10.5) | block 54106791, status success |
 | ok | Base Sepolia tx 0x7fe60897… CLAIMS.md:149 (claim 10.5) | block 53798407, status success |
+| ok | NEAR tx 7ZWDHjQS… CLAIMS.md:151 (claim 10.7) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9021283014a3433830f424083802c80830 |
+| ok | Base Sepolia tx 0xd49ebd7a… CLAIMS.md:151 (claim 10.7) | block 55461917, status success |
 | ok | policy13.keyfree-lab.testnet access keys | 0 (docs: 0) |
 | ok | live code sha256 | 6ae5e63e37576ec6522ed5e2bb38b1cff77d7f6598d282230affbc8624e86083 (README: 6ae5e63e37576ec6522ed5e2bb38b1cff77d7f6598d282230affbc8624e86083) |
 | ok | live code size | 384219 bytes (README: 384 219) |
