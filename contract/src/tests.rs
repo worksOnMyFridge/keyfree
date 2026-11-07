@@ -2413,10 +2413,10 @@ fn applying_one_role_change_keeps_the_approved_replacement_of_a_stolen_key() {
     assert_eq!(c.guardian.as_str(), "guardian2.testnet");
 }
 
-// Z5: an approval from a member who has since been replaced does not count when the change is applied.
+// Z5: a change proposed by a member who has since been replaced is gone with that member.
 #[test]
-#[should_panic(expected = "needs 2 of 3 approvals")]
-fn an_approval_from_a_replaced_member_no_longer_counts() {
+#[should_panic(expected = "no such role change")]
+fn a_change_proposed_by_a_replaced_member_goes_with_it() {
     let mut c = idle();
     // the guardian and the reserve approve a new owner; meanwhile the guardian is replaced
     ctx_at("guardian.testnet", 20, 1_000, vec![]);
@@ -2471,4 +2471,71 @@ fn a_member_can_be_replaced_while_paused() {
     c.apply_role(acc("owner.testnet"));
     assert_eq!(c.guardian.as_str(), "guardian2.testnet");
     assert!(c.paused, "still paused: unpausing takes 2 of 3 of the new council");
+}
+
+// Z5, checked again after v19: the old guardian proposed a new owner and the reserve approved; the guardian is
+// replaced. The change goes with its proposer, so the new guardian cannot make it ready at once.
+#[test]
+fn an_old_change_does_not_become_ready_at_once_after_the_council_changes() {
+    let mut c = idle();
+    // the reserve proposes a new owner, the guardian approves: ready at 1 000 + 3 600
+    ctx_at("reserve.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Owner, acc("owner2.testnet"));
+    ctx_at("guardian.testnet", 21, 1_000, vec![]);
+    c.approve_role(acc("reserve.testnet"));
+    // meanwhile the owner and the reserve replace the guardian
+    ctx_at("owner.testnet", 22, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("reserve.testnet", 23, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("owner.testnet", 24, 5_000, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    assert_eq!(c.guardian.as_str(), "guardian2.testnet");
+    // the owner change lost the old guardian's approval: below 2 of 3, its delay is off
+    let old = c.role_changes.iter().find(|x| x.proposer.as_str() == "reserve.testnet").unwrap();
+    assert_eq!(old.approvals.len(), 1);
+    assert_eq!(old.ready_at, None);
+    // the new guardian approves at 5 000: the full delay starts again, it is not ready at once
+    ctx_at("guardian2.testnet", 25, 5_000, vec![]);
+    c.approve_role(acc("reserve.testnet"));
+    let old = c.role_changes.iter().find(|x| x.proposer.as_str() == "reserve.testnet").unwrap();
+    assert_eq!(old.ready_at, Some(5_000 + 3_600));
+}
+
+#[test]
+#[should_panic(expected = "role change delay not over")]
+fn the_restarted_delay_holds() {
+    let mut c = idle();
+    ctx_at("reserve.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Owner, acc("owner2.testnet"));
+    ctx_at("guardian.testnet", 21, 1_000, vec![]);
+    c.approve_role(acc("reserve.testnet"));
+    ctx_at("owner.testnet", 22, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("reserve.testnet", 23, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("owner.testnet", 24, 5_000, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    ctx_at("guardian2.testnet", 25, 5_000, vec![]);
+    c.approve_role(acc("reserve.testnet"));
+    ctx_at("reserve.testnet", 26, 5_001, vec![]);
+    c.apply_role(acc("reserve.testnet"));
+}
+
+#[test]
+fn a_cancel_from_a_member_who_left_no_longer_counts() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Reserve, acc("reserve2.testnet"));
+    ctx_at("guardian.testnet", 21, 1_000, vec![]);
+    c.cancel_role(acc("owner.testnet")); // one cancel of two
+    // the guardian is replaced
+    ctx_at("reserve.testnet", 22, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("owner.testnet", 23, 1_000, vec![]);
+    c.approve_role(acc("reserve.testnet"));
+    ctx_at("owner.testnet", 24, 5_000, vec![]);
+    c.apply_role(acc("reserve.testnet"));
+    let left = c.role_changes.iter().find(|x| x.proposer.as_str() == "owner.testnet").unwrap();
+    assert!(left.cancels.is_empty(), "the old guardian's cancel no longer counts");
 }

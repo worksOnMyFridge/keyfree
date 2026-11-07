@@ -12,7 +12,8 @@ export interface ChainConfig {
 }
 
 export interface Config {
-  // The network's MPC account; status checks the policy signs through it (default: v1.signer-prod.testnet / v1.signer).
+  // Not trusted: status always checks against the network's MPC (v1.signer-prod.testnet / v1.signer) and only
+  // warns when this names another account.
   mpc_account?: string;
   near_network: "testnet" | "mainnet";
   near_rpc: string;
@@ -76,7 +77,10 @@ export function localCouncilKeys(cfg: Config, council: string[]): string[] {
   const found: string[] = [];
   for (const a of council) if (hasLocalKey(cfg, a)) found.push(`${a} in ~/.near-credentials/${cfg.near_network}/`);
   if (env("KEYFREE_COUNCIL_KEY")) found.push("KEYFREE_COUNCIL_KEY is set");
-  for (const dir of [process.cwd(), path.join(process.cwd(), "setup")]) {
+  // Next to the agent: its working folder, the folder of its keyfree.json, and their setup/ folders.
+  const conf = env("KEYFREE_CONFIG");
+  const bases = [process.cwd(), ...(conf ? [path.dirname(path.resolve(conf))] : [])];
+  for (const dir of [...new Set(bases.flatMap((b) => [b, path.join(b, "setup")]))]) {
     let names: string[] = [];
     try { names = fs.readdirSync(dir).filter((n) => n.endsWith("_key.json")); } catch { continue; }
     for (const n of names) {

@@ -103,9 +103,9 @@ Result: 128 of 128 checks agree.
 | ok | daily budget on Ethereum Sepolia | 10 transactions, 10000000000000000 wei a day |
 | ok | live run's steps in CLAIMS and README | 134 |
 | ok | live fault run's steps in CLAIMS | 31 |
-| ok | contract tests in README.md | docs 186, repository 186 |
-| ok | contract tests in CLAIMS.md | docs 186, repository 186 |
-| ok | contract tests in SECURITY.md | docs 186, repository 186 |
+| ok | contract tests in README.md | docs 189, repository 189 |
+| ok | contract tests in CLAIMS.md | docs 189, repository 189 |
+| ok | contract tests in SECURITY.md | docs 189, repository 189 |
 | ok | tool tests in README.md | docs 83, repository 83 |
 | ok | tool tests in CLAIMS.md | docs 83, repository 83 |
 | ok | factory tests in README.md | docs 6, repository 6 |

@@ -297,7 +297,7 @@ const msalt = saltOf("mcp");
 const msalted = await tool("keyfree_preview", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT], salt: msalt });
 check(msalted.error && /salt|Unrecognized/.test(msalted.text), "keyfree_preview with a salt from the model: rejected before the handler (Z8)");
 const moutside = await tool("keyfree_code_hash", { artifact: path.resolve(path.dirname(CFG), "keyfree.json") });
-check(moutside.error && /must be inside this project's folder/.test(moutside.text), "keyfree_code_hash of a file outside the project: refused (Z9)");
+check(moutside.error && /must be an existing file inside this project's folder/.test(moutside.text), "keyfree_code_hash of a file outside the project: refused (Z9)");
 const mpv = await tool("keyfree_preview", { chain: CHAIN.name, artifact: COUNTER, constructor_args: [MCP_COUNT] });
 check(!mpv.error && mpv.data.matches_viem === true && mpv.data.expected_address === at(mpv.data.salt, counterInit(MCP_COUNT)), `keyfree_preview: a random salt, and the address it gives: ${mpv.data?.expected_address}`);
 const mno = await tool("keyfree_preview", { chain: CHAIN.chain_id, artifact: COUNTER, constructor_args: [999] });

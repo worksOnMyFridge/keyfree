@@ -546,9 +546,17 @@ test("Z3: status names the MPC and checks the policy's address against it; a loo
   w.near.st.faults["view:get_config"] = () => ({ mpc: "evil-mpc.testnet", path: "keyfree-1" });
   r = await w.run("status");
   assert.match(r.json().warning, /signs through evil-mpc\.testnet, not the network's MPC/);
+  // keyfree.json cannot change which MPC is trusted: naming the look-alike there only adds a warning
+  w.near.st.faults["view:get_config"] = () => ({ mpc: "evil-mpc.testnet", path: "keyfree-1" });
+  w.write({ mpc_account: "evil-mpc.testnet" });
+  r = await w.run("status");
+  assert.equal(r.json().mpc.address_matches, false);
+  assert.match(r.json().warning, /keyfree.json names evil-mpc\.testnet/);
+  assert.match(r.json().warning, /signs through evil-mpc\.testnet, not the network's MPC/);
+  w.write();
   delete w.near.st.faults["view:get_config"];
   r = await w.run("status");
-  assert.equal(r.json().mpc.checked, false, "an older policy: said, not guessed");
+  assert.equal(r.json().mpc.checked, false, "get_config not read: said, not taken for a match");
 });
 
 test("Z8 and Z9: the MCP tools take no salt and no artifact outside the project", async (t) => {
@@ -568,10 +576,11 @@ test("Z8 and Z9: the MCP tools take no salt and no artifact outside the project"
       assert.equal(res.isError, true, `${name} took a salt`);
     }
     const outside = path.join(w.dir, "agent_key.json"); // a real file, outside the project
-    for (const name of ["keyfree_code_hash", "keyfree_preview", "keyfree_deploy"]) {
-      const res = await client.callTool({ name, arguments: name === "keyfree_code_hash" ? { artifact: outside } : { chain: "base-sepolia", artifact: outside } });
+    const missing = path.join(w.dir, "no-such-file.json");
+    for (const [name, file] of [["keyfree_code_hash", outside], ["keyfree_code_hash", missing], ["keyfree_preview", outside], ["keyfree_deploy", outside], ["keyfree_retry", outside], ["keyfree_retry", missing]]) {
+      const res = await client.callTool({ name, arguments: name === "keyfree_code_hash" ? { artifact: file } : { chain: "base-sepolia", artifact: file } });
       assert.equal(res.isError, true);
-      assert.match(res.content[0].text, /must be inside this project's folder/);
+      assert.match(res.content[0].text, /must be an existing file inside this project's folder/);
     }
     assert.equal(signed(w).length, 0, "nothing was asked of the policy");
   } finally {

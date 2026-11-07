@@ -136,7 +136,7 @@ mocked chain; tool attacks run the built `keyfree` package.
 From the repository root:
 
 ```bash
-(cd contract && cargo test -- --test-threads=1)       # 186 tests of the policy (Rust, near-sdk 5.29);
+(cd contract && cargo test -- --test-threads=1)       # 189 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
 (cd packages/keyfree && npm test && npm run smoke)    # 83 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM

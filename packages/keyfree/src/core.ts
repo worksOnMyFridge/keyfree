@@ -196,19 +196,31 @@ export class Keyfree {
   // network's real MPC, and the address the policy reports is the one that MPC derives for (this policy, path).
   // A look-alike MPC chosen at install would hold a key for the address while the policy shows 0 keys.
   private async mpcCheck(address: string | null): Promise<{ report: Record<string, unknown>; warning?: string }> {
-    const real = this.cfg.mpc_account ?? (this.cfg.near_network === "mainnet" ? "v1.signer" : "v1.signer-prod.testnet");
-    const cfg = await this.policy.view<{ mpc: string; path: string } | null>("get_config").catch(() => null);
-    if (!cfg) return { report: { checked: false, note: "this policy is older than v19 and does not name its MPC; compare the address with a fresh derivation by hand" } };
+    // The network's MPC is fixed here, not taken from keyfree.json: a config written by an attacker could otherwise
+    // name its own MPC as the one to trust.
+    const real = this.cfg.near_network === "mainnet" ? "v1.signer" : "v1.signer-prod.testnet";
+    const named = this.cfg.mpc_account && this.cfg.mpc_account !== real
+      ? `keyfree.json names ${this.cfg.mpc_account} as the MPC; the network's MPC is ${real}, and the policy is checked against it` : undefined;
+    let cfg: { mpc: string; path: string } | null = null;
+    let readError: string | undefined;
+    try { cfg = await this.policy.view<{ mpc: string; path: string }>("get_config"); } catch (e) { readError = reason(e); }
+    if (!cfg) {
+      // A policy before v19 has no get_config; any other failure is said, not taken for an old policy.
+      const older = /MethodNotFound|method.*not found|CodeDoesNotExist/i.test(readError ?? "");
+      return older
+        ? { report: { checked: false, note: "this policy is older than v19 and does not name its MPC; compare the address with a fresh derivation by hand" }, ...(named ? { warning: named } : {}) }
+        : { report: { checked: false, note: "get_config could not be read" }, warning: [named, `could not read the policy's MPC (get_config): ${readError}`].filter(Boolean).join(" | ") };
+    }
     if (cfg.mpc !== real) {
       return { report: { checked: true, account: cfg.mpc, path: cfg.path, expected_account: real, address_matches: false },
-        warning: `the policy signs through ${cfg.mpc}, not the network's MPC ${real}: whoever runs that contract may hold a key for the policy's address` };
+        warning: [named, `the policy signs through ${cfg.mpc}, not the network's MPC ${real}: whoever runs that contract may hold a key for the policy's address`].filter(Boolean).join(" | ") };
     }
     const key = await this.policy.viewOf<string>(real, "derived_public_key", { path: cfg.path, predecessor: this.cfg.policy, domain_id: 0 }).catch(() => null);
     const derived = typeof key === "string" ? ethAddressOfKey(key) : null;
     if (!derived) return { report: { checked: false, account: cfg.mpc, path: cfg.path, note: "the MPC did not answer derived_public_key" } };
     const same = !!address && derived === address.toLowerCase();
-    return { report: { checked: true, account: cfg.mpc, path: cfg.path, derived_address: derived, address_matches: same },
-      ...(same ? {} : { warning: `the policy's address ${address} is not the one ${real} derives for it (${derived})` }) };
+    const warning = [named, same ? undefined : `the policy's address ${address} is not the one ${real} derives for it (${derived})`].filter(Boolean).join(" | ");
+    return { report: { checked: true, account: cfg.mpc, path: cfg.path, derived_address: derived, address_matches: same }, ...(warning ? { warning } : {}) };
   }
 
   // The chain's simulation from our address, +25 %, under the cap. Over the cap it would run out of gas on chain.

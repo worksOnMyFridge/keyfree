@@ -483,8 +483,23 @@ impl Keyfree {
         // the moment they are applied, so an approval from a member who has just been replaced no longer
         // counts. Clearing them all let any member wipe an approved replacement of a stolen key (Z5).
         self.role_changes.retain(|x| x.proposer != c.proposer);
+        if matches!(c.role, Role::Owner | Role::Guardian | Role::Reserve) { self.settle_open_changes(); }
         self.unpause_votes.clear();
         env::log_str(&format!("keyfree: {:?} is now {}", c.role, c.account));
+    }
+
+    // After the council changed (the fifth review's Z5, checked again afterwards): a change proposed by a member
+    // who left goes; approvals and cancels of members who left no longer count; and a change that falls below the
+    // approvals it needs starts its full delay again from the approval that brings it back, so a new member's
+    // approval never makes an old change ready at once.
+    fn settle_open_changes(&mut self) {
+        let council = [self.owner.clone(), self.guardian.clone(), self.reserve.clone()];
+        self.role_changes.retain(|x| council.contains(&x.proposer));
+        for x in self.role_changes.iter_mut() {
+            x.approvals.retain(|a| council.contains(a));
+            x.cancels.retain(|a| council.contains(a));
+            if x.approvals.len() < need(x.role) { x.ready_at = None; }
+        }
     }
 
     // Brake: any council member removes the agent at once.

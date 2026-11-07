@@ -57,7 +57,7 @@ only as safe as that place.
 - **The NEAR RPC** the tool talks to: the contract decides on chain, whatever a node says. A lying node can stop the
   tool or show it a false state, including a false ETH address, so a report of success is only as good as the node;
   `keyfree_confirm` and the explorers are the check. A retry's transaction is compared with its journal line too.
-- **The policy code.** It is open and tested (186 unit and property tests, golden and random-vector tests against viem, the live wasm in a local nearcore node, an attack bench of 65 attacks: `npm run attacks`). During development
+- **The policy code.** It is open and tested (189 unit and property tests, golden and random-vector tests against viem, the live wasm in a local nearcore node, an attack bench of 65 attacks: `npm run attacks`). During development
   it went through five security reviews, each done by a separate AI reviewer session that did not write the
   code, the fourth on another model, the fifth on the whole lifecycle; their findings were fixed with tests or stated as limits (AUDIT.md). It has not had a professional human audit.
 

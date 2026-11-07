@@ -24,8 +24,10 @@ function inProject<T extends { artifact?: string }>(a: T): T {
   if (a.artifact === undefined) return a;
   const full = path.resolve(root, a.artifact);
   let real: string;
-  try { real = fs.realpathSync(full); } catch { throw new Error(`Artifact ${a.artifact} not found in this project. Build the contract first (forge build).`); }
-  if (real !== root && !real.startsWith(root + path.sep)) throw new Error("The artifact must be inside this project's folder.");
+  // One answer for "no such file" and "outside the project", so a tool call cannot learn which paths exist.
+  const refuse = () => new Error("The artifact must be an existing file inside this project's folder (build the contract first: forge build).");
+  try { real = fs.realpathSync(full); } catch { throw refuse(); }
+  if (real !== root && !real.startsWith(root + path.sep)) throw refuse();
   return { ...a, artifact: real };
 }
 
@@ -106,7 +108,7 @@ function createServer(): McpServer {
     description: `When keyfree_deploy or keyfree_upgrade did not land (the MPC did not sign in time, the broadcast failed, or the transaction stays pending under a low fee): re-sign the same request (same nonce, same content, new fees) and broadcast it. Nothing else can use that nonce. For a deploy signed but not on chain, pass the same artifact and constructor arguments: the journal holds only the code's hash. ${RULE}`,
     inputSchema: z.strictObject({ chain: chainArg, ...codeArgs }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-  }, async (a) => run(() => kf.retry(a)));
+  }, async (a) => run(async () => kf.retry(inProject(a))));
 
   server.registerTool("keyfree_confirm", {
     title: "Confirm a deploy or upgrade in the journal",
