@@ -61,7 +61,7 @@ nodes that fail on purpose; `npm run live:faults` runs the real cases on a polic
 ```bash
 npm install && npm run build
 cp keyfree.example.json demo/keyfree.json
-export KEYFREE_AGENT_KEY=/path/to/agent_key.json   # {"private_key": "ed25519:..."}, never in the repo
+export KEYFREE_AGENT_KEY=/path/to/agent_key.json   # {"private_key": "ed25519:..."}: the agent's key only, never committed
 npm test && npm run smoke                            # offline unit tests; MCP self-check (read only)
 npm run live                                         # every command and MCP tool for real, on a policy of your own
 npm run live:faults                                  # dead nodes, a gas spike, a lost broadcast and its recovery, for real

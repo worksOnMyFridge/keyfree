@@ -569,8 +569,9 @@ test("faults: two requests in the same moment never get one nonce twice", async 
 
 test("faults: a policy short of NEAR for its storage refuses the request before the MPC is asked; a top-up from anyone fixes it", async () => {
   const blob = toHexBytes(49_152, (i) => (i * 7 + 3) & 0xff);
-  // Enough for the code and a little state at 10^-5 NEAR a byte, short of what the blob needs.
-  const lean = Math.ceil((POLICY.length / 1e5 + 0.06) * 100) / 100;
+  // Enough for the code and some state at 10^-5 NEAR a byte (0.1 NEAR = 10 000 bytes), far short of the
+  // 0.49 NEAR the blob needs. 0.06 was too close: v19's wasm, 634 bytes larger, rounded below the install.
+  const lean = Math.ceil((POLICY.length / 1e5 + 0.1) * 100) / 100;
   const P = await install("lean", lean);
   const eth = await prepare(P, [blob]);
   await assert.rejects(view(P, "preview", deployArgs(`${blob}00`, 3_000_000)), /init code too large/);
