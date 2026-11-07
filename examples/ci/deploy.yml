@@ -18,7 +18,8 @@ jobs:
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    # An environment keeps the secret away from other workflows and can require a reviewer before each run.
+    # The secret lives in an environment. Protect it, or it reaches any branch's workflow: in Settings >
+    # Environments > testnet, allow deployments from main only and add a required reviewer.
     environment: testnet
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

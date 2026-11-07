@@ -2332,3 +2332,143 @@ fn random_transactions_encode_like_viem() {
     }
     assert_eq!(cases.len(), 400);
 }
+
+// ---- v19: the fifth review (lifecycle red team), findings R3..R6 ----
+
+// R3: the MPC account and the path are readable, so anyone can check the address against the real MPC.
+#[test]
+fn the_config_names_the_mpc_and_the_path() {
+    let c = idle();
+    let cfg = c.get_config();
+    assert_eq!(cfg["mpc"], c.mpc.to_string());
+    assert_eq!(cfg["path"], c.path);
+    assert_eq!(cfg["rules_delay_sec"], c.rules_delay_sec);
+    assert_eq!(cfg["upgrade_delay_sec"], c.upgrade_delay_sec);
+}
+
+// R4: upgradeTo at the intrinsic minimum can only revert and would use up the one-time allowance.
+#[test]
+#[should_panic(expected = "gas limit below the intrinsic minimum plus what this call surely spends")]
+fn an_upgrade_at_the_intrinsic_minimum_is_refused() {
+    let mut c = upgrade_allowed();
+    let intrinsic = intrinsic_gas(&tx_of(&proxy_pending(84532, 4, &[0x22; 20], &[0x33; 20], 0, 14_000_000, 1_000_000)));
+    ctx("agent.testnet", 30);
+    let _ = c.request_proxy_upgrade(84532, PROXY.into(), IMPL_V2.into(), intrinsic, 14_000_000, 1_000_000);
+}
+
+#[test]
+fn an_upgrade_at_the_floor_has_room_for_a_real_upgrade() {
+    let p = proxy_pending(84532, 4, &[0x22; 20], &[0x33; 20], 0, 14_000_000, 1_000_000);
+    // TreasuryProxy.upgradeTo on Base Sepolia used 32 679 gas in all (tx 0x5fe084...0904c): a request at the
+    // floor has that much and more, and the unused gas is not charged
+    assert!(min_gas(&p) > 32_679 && min_gas(&p) < 60_000, "floor {}", min_gas(&p));
+    assert_eq!(min_gas(&p), intrinsic_gas(&tx_of(&p)) + 28_000);
+    let mut c = upgrade_allowed();
+    ctx("agent.testnet", 30);
+    let _ = c.request_proxy_upgrade(84532, PROXY.into(), IMPL_V2.into(), 60_000, 14_000_000, 1_000_000);
+    assert_eq!(c.pending.as_ref().map(|p| p.gas_limit), Some(60_000));
+}
+
+// R4: a salted factory deploy under CREATE2's own cost can only revert and would burn that address.
+#[test]
+#[should_panic(expected = "gas limit below the intrinsic minimum plus what this call surely spends")]
+fn a_salted_deploy_under_the_create2_cost_is_refused() {
+    let mut c = contract();
+    c.pending = None;
+    ctx("owner.testnet", 20);
+    c.apply_rule_change(&RuleChange::SetFactory { chain_id: 84532, factory_hex: "09".repeat(20) });
+    let probe = Pending { chain_id: 84532, nonce: 4, code_hash: String::new(), gas_limit: 0, max_fee_per_gas: 14_000_000,
+        max_priority_fee_per_gas: 1_000_000, init_code: hex::decode(INIT).unwrap(), salt: Some(hex::decode(SALT).unwrap()),
+        factory: Some(vec![9; 20]), since_block: 0 };
+    let intrinsic = intrinsic_gas(&tx_of(&probe));
+    assert_eq!(min_gas(&probe), intrinsic + 32_000 + 8);
+    ctx("agent.testnet", 21);
+    let _ = c.request_deploy(84532, INIT.into(), intrinsic, 14_000_000, 1_000_000, Some(SALT.into()), Some(true));
+}
+
+#[test]
+fn the_preview_reports_the_floor_it_enforces() {
+    let c = upgrade_allowed();
+    ctx("agent.testnet", 30);
+    let v = c.preview_proxy_upgrade(84532, PROXY.into(), IMPL_V2.into(), 100_000, 14_000_000, 1_000_000);
+    let p = proxy_pending(84532, v["nonce"].as_u64().unwrap(), &[0x22; 20], &[0x33; 20], 0, 14_000_000, 1_000_000);
+    assert_eq!(v["min_gas"].as_u64().unwrap() as u128, min_gas(&p));
+}
+
+// R5: applying a ready agent change keeps an approved replacement of a stolen guardian key.
+#[test]
+fn applying_one_role_change_keeps_the_approved_replacement_of_a_stolen_key() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Agent, acc("agent2.testnet"));
+    ctx_at("reserve.testnet", 21, 1_500, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("owner.testnet", 22, 1_500, vec![]);
+    c.approve_role(acc("reserve.testnet"));
+    ctx_at("guardian.testnet", 23, 4_600, vec![]); // the thief applies the agent change first
+    c.apply_role(acc("owner.testnet"));
+    assert_eq!(c.role_changes.len(), 1, "the approved replacement is still there");
+    ctx_at("owner.testnet", 24, 5_200, vec![]);
+    c.apply_role(acc("reserve.testnet"));
+    assert_eq!(c.guardian.as_str(), "guardian2.testnet");
+}
+
+// R5: an approval from a member who has since been replaced does not count when the change is applied.
+#[test]
+#[should_panic(expected = "needs 2 of 3 approvals")]
+fn an_approval_from_a_replaced_member_no_longer_counts() {
+    let mut c = idle();
+    // the guardian and the reserve approve a new owner; meanwhile the guardian is replaced
+    ctx_at("guardian.testnet", 20, 1_000, vec![]);
+    c.propose_role(Role::Owner, acc("owner2.testnet"));
+    ctx_at("reserve.testnet", 21, 1_000, vec![]);
+    c.approve_role(acc("guardian.testnet"));
+    ctx_at("owner.testnet", 22, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("reserve.testnet", 23, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("reserve.testnet", 24, 5_000, vec![]);
+    c.apply_role(acc("owner.testnet")); // the guardian is now guardian2
+    ctx_at("reserve.testnet", 25, 5_000, vec![]);
+    c.apply_role(acc("guardian.testnet")); // only the reserve's approval is from the current council
+}
+
+// R6: a pause stops a widening from being applied; replacing a member still works while paused.
+#[test]
+#[should_panic(expected = "paused: no rule is applied while paused")]
+fn a_paused_policy_applies_no_rule() {
+    let mut c = idle();
+    ctx_at("owner.testnet", 20, 1_000, vec![]);
+    let id = c.propose_rule(RuleChange::AllowCode { code_hash: "ab".repeat(32) });
+    ctx_at("guardian.testnet", 21, 1_100, vec![]);
+    c.pause();
+    ctx_at("owner.testnet", 22, 1_000 + 1_800, vec![]);
+    c.apply_rule(id);
+}
+
+#[test]
+#[should_panic(expected = "paused: no upgrade is applied while paused")]
+fn a_paused_policy_applies_no_upgrade() {
+    let mut c = idle();
+    ctx_pay("owner.testnet", 23, 3_000, vec![0, 97, 115, 109], 10_000);
+    c.propose_upgrade();
+    ctx_at("reserve.testnet", 24, 3_100, vec![]);
+    c.pause();
+    ctx_at("owner.testnet", 25, 3_000 + 3_600, vec![]);
+    let _ = c.apply_upgrade();
+}
+
+#[test]
+fn a_member_can_be_replaced_while_paused() {
+    let mut c = idle();
+    ctx_at("guardian.testnet", 20, 1_000, vec![]); // a stolen guardian key pauses
+    c.pause();
+    ctx_at("owner.testnet", 21, 1_000, vec![]);
+    c.propose_role(Role::Guardian, acc("guardian2.testnet"));
+    ctx_at("reserve.testnet", 22, 1_000, vec![]);
+    c.approve_role(acc("owner.testnet"));
+    ctx_at("owner.testnet", 23, 1_000 + 3_600, vec![]);
+    c.apply_role(acc("owner.testnet"));
+    assert_eq!(c.guardian.as_str(), "guardian2.testnet");
+    assert!(c.paused, "still paused: unpausing takes 2 of 3 of the new council");
+}

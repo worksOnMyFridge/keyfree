@@ -1,12 +1,20 @@
-# The council's watch: every hour, `keyfree pending` on the live policy. A widening that waits its delay (a new
-# rule, agent, role or policy upgrade) makes the run fail, and GitHub tells whoever watches this repository, while
-# there is still time for any council member to cancel it. A fork watches its own policy: change keyfree.json.
-# No keys and no secrets: `pending` only reads.
+# The council's watch: every 15 minutes, `keyfree pending` on the live policy. A widening that waits its delay (a
+# new rule, agent, role or policy upgrade) makes the run fail while there is still time for any council member to
+# cancel it. No keys: `pending` only reads.
+#
+# What this alarm can and cannot do (R2 of the fifth review):
+# - GitHub runs schedules late at busy times and may skip a run; a delay must be much longer than the interval.
+#   The live demo policy uses 60 s and 180 s delays for testing, which no schedule can catch; a real policy should
+#   use hours (setup/policy.mjs warns under 1 hour).
+# - A failed scheduled run is mailed to whoever last changed this schedule, not to every council member. Set the
+#   secret KEYFREE_ALERT_WEBHOOK (a Slack, Discord or ntfy URL every member follows) to reach all of them.
+# - GitHub turns schedules off after 60 days without activity in a public repository; re-enable it in Actions.
+# A fork watches its own policy: change keyfree.json.
 name: watch
 
 on:
   schedule:
-    - cron: "41 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -28,13 +36,23 @@ jobs:
           node-version: 22
       - run: npm ci --ignore-scripts && npm run build
       - name: Widenings waiting their delay
+        id: pending
         run: |
           set +e
           node dist/cli.js pending --config keyfree.example.json > pending.json
           code=$?
           cat pending.json
+          echo "code=$code" >> "$GITHUB_OUTPUT"
           case "$code" in
             0) echo "Nothing waits its delay." ;;
             3) echo "::error title=A widening waits its delay::Read it above; any council member can cancel it before it is ready."; exit 1 ;;
-            *) echo "::warning title=Could not read the policy::keyfree pending exited with $code; the state is unknown."; exit 1 ;;
+            *) echo "::warning title=Could not read the policy (not a widening)::keyfree pending exited with $code; the state is unknown until a node answers."; exit 1 ;;
           esac
+      - name: Tell every council member
+        if: failure() && steps.pending.outputs.code == '3'
+        env:
+          HOOK: ${{ secrets.KEYFREE_ALERT_WEBHOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "No KEYFREE_ALERT_WEBHOOK secret: only this failed run tells anyone."; exit 0; fi
+          msg="Keyfree: a widening waits its delay on $(node -p 'require("./keyfree.example.json").policy'). Cancel it if no council member proposed it: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          node -e 'fetch(process.env.HOOK,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({text:process.argv[1],content:process.argv[1]})}).then(r=>{if(!r.ok)process.exit(1)})' "$msg"

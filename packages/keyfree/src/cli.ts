@@ -171,6 +171,11 @@ async function main() {
         sub === "set-limits" ? { SetLimits: { max_gas_limit: u128("gas", a), max_fee_cap: u128("fee_wei", b) } } :
         sub === "allow-upgrade" ? { AllowProxyUpgrade: { chain_id: chainId(a), proxy_hex: addr("proxy", b), implementation_hex: addr("implementation", c) } } :
         sub === "set-budget" ? { SetBudget: { chain_id: chainId(a), max_wei_per_day: u128("wei_per_day", b), max_tx_per_day: u32("tx_per_day", c) } } : null;
+      if (sub === "allow-upgrade") {
+        // R10: the rule names an address; show what code is there now and refuse an empty address.
+        const impl = await kf.implementationCode(String(a), addr("implementation", c));
+        return out({ implementation_code: impl, proposed: await council(cfg, kf, f.as, "propose_rule", { change }) });
+      }
       if (change) return out(await council(cfg, kf, f.as, "propose_rule", { change }));
       if (sub === "apply" || sub === "cancel") return out(await council(cfg, kf, f.as, `${sub}_rule`, { id: u32("id", a) }));
       throw new Error(`Unknown rules command "${sub}".\n\n${HELP}`);

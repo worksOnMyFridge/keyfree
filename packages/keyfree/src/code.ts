@@ -23,7 +23,12 @@ export function loadCode(input: CodeInput): Code {
   }
   if (!input.artifact) throw new Error("Give init_code_hex or artifact (a Foundry out/X.sol/X.json or Hardhat artifact).");
   if (!fs.existsSync(input.artifact)) throw new Error(`Artifact ${input.artifact} not found. Build the contract first (forge build).`);
-  const a = JSON.parse(fs.readFileSync(input.artifact, "utf8")) as { abi?: Abi; bytecode?: string | { object?: string }; contractName?: string };
+  let a: { abi?: Abi; bytecode?: string | { object?: string }; contractName?: string };
+  try {
+    a = JSON.parse(fs.readFileSync(input.artifact, "utf8"));
+  } catch {
+    throw new Error(`${input.artifact} is not a Foundry or Hardhat JSON artifact.`);
+  }
   const raw = typeof a.bytecode === "string" ? a.bytecode : a.bytecode?.object;
   if (!raw || raw === "0x") throw new Error(`${input.artifact} has no bytecode (an interface or abstract contract?).`);
   const bytecode = (raw.startsWith("0x") ? raw : `0x${raw}`) as Hex;

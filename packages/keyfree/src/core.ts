@@ -4,7 +4,7 @@ import {
   decodeEventLog, decodeFunctionData, encodeFunctionData, getAddress, getContractAddress, isAddress, keccak256, parseTransaction, recoverTransactionAddress, serializeTransaction,
   type Hex, type TransactionSerializableEIP1559,
 } from "viem";
-import { agentKey, findChain, hasLocalKey, type ChainConfig, type Config } from "./config.js";
+import { agentKey, findChain, localCouncilKeys, type ChainConfig, type Config } from "./config.js";
 import { loadCode, type CodeInput } from "./code.js";
 import { evm, FACTORY_ABI, PROXY_ABI, ADMIN_SLOT, IMPLEMENTATION_SLOT, slotAddress, randomSalt, txLink, addressLink } from "./evm.js";
 import { KeyPair } from "near-api-js";
@@ -82,6 +82,15 @@ export class Keyfree {
     return this.policy.account(this.cfg.agent, key);
   }
 
+  // R10: an upgrade is allowed by address. Before the council proposes one, the CLI shows the code that sits at
+  // that address now and refuses an address with no code: what lands there later would be someone's choice.
+  async implementationCode(chainName: string, implementation: string): Promise<{ code_hash: string; bytes: number }> {
+    const chain = findChain(this.cfg, chainName);
+    const code = await this.evm(chain).getCode({ address: implementation as Hex }).catch((e) => { throw new Error(`The EVM node did not answer for ${implementation}: ${reason(e)}`); });
+    if (!code || code === "0x") throw new Error(`${implementation} has no code on ${chain.name}. Allow an upgrade only to an implementation that is already deployed and that you have read.`);
+    return { code_hash: keccak256(code), bytes: (code.length - 2) / 2 };
+  }
+
   private evm(chain: ChainConfig) {
     return evm(chain, this.cfg.rpc_timeout_ms);
   }
@@ -148,10 +157,16 @@ export class Keyfree {
     }));
     // Agent and council are only as separate as their keys: say so when a council key is on this machine.
     const council = [roles.owner, roles.guardian, roles.reserve].filter((a): a is string => typeof a === "string");
-    const here = council.filter((a) => hasLocalKey(this.cfg, a));
+    const here = localCouncilKeys(this.cfg, council);
+    const mpc = await this.mpcCheck(address);
+    const warnings = [
+      ...(here.length ? [`council keys on this machine (${here.join("; ")}): keep them on another device, never where the agent runs`] : []),
+      ...(mpc.warning ? [mpc.warning] : []),
+    ];
     return {
       policy: this.cfg.policy, policy_keys: keys, address, build: st.build, version: st.version, paused: st.paused,
-      ...(here.length ? { warning: `council keys on this machine (${here.join(", ")}): keep them on another device, never where the agent runs` } : {}),
+      ...(warnings.length ? { warning: warnings.join(" | ") } : {}),
+      mpc: mpc.report,
       agent: roles.agent, owner: roles.owner, guardian: roles.guardian, reserve: roles.reserve, retiring: roles.retiring,
       upgrade_delay_sec: st.upgrade_delay_sec, rules_delay_sec: rules.rules_delay_sec, pending_upgrade: st.proposed,
       allowed_code: rules.allowed_code, allowed_proxy_upgrades: rules.allowed_proxy_upgrades ?? [], max_gas_limit: rules.max_gas_limit, max_fee_cap: rules.max_fee_cap, chains,
@@ -175,6 +190,25 @@ export class Keyfree {
     // The fees travel as JSON numbers: above 2^53 they would be rounded, and no real fee is there.
     if (max > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`The node's fee estimate on ${chain.name} (${max} wei per gas) is too large to be real. Nothing was signed.`);
     return { max_fee_per_gas: max, max_priority_fee_per_gas: prio };
+  }
+
+  // R3: the policy signs through the MPC account and path it was installed with. Check both: the account is the
+  // network's real MPC, and the address the policy reports is the one that MPC derives for (this policy, path).
+  // A look-alike MPC chosen at install would hold a key for the address while the policy shows 0 keys.
+  private async mpcCheck(address: string | null): Promise<{ report: Record<string, unknown>; warning?: string }> {
+    const real = this.cfg.mpc_account ?? (this.cfg.near_network === "mainnet" ? "v1.signer" : "v1.signer-prod.testnet");
+    const cfg = await this.policy.view<{ mpc: string; path: string } | null>("get_config").catch(() => null);
+    if (!cfg) return { report: { checked: false, note: "this policy is older than v19 and does not name its MPC; compare the address with a fresh derivation by hand" } };
+    if (cfg.mpc !== real) {
+      return { report: { checked: true, account: cfg.mpc, path: cfg.path, expected_account: real, address_matches: false },
+        warning: `the policy signs through ${cfg.mpc}, not the network's MPC ${real}: whoever runs that contract may hold a key for the policy's address` };
+    }
+    const key = await this.policy.viewOf<string>(real, "derived_public_key", { path: cfg.path, predecessor: this.cfg.policy, domain_id: 0 }).catch(() => null);
+    const derived = typeof key === "string" ? ethAddressOfKey(key) : null;
+    if (!derived) return { report: { checked: false, account: cfg.mpc, path: cfg.path, note: "the MPC did not answer derived_public_key" } };
+    const same = !!address && derived === address.toLowerCase();
+    return { report: { checked: true, account: cfg.mpc, path: cfg.path, derived_address: derived, address_matches: same },
+      ...(same ? {} : { warning: `the policy's address ${address} is not the one ${real} derives for it (${derived})` }) };
   }
 
   // The chain's simulation from our address, +25 %, under the cap. Over the cap it would run out of gas on chain.
@@ -569,4 +603,20 @@ function asPreviewError(e: unknown): Error {
 function probeGas(data: Hex): number {
   const n = (data.length - 2) / 2;
   return 21_000 + 32_000 + 40 * n + 2 * Math.ceil(n / 32) + 1_000;
+}
+
+// "secp256k1:<base58 of the 64-byte uncompressed point>" -> the EVM address: keccak256(point)[12..].
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+export function ethAddressOfKey(key: string): string | null {
+  const body = key.startsWith("secp256k1:") ? key.slice(10) : null;
+  if (!body) return null;
+  let n = 0n;
+  for (const ch of body) {
+    const d = B58.indexOf(ch);
+    if (d < 0) return null;
+    n = n * 58n + BigInt(d);
+  }
+  const hex = n.toString(16).padStart(128, "0");
+  if (hex.length !== 128) return null;
+  return `0x${keccak256(`0x${hex}` as Hex).slice(-40)}`;
 }

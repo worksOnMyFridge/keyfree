@@ -1,10 +1,12 @@
 // Your own Keyfree policy on NEAR testnet, on the code the live demo policy runs. One stage per call; progress
-// is kept in setup/state.json, keys of accounts this script creates in setup/<role>_key.json (gitignored).
+// is kept in setup/state.json, keys of accounts this script creates in setup/<role>_key.json (gitignored, readable
+// only by you). The guardian and the reserve are accounts you create on other devices: this script does not make
+// council keys on the machine where the agent will run, unless "demo_council_here": true (a quick testnet trial).
 //   node setup/policy.mjs plan      offline: the config and what each stage will do
 //   wasm       take the policy code from the reference policy on chain (or "wasm" in the config) and check its
 //              sha256 against the reproducible build ("wasm_sha256"); nothing else is ever installed
-//   accounts   create the policy (temporary key), the agent (function-call key only), guardian and reserve
-//              as sub-accounts of the owner; accounts that already exist are left alone
+//   accounts   create the policy (temporary key) and the agent (function-call key only) as sub-accounts of the
+//              owner; the guardian and the reserve must already exist (made elsewhere), or the stage stops
 //   install    deploy + init + delete the policy's key in ONE transaction -> 0 keys; derive the ETH address;
 //              propose the rules: each chain from its current nonce, a daily budget per chain, gas caps, the
 //              factory's code
@@ -12,7 +14,7 @@
 //   factory <chain>   once the ETH address holds a little ETH: the agent deploys the factory without a key,
 //              then the SetFactory rule is proposed (run apply again after the delay)
 //   keyfree    write setup/keyfree.json for the keyfree tool (CLI and MCP)
-//   check      read-only: keys, roles, rules, chains, budget
+//   check      read-only: keys, roles, rules, chains, budget, the MPC and the delays
 // The owner signs with its key from ~/.near-credentials/testnet/<owner>.json.
 import fs from "node:fs";
 import crypto from "node:crypto";
@@ -29,6 +31,22 @@ const stateFile = here("state.json");
 const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile)) : { proposed: [] };
 const keep = () => fs.writeFileSync(stateFile, JSON.stringify(state, null, 1));
 const keyFile = (role) => here(`${role}_key.json`); // never printed
+// Key files are readable by you only (no effect on Windows, where the user profile already limits them).
+const writeKey = (role, body) => fs.writeFileSync(keyFile(role), body, { mode: 0o600 });
+// The network's MPC: a policy installed with any other account signs through whoever runs it (R3).
+const REAL_MPC = { testnet: "v1.signer-prod.testnet", mainnet: "v1.signer" };
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const ethOfKey = (key) => {
+  let n = 0n;
+  for (const ch of String(key).replace(/^secp256k1:/, "")) n = n * 58n + BigInt(B58.indexOf(ch));
+  return `0x${keccak256(`0x${n.toString(16).padStart(128, "0")}`).slice(-40)}`;
+};
+const derivedByRealMpc = async () => {
+  const r = await provider.callFunctionRaw({ contractId: REAL_MPC.testnet, method: "derived_public_key", args: { path: CFG.path, predecessor: P, domain_id: 0 }, blockQuery: { finality: "optimistic" } });
+  return ethOfKey(JSON.parse(Buffer.from(r.result).toString()));
+};
+// A scheduled alarm (the watch workflow) runs every few minutes at best: shorter delays are for trials only.
+const MIN_WATCHABLE_DELAY = 3600;
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 const wait = (s) => new Promise((r) => setTimeout(r, s * 1000));
 const settle = () => wait(3); // a call returns before views see its block
@@ -68,6 +86,9 @@ try {
   if (stage === "plan" || !stage) {
     say(`policy ${P}, owner ${CFG.owner}, agent ${CFG.agent}, guardian ${CFG.guardian}, reserve ${CFG.reserve}`);
     say(`delays: rules ${CFG.rules_delay_sec} s, upgrades and roles ${CFG.upgrade_delay_sec} s; MPC ${CFG.mpc}, path ${CFG.path}`);
+    if (CFG.mpc !== REAL_MPC.testnet) say(`WARNING: "mpc" is ${CFG.mpc}, not the network's MPC ${REAL_MPC.testnet}; install will stop`);
+    if (Math.min(CFG.rules_delay_sec, CFG.upgrade_delay_sec) < MIN_WATCHABLE_DELAY) say(`WARNING: a delay under ${MIN_WATCHABLE_DELAY} s is too short for a scheduled alarm to catch a stolen owner key; fine for a trial only`);
+    if (CFG.demo_council_here) say("WARNING: demo_council_here creates the guardian's and the reserve's keys on this machine: two of three council keys next to the agent. Testnet trials only");
     say(`code: ${CFG.wasm ?? `from ${CFG.reference_policy}`}, must have sha256 ${CFG.wasm_sha256}`);
     for (const c of CFG.chains) say(`chain ${c.name} (${c.chain_id}): fee floor ${c.fee_floor_wei} wei, budget ${c.max_wei_per_day} wei and ${c.max_tx_per_day} transactions a day`);
     say("stages: wasm, accounts, install, apply, factory <chain>, apply, keyfree, check");
@@ -86,7 +107,7 @@ try {
       if (await exists(id)) return say(`  ${id} exists, left as it is`);
       if (!id.endsWith(`.${CFG.owner}`)) throw new Error(`${id} does not exist and is not a sub-account of ${CFG.owner}: create it yourself`);
       const kp = KeyPair.fromRandom("ed25519");
-      fs.writeFileSync(keyFile(role), JSON.stringify({ account_id: id, private_key: kp.toString() }));
+      writeKey(role, JSON.stringify({ account_id: id, private_key: kp.toString() }));
       const out = await o.signAndSendTransaction({ receiverId: id, actions: [actions.createAccount(), actions.transfer(BigInt(parseNearAmount(near))), keyAction(kp.getPublicKey())] });
       say(`  created ${id} with ${near} NEAR ${explorer(out.transaction.hash)}`);
     };
@@ -95,13 +116,21 @@ try {
     // The agent never gets a full key: only the request methods on this policy, and no allowance (a small one
     // runs out on the first 250 Tgas request; the agent account's own balance is the cap).
     await make("agent", CFG.agent, CFG.agent_near, (pk) => actions.addFunctionCallAccessKey(pk, P, AGENT_METHODS));
-    for (const r of ["guardian", "reserve"]) await make(r, CFG[r], CFG.council_near, (pk) => actions.addFullAccessKey(pk));
+    // Two of three council keys decide everything after the delay: on the agent's machine they are within its reach
+    // (R1). So the guardian and the reserve are made elsewhere, by the people who will hold them.
+    for (const r of ["guardian", "reserve"]) {
+      if (await exists(CFG[r])) { say(`  ${CFG[r]} exists, left as it is`); continue; }
+      if (!CFG.demo_council_here) throw new Error(`${r} ${CFG[r]} does not exist. Create it on another device (its own wallet) and run this stage again; this script makes no council keys where the agent runs (set "demo_council_here": true only for a quick testnet trial)`);
+      await make(r, CFG[r], CFG.council_near, (pk) => actions.addFullAccessKey(pk));
+      say(`  WARNING: ${r} key written to setup/${r}_key.json on this machine (demo_council_here)`);
+    }
     const ak = await keysOf(CFG.agent);
     check(ak.every((k) => k.access_key.permission !== "FullAccess"), `agent ${CFG.agent} holds no full-access key (${ak.length} key)`);
   } else if (stage === "install") {
     const code = fs.readFileSync(WASM);
     check(sha(code) === CFG.wasm_sha256, `setup/policy.wasm is the reproducible build (sha256 ${sha(code).slice(0, 16)}...)`);
-    if (fails) throw new Error("run the wasm stage first");
+    check(CFG.mpc === REAL_MPC.testnet, `the policy will sign through ${CFG.mpc} (the network's MPC is ${REAL_MPC.testnet})`);
+    if (fails) throw new Error("run the wasm stage first, and use the network's MPC");
     const key = JSON.parse(fs.readFileSync(keyFile("policy"))).private_key;
     const out = await new Account(P, provider, key).signAndSendTransaction({ receiverId: P, actions: [
       actions.deployContract(code),
@@ -110,12 +139,14 @@ try {
       actions.deleteKey(KeyPair.fromString(key).getPublicKey()),
     ] });
     say(`deployed, initialised and key deleted in one transaction ${explorer(out.transaction.hash)}`);
+    fs.rmSync(keyFile("policy"), { force: true }); // the key no longer exists on chain; no copy is kept
     await settle();
     check((await keysOf(P)).length === 0, `${P} has 0 access keys`);
     const st = await view("get_status");
     check(st.build === CFG.expect_build, `get_status: build ${st.build}, version ${st.version}`);
     state.address = result(await call(owner(), "setup", {}, "60"));
     check(/^0x[0-9a-f]{40}$/.test(state.address ?? ""), `ETH address derived by the MPC for this policy: ${state.address}`);
+    check(state.address === await derivedByRealMpc(), `the address is the one ${REAL_MPC.testnet} derives for (${P}, ${CFG.path})`);
     keep();
     const changes = [];
     for (const c of CFG.chains) {
@@ -175,10 +206,18 @@ try {
       chains: CFG.chains.map((c) => ({ name: c.name, chain_id: c.chain_id, rpc: c.rpc, explorer: c.explorer })),
     };
     fs.writeFileSync(here("keyfree.json"), JSON.stringify(out, null, 2));
-    say(`wrote setup/keyfree.json; the agent's key is setup/agent_key.json: KEYFREE_AGENT_KEY=setup/agent_key.json`);
+    say(`wrote setup/keyfree.json. The agent's key is setup/agent_key.json (a function-call key, readable by you only): point KEYFREE_AGENT_KEY at it where the agent runs. Council keys never go there.`);
   } else if (stage === "check") {
     const [keys, st, roles, rules] = [await keysOf(P), await view("get_status"), await view("get_roles"), await view("get_rules")];
     check(keys.length === 0, `${P}: ${keys.length} access keys, build ${st.build}, version ${st.version}, paused ${st.paused}`);
+    const conf = await view("get_config").catch(() => null);
+    if (conf) {
+      check(conf.mpc === REAL_MPC.testnet, `signs through ${conf.mpc}, path ${conf.path}`);
+      const want = await derivedByRealMpc();
+      check(want === (await view("get_eth_address")), `the policy's address is the one ${REAL_MPC.testnet} derives: ${want}`);
+    } else say("  this policy is older than v19 and does not name its MPC");
+    if (Math.min(conf?.rules_delay_sec ?? CFG.rules_delay_sec, conf?.upgrade_delay_sec ?? CFG.upgrade_delay_sec) < MIN_WATCHABLE_DELAY) say(`  note: a delay under ${MIN_WATCHABLE_DELAY} s is too short for a scheduled alarm; fine for a trial only`);
+    for (const r of ["guardian", "reserve"]) if (fs.existsSync(keyFile(r))) say(`  WARNING: setup/${r}_key.json is on this machine: move it to its holder's device and delete it here`);
     say(`  roles: owner ${roles.owner}, agent ${roles.agent}, guardian ${roles.guardian}, reserve ${roles.reserve}`);
     say(`  allowed code ${rules.allowed_code.length}, gas cap ${rules.max_gas_limit}, fee cap ${rules.max_fee_cap}, open proposals ${(rules.proposals ?? []).length}`);
     for (const c of CFG.chains) {

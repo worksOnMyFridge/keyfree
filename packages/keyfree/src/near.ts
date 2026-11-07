@@ -88,9 +88,13 @@ export class Policy {
   }
 
   async view<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {
+    return this.viewOf<T>(this.cfg.policy, method, args);
+  }
+
+  async viewOf<T>(contractId: string, method: string, args: Record<string, unknown> = {}): Promise<T> {
     let bytes: Uint8Array | number[];
     try {
-      bytes = (await this.provider.callFunctionRaw({ contractId: this.cfg.policy, method, args, blockQuery: { finality: "optimistic" } })).result;
+      bytes = (await this.provider.callFunctionRaw({ contractId, method, args, blockQuery: { finality: "optimistic" } })).result;
     } catch (e) {
       // A contract panic stays as it is: the caller reads the policy's words out of it.
       if (/panic/i.test(String((e as Error)?.message))) throw e;

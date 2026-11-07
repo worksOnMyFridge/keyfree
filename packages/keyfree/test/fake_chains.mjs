@@ -350,5 +350,5 @@ export async function fakeNear({ policy, agent, agentPublicKey, factory, proxy, 
     }
     throw new Error(`fake NEAR: no ${m.method}`);
   });
-  return { ...server, st, signer: signerKey.address.toLowerCase() };
+  return { ...server, st, signer: signerKey.address.toLowerCase(), signerPublicKey: signerKey.publicKey };
 }

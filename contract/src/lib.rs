@@ -479,8 +479,10 @@ impl Keyfree {
                 self.rule_proposals.clear();
             }
         }
-        // Approvals and votes were given by the old council: start over.
-        self.role_changes.clear();
+        // Only this change is done. The others stay: their approvals are recounted against the council of
+        // the moment they are applied, so an approval from a member who has just been replaced no longer
+        // counts. Clearing them all let any member wipe an approved replacement of a stolen key (R5).
+        self.role_changes.retain(|x| x.proposer != c.proposer);
         self.unpause_votes.clear();
         env::log_str(&format!("keyfree: {:?} is now {}", c.role, c.account));
     }
@@ -591,6 +593,7 @@ impl Keyfree {
     pub fn apply_upgrade(&mut self) -> Promise {
         self.only_owner();
         self.not_retiring();
+        require!(!self.paused, "paused: no upgrade is applied while paused (unpause takes 2 of 3)");
         require!(self.pending.is_none(), "a request is being signed");
         let (hash, ready_at) = self.proposed.clone().unwrap_or_else(|| env::panic_str("no upgrade proposed"));
         require!(now() >= ready_at, "upgrade delay not over");
@@ -639,6 +642,12 @@ impl Keyfree {
         } else {
             env::log_str("keyfree: unpause needs a second vote");
         }
+    }
+
+    // Which MPC signs for this policy and with which path: anyone can check that the policy's EVM address is
+    // the one the real MPC derives for (this account, path), so an install with a look-alike MPC shows (R3).
+    pub fn get_config(&self) -> Value {
+        json!({ "mpc": self.mpc, "path": self.path, "rules_delay_sec": self.rules_delay_sec, "upgrade_delay_sec": self.upgrade_delay_sec })
     }
 
     pub fn get_status(&self) -> Value {
@@ -691,6 +700,7 @@ impl Keyfree {
     pub fn apply_rule(&mut self, id: u32) {
         self.only_council();
         self.not_retiring();
+        require!(!self.paused, "paused: no rule is applied while paused (unpause takes 2 of 3)");
         let i = self.rule_proposals.iter().position(|r| r.id == id).unwrap_or_else(|| env::panic_str("no such rule proposal"));
         require!(now() >= self.rule_proposals[i].ready_at, "rule delay not over");
         let r = self.rule_proposals.remove(i);
@@ -760,7 +770,7 @@ impl Keyfree {
         let p = self.check(chain_id, &init_code_hex, gas_limit, max_fee_per_gas, max_priority_fee_per_gas, salt_hex, via_factory.unwrap_or(false));
         self.spent_after(&p);
         let unsigned = tx_of(&p).build_for_signing();
-        json!({ "unsigned": format!("0x{}", hex::encode(&unsigned)), "hash": hex::encode(env::keccak256_array(&unsigned)), "nonce": p.nonce, "expected_address": expected_address(&p), "min_gas": intrinsic_gas(&tx_of(&p)) })
+        json!({ "unsigned": format!("0x{}", hex::encode(&unsigned)), "hash": hex::encode(env::keccak256_array(&unsigned)), "nonce": p.nonce, "expected_address": expected_address(&p), "min_gas": min_gas(&p) })
     }
 
     pub fn request_deploy(&mut self, chain_id: u64, init_code_hex: String, gas_limit: u128, max_fee_per_gas: u128, max_priority_fee_per_gas: u128, salt_hex: Option<String>, via_factory: Option<bool>) -> Promise {
@@ -790,7 +800,7 @@ impl Keyfree {
         self.spent_after(&p);
         let unsigned = tx_of(&p).build_for_signing();
         json!({ "unsigned": format!("0x{}", hex::encode(&unsigned)), "hash": hex::encode(env::keccak256_array(&unsigned)), "nonce": p.nonce,
-            "to": format!("0x{}", hex::encode(p.factory.as_deref().unwrap_or_default())), "data": format!("0x{}", hex::encode(&p.init_code)), "min_gas": intrinsic_gas(&tx_of(&p)) })
+            "to": format!("0x{}", hex::encode(p.factory.as_deref().unwrap_or_default())), "data": format!("0x{}", hex::encode(&p.init_code)), "min_gas": min_gas(&p) })
     }
 
     // The agent asks for one allowed upgradeTo. The allowance is used up here, so whatever happens next the
@@ -1281,9 +1291,30 @@ fn intrinsic_gas(tx: &EVMTransaction) -> u128 {
     (21_000 + 4 * tokens + create).max(21_000 + 10 * tokens)
 }
 
+// What a transaction of each kind surely spends beyond the intrinsic gas (R4). A gas limit under it can
+// only revert on chain, and a reverted request has used its nonce, a one-time proxy upgrade and a salt.
+// - upgradeTo on a proxy: reading the admin, writing the implementation slot and the Upgraded event. Our
+//   TreasuryProxy used 32 679 gas in all; 28 000 on top of the intrinsic gas (about 50 000) leaves room for
+//   a proxy that does a little more, and unused gas is not charged.
+// - CREATE2 through our factory: 32 000 for CREATE2, hashing and charging the init code (8 per word).
+// - a plain creation: already in the intrinsic gas (32 000 + 2 per word); the code deposit depends on what
+//   the constructor returns and is not known here.
+fn call_floor(p: &Pending) -> u128 {
+    let words = (p.init_code.len() as u128 + 31) / 32;
+    match (&p.factory, &p.salt) {
+        (Some(_), None) => 28_000,
+        (Some(_), Some(_)) => 32_000 + 8 * words,
+        _ => 0,
+    }
+}
+
+fn min_gas(p: &Pending) -> u128 {
+    intrinsic_gas(&tx_of(p)) + call_floor(p)
+}
+
 fn require_intrinsic(p: &Pending) {
-    let min = intrinsic_gas(&tx_of(p));
-    if p.gas_limit < min { env::panic_str(&format!("gas limit below the intrinsic minimum {min}")); }
+    let min = min_gas(p);
+    if p.gas_limit < min { env::panic_str(&format!("gas limit below the intrinsic minimum plus what this call surely spends: {min}")); }
 }
 
 // Address CREATE2 will give the new contract: keccak(0xff ++ deployer ++ salt ++ keccak(init))[12..],

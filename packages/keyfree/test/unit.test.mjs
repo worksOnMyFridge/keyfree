@@ -54,3 +54,54 @@ test("chains by name or id, unknown ones listed", () => {
   assert.equal(findChain(cfg, 84532).name, "base-sepolia");
   assert.throws(() => findChain(cfg, "arbitrum"), (e) => e instanceof ConfigError && /base-sepolia \(84532\)/.test(e.message));
 });
+
+// ---- v19 (fifth review): R1, R3, R9 ----
+import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
+import { ethAddressOfKey } from "../dist/core.js";
+import { localCouncilKeys } from "../dist/config.js";
+
+import { b58 } from "./b58.mjs";
+
+test("R3: the EVM address of an MPC key is keccak of its point, the same as the account's address", () => {
+  for (let i = 0; i < 5; i++) {
+    const a = privateKeyToAccount(generatePrivateKey());
+    assert.equal(ethAddressOfKey(`secp256k1:${b58(a.publicKey.slice(4))}`), a.address.toLowerCase());
+  }
+  assert.equal(ethAddressOfKey("ed25519:abc"), null);
+  assert.equal(ethAddressOfKey("secp256k1:0OIl"), null, "not base58");
+});
+
+test("R1: council keys next to the agent are found by account name, the keys themselves are never shown", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kf-council-"));
+  fs.mkdirSync(path.join(dir, "setup"));
+  fs.writeFileSync(path.join(dir, "setup", "guardian_key.json"), JSON.stringify({ account_id: "guardian.you.testnet", private_key: "ed25519:SECRETGUARDIAN" }));
+  fs.writeFileSync(path.join(dir, "reserve_key.json"), JSON.stringify({ account_id: "reserve.you.testnet", private_key: "ed25519:SECRETRESERVE" }));
+  fs.writeFileSync(path.join(dir, "agent_key.json"), JSON.stringify({ account_id: "agent.you.testnet", private_key: "ed25519:AGENT" }));
+  fs.writeFileSync(path.join(dir, "broken_key.json"), "not json");
+  const cwd = process.cwd();
+  const prev = process.env.KEYFREE_COUNCIL_KEY;
+  try {
+    process.chdir(dir);
+    delete process.env.KEYFREE_COUNCIL_KEY;
+    const cfg = { near_network: "testnet" };
+    const found = localCouncilKeys(cfg, ["you.testnet", "guardian.you.testnet", "reserve.you.testnet"]);
+    assert.equal(found.length, 2, found.join(" | "));
+    assert.ok(found.some((f) => f.startsWith("guardian.you.testnet in ")));
+    assert.ok(found.some((f) => f.startsWith("reserve.you.testnet in ")));
+    assert.ok(!found.join(" ").includes("SECRET"), "no key in the report");
+    process.env.KEYFREE_COUNCIL_KEY = "/somewhere/owner.json";
+    assert.ok(localCouncilKeys(cfg, ["you.testnet"]).some((f) => f.startsWith("KEYFREE_COUNCIL_KEY is set")));
+  } finally {
+    process.chdir(cwd);
+    if (prev === undefined) delete process.env.KEYFREE_COUNCIL_KEY; else process.env.KEYFREE_COUNCIL_KEY = prev;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("R9: a file that is not an artifact gives a plain message, never a piece of its content", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kf-"));
+  const file = path.join(dir, ".env");
+  fs.writeFileSync(file, "NEAR_PRIVATE_KEY=ed25519:SECRET\n");
+  assert.throws(() => loadCode({ artifact: file }), (e) => /is not a Foundry or Hardhat JSON artifact/.test(e.message) && !e.message.includes("NEAR_PRIVA") && !e.message.includes("SECRET"));
+  fs.rmSync(dir, { recursive: true, force: true });
+});

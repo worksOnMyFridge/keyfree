@@ -525,3 +525,56 @@ test("the MCP server reports a lost broadcast to the model, and keyfree_retry re
     await client.close();
   }
 });
+
+// ---- v19 (fifth review): R3 the MPC check, R8 no salt from the model, R9 artifacts only in the project ----
+import { b58 } from "./b58.mjs";
+
+test("R3: status names the MPC and checks the policy's address against it; a look-alike MPC or address is called out", async (t) => {
+  const w = await world(t);
+  const key = (pub) => `secp256k1:${b58(pub.slice(4))}`;
+  w.near.st.faults["view:get_config"] = () => ({ mpc: "v1.signer-prod.testnet", path: "keyfree-1", rules_delay_sec: 60, upgrade_delay_sec: 180 });
+  w.near.st.faults["view:derived_public_key"] = () => key(w.near.signerPublicKey);
+  let r = await w.run("status");
+  assert.equal(r.code, 0, r.err);
+  assert.equal(r.json().mpc.address_matches, true);
+  assert.doesNotMatch(r.json().warning ?? "", /derives|MPC/);
+  const other = privateKeyToAccount(generatePrivateKey());
+  w.near.st.faults["view:derived_public_key"] = () => key(other.publicKey);
+  r = await w.run("status");
+  assert.equal(r.json().mpc.address_matches, false);
+  assert.match(r.json().warning, /is not the one v1\.signer-prod\.testnet derives/);
+  w.near.st.faults["view:get_config"] = () => ({ mpc: "evil-mpc.testnet", path: "keyfree-1" });
+  r = await w.run("status");
+  assert.match(r.json().warning, /signs through evil-mpc\.testnet, not the network's MPC/);
+  delete w.near.st.faults["view:get_config"];
+  r = await w.run("status");
+  assert.equal(r.json().mpc.checked, false, "an older policy: said, not guessed");
+});
+
+test("R8 and R9: the MCP tools take no salt and no artifact outside the project", async (t) => {
+  const w = await world(t);
+  const { Client } = await import("@modelcontextprotocol/client");
+  const { getDefaultEnvironment, StdioClientTransport } = await import("@modelcontextprotocol/client/stdio");
+  const client = new Client({ name: "keyfree-v19", version: "0.1.0" });
+  await client.connect(new StdioClientTransport({
+    command: process.execPath, args: [path.join(here, "..", "dist", "mcp.js")],
+    env: { ...getDefaultEnvironment(), KEYFREE_CONFIG: path.join(w.dir, "keyfree.json"), KEYFREE_AGENT_KEY: path.join(w.dir, "agent_key.json"), HOME: w.dir, USERPROFILE: w.dir },
+    stderr: "ignore",
+  }));
+  try {
+    const salt = `0x${"ab".repeat(32)}`;
+    for (const name of ["keyfree_deploy", "keyfree_preview"]) {
+      const res = await client.callTool({ name, arguments: { chain: "base-sepolia", artifact: ARTIFACT, constructor_args: [1], salt } });
+      assert.equal(res.isError, true, `${name} took a salt`);
+    }
+    const outside = path.join(w.dir, "agent_key.json"); // a real file, outside the project
+    for (const name of ["keyfree_code_hash", "keyfree_preview", "keyfree_deploy"]) {
+      const res = await client.callTool({ name, arguments: name === "keyfree_code_hash" ? { artifact: outside } : { chain: "base-sepolia", artifact: outside } });
+      assert.equal(res.isError, true);
+      assert.match(res.content[0].text, /must be inside this project's folder/);
+    }
+    assert.equal(signed(w).length, 0, "nothing was asked of the policy");
+  } finally {
+    await client.close();
+  }
+});

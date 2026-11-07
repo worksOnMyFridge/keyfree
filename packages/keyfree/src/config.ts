@@ -12,6 +12,8 @@ export interface ChainConfig {
 }
 
 export interface Config {
+  // The network's MPC account; status checks the policy signs through it (default: v1.signer-prod.testnet / v1.signer).
+  mpc_account?: string;
   near_network: "testnet" | "mainnet";
   near_rpc: string;
   near_rpc_fallbacks?: string[]; // tried in order when near_rpc fails: public nodes do go down
@@ -64,6 +66,27 @@ function credentialsFile(cfg: Config, account: string): string {
 // Whether this machine holds a key for the account in the usual near-cli place. Only checks that the file exists.
 export function hasLocalKey(cfg: Config, account: string): boolean {
   return fs.existsSync(credentialsFile(cfg, account));
+}
+
+// Every council key the agent's machine holds where the agent could read it (R1): the near-cli place, a key
+// file named by KEYFREE_COUNCIL_KEY, and *_key.json files next to the agent (the working folder and its setup/)
+// that name a council account. Only account names and where they were found, never a key.
+export function localCouncilKeys(cfg: Config, council: string[]): string[] {
+  const found: string[] = [];
+  for (const a of council) if (hasLocalKey(cfg, a)) found.push(`${a} in ${credentialsFile(cfg, a)}`);
+  const named = env("KEYFREE_COUNCIL_KEY");
+  if (named) found.push(`KEYFREE_COUNCIL_KEY is set (${named})`);
+  for (const dir of [process.cwd(), path.join(process.cwd(), "setup")]) {
+    let names: string[] = [];
+    try { names = fs.readdirSync(dir).filter((n) => n.endsWith("_key.json")); } catch { continue; }
+    for (const n of names) {
+      try {
+        const k = JSON.parse(fs.readFileSync(path.join(dir, n), "utf8")) as { account_id?: unknown };
+        if (typeof k.account_id === "string" && council.includes(k.account_id)) found.push(`${k.account_id} in ${path.join(dir, n)}`);
+      } catch { /* not a key file */ }
+    }
+  }
+  return [...new Set(found)];
 }
 
 // The agent's key: a function-call key that may only call the policy's request methods.
