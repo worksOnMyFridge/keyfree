@@ -53,8 +53,8 @@ only as safe as that place.
   tool or show it a false state, including a false ETH address, so a report of success is only as good as the node;
   `keyfree_confirm` and the explorers are the check. A retry's transaction is compared with its journal line too.
 - **The policy code.** It is open and tested (176 unit and property tests, golden and random-vector tests against viem, the live wasm in a local nearcore node, an attack bench of 65 attacks: `npm run attacks`). During development
-  it went through three security reviews, each done by a separate AI reviewer session that did not write the
-  code; their findings were fixed with tests (AUDIT.md). It has not had a professional human audit.
+  it went through four security reviews, each done by a separate AI reviewer session that did not write the
+  code, the fourth on another model; their findings were fixed with tests or stated as limits (AUDIT.md). It has not had a professional human audit.
 
 ## Known limits
 
@@ -97,7 +97,7 @@ only as safe as that place.
 - **Reproducible from v14.1 on.** The live code is a `cargo near` reproducible build (README, "Check which
   code the live policy runs"). Versions up to v14 were built on a laptop and cannot be rebuilt byte for byte.
 - Testnets only so far (Base Sepolia, Ethereum Sepolia); Arbitrum not run yet; see "Not claimed" in
-  CLAIMS.md. The findings of the three security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
+  CLAIMS.md. The findings of the four security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
 
 ## Reporting
 

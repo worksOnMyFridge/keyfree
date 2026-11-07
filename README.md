@@ -9,8 +9,8 @@ stolen laptop controls that key, and with it the contracts and the money behind 
 Keyfree removes the key. The agent asks; a contract on NEAR decides; NEAR MPC signs.
 
 This is not a spending limit on an agent's wallet. Keyfree guards a different moment: the deploy and the
-upgrade, where a contract learns who it pays and what its code may do. There is no EVM key for the agent to
-leak, because none exists.
+upgrade, where a contract learns who it pays and what its code may do. Nobody holds the EVM key for the
+policy's address: NEAR MPC signs for it, and the key exists only as shares across the MPC network, never whole.
 
 ```
 AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> NEAR MPC signature ──> Base, Ethereum
@@ -25,7 +25,9 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 - It **builds the EVM transaction itself** from fields and asks NEAR MPC to sign it for the policy's own
   derived address. It never signs a hash someone hands it.
 - The agent's NEAR key can only call the request methods. Rules, roles and upgrades belong to a council of
-  three humans, and anything that widens power waits a public delay that any of them can cancel.
+  three humans, and anything that widens power waits a public delay that any of them can cancel. If nobody
+  cancels, it passes: the delay protects only while someone watches, so `keyfree pending` turns it into an alert
+  ([below](#what-a-stolen-key-gets)).
 - After a deploy lands, **NEAR Read MPC** confirms the factory's `Deployed` log, so the policy's journal
   records what happened on chain, not what was intended.
 
@@ -35,11 +37,11 @@ Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet, Base Sepol
 
 | Point | Where to check it |
 |---|---|
-| Technical implementation | [CLAIMS.md](CLAIMS.md): every claim with its transaction, log line or test. `npm run attacks` (65 attacks, offline) and the tests in [Run the tests](#run-the-tests). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Four reviews and what changed after each: [AUDIT.md](AUDIT.md) |
+| Technical implementation | `npm run check:claims` (read-only, no keys) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Four security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
 | Design and use | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy |
 | Impact | The problem: an agent that deploys holds a key that can be stolen or talked into anything. [Where the money goes](#where-the-money-goes): a live treasury upgraded only as the council allowed, and real Claude Code sessions that a poisoned README could not get past the policy ([evidence/injection_live.md](evidence/injection_live.md)). There are no users yet |
 | Originality | [How this differs](#how-this-differs-from-other-ways-to-keep-the-key-from-the-agent): one public contract on NEAR holds the rules for every EVM chain, signs only what it built itself, and upgrades itself without a key |
-| What it takes to use it | [Run your own policy](#run-your-own-policy): one script installs a policy on the same code. Apache-2.0. Before real money it needs a professional audit: [SECURITY.md](SECURITY.md) lists the known limits |
+| What it takes to use it | [Run your own policy](#run-your-own-policy): `setup/policy.mjs` installs a policy on the same code in a few steps, with about 7 testnet NEAR and a little Base Sepolia ETH. The [`watch`](.github/workflows/watch.yml) workflow is the council's alarm, ready to fork. Apache-2.0. Before real money it needs a professional audit: [SECURITY.md](SECURITY.md) lists the known limits |
 
 ## Where the money goes
 
@@ -64,6 +66,18 @@ and was refused all three of those ([CLAIMS 7](CLAIMS.md#7-a-treasury-upgrade-on
 A fresh Claude Code session did the same on a second treasury: another version refused, v2 done and confirmed
 by Read MPC, the rollback refused (CLAIMS 7.7).
 Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, and it never sends value.
+
+## What a stolen key gets
+
+| Someone has | They get | Evidence |
+|---|---|---|
+| a prompt injection in what the agent reads | requests for allowed code with allowed constructor arguments, nothing else: other bytes have another hash and are refused before anything is signed | [CLAIMS 3.3](CLAIMS.md#3-an-ai-agent-deploys-and-cannot-be-talked-past-the-rules), [real Claude Code sessions](evidence/injection_live.md) |
+| the agent's NEAR key | the same; no rule, role or upgrade method; it can only spend its own account's NEAR on gas | CLAIMS 1.4 |
+| the guardian's or the reserve's key | pause and cancel; nothing that widens power; the other two replace it after the delay | CLAIMS 4.3 |
+| the owner's key | a widening that waits the public delay, which any other member cancels. Seen live: `keyfree pending` exited 3 and listed the rule, the guardian cancelled it, the code stayed refused ([`evidence/tool_live.log`](evidence/tool_live.log), "a widening waits") | [`watch`](.github/workflows/watch.yml) fails every hour while one waits |
+| the owner's key, while the other two stay silent through the whole delay | full power: the widening applies. The protection is that someone watches | [SECURITY.md](SECURITY.md) |
+| two council keys | full power after the delay | [SECURITY.md](SECURITY.md) |
+| control of NEAR MPC | outside what Keyfree protects: it signs only what the policy built, but it trusts the MPC network | [SECURITY.md](SECURITY.md#what-is-trusted) |
 
 ## See it in 2 minutes (browser only)
 
@@ -267,7 +281,7 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 
 ## Security
 
-Read [SECURITY.md](SECURITY.md) and, for every finding of the three security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
+Read [SECURITY.md](SECURITY.md) and, for every finding of the four security reviews, [AUDIT.md](AUDIT.md). In one line: there is no key, but there is power. Full power is 2 of the 3
 council members plus the delay, or the owner plus the delay while the other two stay silent. Keep the
 council keys on separate devices, never where the agent runs; `keyfree status` warns when a council key is on
 the machine it runs on.
@@ -275,7 +289,8 @@ the machine it runs on.
 The delay protects only if someone looks. The live demo policy uses short delays so a judge can watch a whole
 cycle: 60 s for rules, 180 s for upgrades and role changes; real use needs hours or days. `keyfree pending`
 lists every widening that waits its delay, with the command that cancels it, and exits with code 3 when there
-is one: run it on a schedule (cron, a scheduled CI job) and send the alert to the council.
+is one: run it on a schedule and send the alert to the council. The [`watch`](.github/workflows/watch.yml) workflow
+does that for the demo policy every hour; a fork watches its own policy by changing `keyfree.example.json`.
 
 ## Disclosures
 
@@ -284,8 +299,9 @@ is one: run it on a schedule (cron, a scheduled CI job) and send the alert to th
   is no earlier Keyfree code.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
-- **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Three security reviews were
-  done by separate AI reviewer sessions; their findings are fixed with tests.
+- **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Four security reviews were
+  done by separate AI reviewer sessions, the fourth on another model (Claude Fable 5.1); none of them is a
+  professional audit. Their findings are fixed with tests or stated as limits ([AUDIT.md](AUDIT.md)).
 - **License.** Apache-2.0 ([LICENSE](LICENSE)). The Solidity contracts (`factory/`, `packages/keyfree/demo/`)
   carry `SPDX-License-Identifier: MIT`: the header is part of their bytecode metadata, so changing it would
   change the code hashes the live policy allows.

@@ -1,0 +1,40 @@
+# The council's watch: every hour, `keyfree pending` on the live policy. A widening that waits its delay (a new
+# rule, agent, role or policy upgrade) makes the run fail, and GitHub tells whoever watches this repository, while
+# there is still time for any council member to cancel it. A fork watches its own policy: change keyfree.json.
+# No keys and no secrets: `pending` only reads.
+name: watch
+
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pending:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/keyfree
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts && npm run build
+      - name: Widenings waiting their delay
+        run: |
+          set +e
+          node dist/cli.js pending --config keyfree.example.json > pending.json
+          code=$?
+          cat pending.json
+          case "$code" in
+            0) echo "Nothing waits its delay." ;;
+            3) echo "::error title=A widening waits its delay::Read it above; any council member can cancel it before it is ready."; exit 1 ;;
+            *) echo "::warning title=Could not read the policy::keyfree pending exited with $code; the state is unknown."; exit 1 ;;
+          esac

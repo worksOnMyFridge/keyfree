@@ -7,12 +7,12 @@ Result: 120 of 120 checks agree.
 
 | | Check | Result |
 |---|---|---|
-| ok | NEAR account policy13.keyfree-lab.testnet README.md:70 +1 | exists, code hash 8CHYL3wW… |
-| ok | NEAR tx 7iawPybU… README.md:72 +1 | policy13.keyfree-lab.testnet -> policy13.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
-| ok | Base Sepolia address 0x43e3cb8d… README.md:73 +1 | the policy's keyless address (get_eth_address), 14 transactions sent |
+| ok | NEAR account policy13.keyfree-lab.testnet README.md:84 +1 | exists, code hash 8CHYL3wW… |
+| ok | NEAR tx 7iawPybU… README.md:86 +1 | policy13.keyfree-lab.testnet -> policy13.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
+| ok | Base Sepolia address 0x43e3cb8d… README.md:87 +1 | the policy's keyless address (get_eth_address), 14 transactions sent |
 | ok | README: nonces of the keyless address on Base Sepolia | docs 0..13, chain 0..13 |
-| ok | Base Sepolia tx 0x59ec9422… README.md:76 +1 | block 51898531, status success |
-| ok | Ethereum Sepolia address 0x43e3cb8d… README.md:78 | the policy's keyless address (get_eth_address), 3 transactions sent |
+| ok | Base Sepolia tx 0x59ec9422… README.md:90 +1 | block 51898531, status success |
+| ok | Ethereum Sepolia address 0x43e3cb8d… README.md:92 | the policy's keyless address (get_eth_address), 3 transactions sent |
 | ok | Base Sepolia address 0x4b78615d… CLAIMS.md:15 | contract, 673 bytes of code |
 | ok | Ethereum Sepolia address 0xca875b5d… CLAIMS.md:16 | contract, 673 bytes of code |
 | ok | Base Sepolia address 0x5319b76f… CLAIMS.md:18 +1 | contract, 559 bytes of code |
@@ -103,7 +103,7 @@ Result: 120 of 120 checks agree.
 | ok | tool tests in CLAIMS.md | docs 78, repository 78 |
 | ok | factory tests in README.md | docs 6, repository 6 |
 | ok | sandbox tests in CLAIMS.md | docs 17, repository 17 |
-| ok | offline attacks in README.md | docs 65, 65, repository 65 |
+| ok | offline attacks in README.md | docs 65, repository 65 |
 | ok | offline attacks in SECURITY.md | docs 65, repository 65 |
 | ok | offline attacks in CLAIMS.md | docs 65, repository 65 |
 | ok | live-only attacks in CLAIMS.md | docs 1, repository 1 |
