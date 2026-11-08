@@ -1,0 +1,28 @@
+name: Bug report
+description: Something in the contract, the tool, the explorer or the documents is wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Never paste a private key. A security problem goes through SECURITY.md, not an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Commands, with their output. Transaction links help.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit, or the `build` from `keyfree status`.
+    validations:
+      required: true
