@@ -110,10 +110,10 @@ only as safe as that place.
   again, and the MPC would sign for the same EVM address. The storage stake of the code stays locked for good.
 - **Reproducible from v14.1 on.** The live code is a `cargo near` reproducible build (README, "Check which
   code the live policy runs"). Versions up to v14 were built on a laptop and cannot be rebuilt byte for byte.
-- Testnets only so far (Base Sepolia, Ethereum Sepolia); Arbitrum not run yet; see "Not claimed" in
+- Testnets only so far (Base Sepolia, Ethereum Sepolia); Arbitrum Sepolia was opened only to test the rule and closed at once, with nothing deployed there; see "Not claimed" in
   CLAIMS.md. The findings of the five security reviews and what was done about each are in [AUDIT.md](AUDIT.md).
 
 ## Reporting
 
-Please open a private security advisory on this repository, or contact the author through the profile on
-the repository page. Do not post exploits publicly before a fix.
+Please report it privately through a [security advisory](https://github.com/worksOnMyFridge/keyfree/security/advisories/new)
+on this repository. You will get an answer there. Do not post exploits publicly before a fix.
