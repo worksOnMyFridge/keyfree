@@ -17,6 +17,11 @@ description = "public addresses, public keys and hashes"
 regexTarget = "secret"
 regexes = ['''^0x[0-9a-fA-F]{40}$''', '''^[1-9A-HJ-NP-Za-km-z]{43,44}$''']
 
+# The open challenge publishes one testnet function-call key on purpose (challenge/README.md). Only this file.
+[[allowlists]]
+description = "the agent key published for the open challenge"
+paths = ['''^challenge/published-agent-key\.json$''']
+
 # The live run's log prints the code hash the MCP tool returned; "key" in the tool's name trips the generic rule.
 # Only this line of this log: a bare 32-byte hex value elsewhere could be a private key and must still be flagged.
 [[allowlists]]

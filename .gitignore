@@ -16,3 +16,6 @@ v14/config.json
 setup/config.json
 setup/state.json
 setup/keyfree.json
+
+# the open challenge: local progress of its setup (its published key is committed on purpose)
+challenge/state.json
