@@ -44,6 +44,8 @@ only as safe as that place.
 | the owner's key | can propose widening; it waits the delay, it is public on chain, and the guardian or the reserve can cancel it |
 | two council keys | full power after the delay (the formula above) |
 
+The second row can be tried: an agent key of a live policy is published on purpose in [`challenge/`](challenge/).
+
 ## What is trusted
 
 - **NEAR MPC** (the chain-signatures network) signs for the policy's derived address and, through Read MPC,

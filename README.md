@@ -79,6 +79,12 @@ Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, an
 | two council keys | full power after the delay | [SECURITY.md](SECURITY.md) |
 | control of NEAR MPC | outside what Keyfree protects: it signs only what the policy built, but it trusts the MPC network | [SECURITY.md](SECURITY.md#what-is-trusted) |
 
+## Take the agent's key
+
+The key of an AI agent on a live policy is in this repository, published on purpose: [`challenge/`](challenge/).
+`npm install && node challenge/try.mjs` uses it for everything it should not be able to do, on NEAR testnet, and each
+attempt is refused with its reason. The same page says what would count as breaking it.
+
 ## See it in 2 minutes (browser only)
 
 1. Open the policy [`policy13.keyfree-lab.testnet`](https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet).
@@ -267,6 +273,7 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | Path | What |
 |---|---|
 | `contract/` | the policy contract (Rust, near-sdk 5.29, `omni-transaction` for EIP-1559), its tests and version history |
+| `challenge/` | the open challenge: an agent key published on purpose, on a policy of its own, and the script that tries it |
 | `factory/` | `KeyfreeFactory.sol`: CREATE2 for exactly one caller, the policy's address; emits `Deployed` |
 | `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
 | `packages/keyfree/demo/` | `Counter`; `vault-kit`, a prompt-injection example (its README swaps the vault owner); `treasury`, the upgradeable treasury (proxy, v1, v2) |

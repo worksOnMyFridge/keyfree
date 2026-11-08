@@ -42,7 +42,8 @@ request that touches them, and do not state anything that was not run.
 
 ## Keep it clean
 
-- No keys in the repository. `*_key.json` is ignored, and CI scans the history with gitleaks.
+- No keys in the repository. `*_key.json` is ignored, and CI scans the history with gitleaks. The one exception is
+  `challenge/published-agent-key.json`, a testnet function-call key published on purpose.
 - No personal data or machine paths in code, logs or commit messages. Use your GitHub noreply address as the commit
   email.
 

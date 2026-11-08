@@ -1,0 +1,42 @@
+--- 2026-11-08T21:34:36.313Z open challenge on challenge.keyfree-lab.testnet, as challenge-agent.keyfree-lab.testnet
+The policy has 0 access keys and allows 1 code hash.
+
+[methods this key may call: the contract decides]
+REFUSED  deploy Counter(999), other constructor arguments
+         code not on the allow list
+REFUSED  deploy arbitrary bytes
+         code not on the allow list
+REFUSED  deploy the allowed code on a chain that is not open
+         chain not allowed
+REFUSED  deploy the allowed code with gas over the cap
+         gas limit over the cap
+REFUSED  deploy the allowed code with a fee over the cap
+         gas price over the cap
+REFUSED  upgrade a proxy nobody allowed
+         proxy upgrade not on the allow list
+REFUSED  re-sign a line that does not exist, with other code
+         no such deploy
+
+[everything else: NEAR rejects the key before any contract runs]
+REFUSED  allow new code (propose_rule)
+         Access key does not allow method propose_rule
+REFUSED  pause the policy
+         Access key does not allow method pause
+REFUSED  take the owner's role (propose_role)
+         Access key does not allow method propose_role
+REFUSED  replace the policy's code (propose_upgrade)
+         Access key does not allow method propose_upgrade
+REFUSED  ask the MPC to sign directly
+         Access key receiver challenge.keyfree-lab.testnet does not match transaction receiver v1.signer-prod.testnet
+REFUSED  send the agent's NEAR away
+         Access key requires full access
+REFUSED  add a full-access key to the agent
+         Access key requires full access
+REFUSED  delete the agent's account
+         Access key requires full access
+
+[the one allowed thing]
+SIGNED   Counter(1) on Base Sepolia, as the rules allow https://testnet.nearblocks.io/txns/9HwSjoTr6x2k4iHcp7zn1EFjqqKF9emgAsdXd7m3NQcH
+
+After: 0 keys, roles and allowed code unchanged: true, paused: false
+15 of 15 attempts refused

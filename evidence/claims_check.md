@@ -3,16 +3,16 @@
 Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the
 repository: every linked transaction and address, the live policy, every count, every quoted log line.
 
-Result: 132 of 132 checks agree.
+Result: 140 of 140 checks agree.
 
 | | Check | Result |
 |---|---|---|
-| ok | NEAR account policy13.keyfree-lab.testnet README.md:84 +1 | exists, code hash 8jdpF6XE… |
-| ok | NEAR tx 7iawPybU… README.md:86 +1 | policy13.keyfree-lab.testnet -> policy13.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
-| ok | Base Sepolia address 0x43e3cb8d… README.md:87 +1 | the policy's keyless address (get_eth_address), 14 transactions sent |
+| ok | NEAR account policy13.keyfree-lab.testnet README.md:90 +1 | exists, code hash 8jdpF6XE… |
+| ok | NEAR tx 7iawPybU… README.md:92 +1 | policy13.keyfree-lab.testnet -> policy13.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
+| ok | Base Sepolia address 0x43e3cb8d… README.md:93 +1 | the policy's keyless address (get_eth_address), 14 transactions sent |
 | ok | README: nonces of the keyless address on Base Sepolia | docs 0..13, chain 0..13 |
-| ok | Base Sepolia tx 0x59ec9422… README.md:90 +1 | block 51898531, status success |
-| ok | Ethereum Sepolia address 0x43e3cb8d… README.md:92 | the policy's keyless address (get_eth_address), 3 transactions sent |
+| ok | Base Sepolia tx 0x59ec9422… README.md:96 +1 | block 51898531, status success |
+| ok | Ethereum Sepolia address 0x43e3cb8d… README.md:98 | the policy's keyless address (get_eth_address), 3 transactions sent |
 | ok | Base Sepolia address 0x4b78615d… CLAIMS.md:15 | contract, 673 bytes of code |
 | ok | Ethereum Sepolia address 0xca875b5d… CLAIMS.md:16 | contract, 673 bytes of code |
 | ok | Base Sepolia address 0x5319b76f… CLAIMS.md:18 +1 | contract, 559 bytes of code |
@@ -97,6 +97,9 @@ Result: 132 of 132 checks agree.
 | ok | Base Sepolia tx 0x7fe60897… CLAIMS.md:151 (claim 10.5) | block 53798407, status success |
 | ok | NEAR tx 7ZWDHjQS… CLAIMS.md:153 (claim 10.7) | agent.kf-outsider-494bd7.testnet -> policy.kf-outsider-494bd7.testnet request_deploy: success = "0x02f9021283014a3433830f424083802c80830 |
 | ok | Base Sepolia tx 0xd49ebd7a… CLAIMS.md:153 (claim 10.7) | block 55461917, status success |
+| ok | NEAR tx EhmqdGsm… CLAIMS.md:154 (claim 10.8) | challenge.keyfree-lab.testnet -> challenge.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
+| ok | NEAR tx 9HwSjoTr… CLAIMS.md:154 (claim 10.8) | challenge-agent.keyfree-lab.testnet -> challenge.keyfree-lab.testnet request_deploy: success = "0x02f9018f83014a3480830f42408401312d008 |
+| ok | NEAR account challenge.keyfree-lab.testnet CLAIMS.md:154 (claim 10.8) | exists, code hash 8jdpF6XE… |
 | ok | policy13.keyfree-lab.testnet access keys | 0 (docs: 0) |
 | ok | live code sha256 | 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c (README: 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c) |
 | ok | live code size | 385621 bytes (README: 385 621) |
@@ -139,3 +142,8 @@ Result: 132 of 132 checks agree.
 | ok | CLAIMS.md:104 quotes v14.log | "the allowance is used up" |
 | ok | CLAIMS.md:137 quotes v19_live.log | "paused: no rule is applied while paused" |
 | ok | CLAIMS.md:151 quotes tool_faults_live.log | "gas price over the cap" |
+| ok | CLAIMS.md:154 quotes challenge_live.log | "code not on the allow list" |
+| ok | CLAIMS.md:154 quotes challenge_live.log | "gas limit over the cap" |
+| ok | CLAIMS.md:154 quotes challenge_live.log | "proxy upgrade not on the allow list" |
+| ok | CLAIMS.md:154 quotes challenge_live.log | "Access key does not allow method propose_rule" |
+| ok | CLAIMS.md:154 quotes challenge_live.log | "Access key requires full access" |
