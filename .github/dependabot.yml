@@ -1,0 +1,15 @@
+# Security updates only: the limit of 0 turns off routine version bumps. Every dependency here is pinned, and a change
+# to one means repeating the checks. Rust is left out on purpose: Cargo.lock is part of the reproducible build, so its
+# dependencies change only with a new contract version (`cargo audit` in CI reports advisories).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
