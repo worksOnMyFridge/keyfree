@@ -340,3 +340,37 @@ OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build
 OK   proposal cleared, policy still has 0 keys
 OK   state kept: 17 allowed codes, next nonce Base 52, Ethereum null
 OK   a refusal still says why: code not on the allow list
+--- 2026-11-08T18:58:58.449Z policy13.keyfree-lab.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 385621 bytes, sha256 72edd42bc4f18be8... == the build workflow's
+OK   every method the live code exports is still there (51 -> 51)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v19, version 9, code sha256 ffa0edd847232186...
+  log: keyfree: upgrade to code sha256 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c (385621 bytes, readable now) proposed, ready at unix 1794164325
+  proposed https://testnet.nearblocks.io/txns/5DTtC2Hk4piVs6iifBJbs6s5Ys7gmw9Xu4cZX2YP2z9u
+OK   guardian reads the proposed code from the chain: 385621 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 176 s for the upgrade delay
+  log: keyfree: applying upgrade 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c
+  log: keyfree: migrated to version 10
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v20, version 10  https://testnet.nearblocks.io/txns/5C683QiVddBADNbdxR8zLNMyfwDz31G7VBMk9z6UNBWk
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 10 allowed codes, next nonce Base 14, Ethereum 3
+OK   a refusal still says why: code not on the allow list
+--- 2026-11-08T19:02:17.019Z policy.kf-outsider-494bd7.testnet: upgrade to a reproducible build (10 ok, 0 fail)
+OK   new wasm 385621 bytes, sha256 72edd42bc4f18be8... == the build workflow's
+OK   every method the live code exports is still there (51 -> 51)
+OK   refusals keep their text (panic_utf8 imported, messages present)
+OK   no machine path inside the wasm
+live: build v19, version 4, code sha256 ffa0edd847232186...
+  log: keyfree: upgrade to code sha256 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c (385621 bytes, readable now) proposed, ready at unix 1794164523
+  proposed https://testnet.nearblocks.io/txns/HjTtJSHLDYPx6wVwmykvdXMSLTEYfuevM3dsJQHmPNwo
+OK   guardian reads the proposed code from the chain: 385621 bytes, sha256 == the reproducible build
+OK   apply before the delay -> upgrade delay not over
+waiting 176 s for the upgrade delay
+  log: keyfree: applying upgrade 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c
+  log: keyfree: migrated to version 5
+OK   upgraded WITHOUT a key: the account's code sha256 == the reproducible build; build v20, version 5  https://testnet.nearblocks.io/txns/A9jUfi6bYJBpzaLhtjkP6c87DoEirhBvxyXM12Jh8hZL
+OK   proposal cleared, policy still has 0 keys
+OK   state kept: 25 allowed codes, next nonce Base 78, Ethereum null
+OK   a refusal still says why: code not on the allow list

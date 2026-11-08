@@ -151,7 +151,7 @@ storage and callbacks, a failed upgrade batch, retirement, and faults (an MPC th
 answers late or never, two requests at once, a policy short of NEAR). Results: [`evidence/sandbox.md`](evidence/sandbox.md).
 Locally (Linux or macOS arm64): `POLICY_WASM=<wasm> MOCK_WASM=<wasm> npm run test:sandbox`.
 
-Every CLI command and MCP tool also ran for real on a separate policy, with its refusals: 134 steps in
+Every CLI command and MCP tool also ran for real on a separate policy, with its refusals: 133 steps in
 [`evidence/tool_live.log`](evidence/tool_live.log) (`npm run live` in `packages/keyfree`). `npm audit` reports `tmp`
 through solc-js 0.8.28; the build only calls solc's `compile()`, not the command-line code that uses `tmp`, and
 another solc version would change the bytecode and with it the allowed code hashes.
@@ -168,21 +168,21 @@ when it must.
 
 The live policy runs a reproducible build: the same commit gives the same bytes on any machine with Docker.
 The policy says which commit itself: its `contract_source_metadata` view (NEP-330) returns the repository
-link, the commit `c6177248ea30c3662a0603ac900d6c928faae936`, the Docker image and the build command.
+link, the commit `29fa5c886b8d9838011cf80c3e4f082ca88fdc2e`, the Docker image and the build command.
 
 ```bash
-git checkout c6177248ea30c3662a0603ac900d6c928faae936
+git checkout 29fa5c886b8d9838011cf80c3e4f082ca88fdc2e
 cd contract
 cargo near build reproducible-wasm         # cargo-near 0.22.0; Docker image pinned by digest in Cargo.toml
 sha256sum target/near/keyfree_policy.wasm
-# -> ffa0edd847232186c4eed41abb1c21cc868b0bed1bb2fbd1af55c7fbe2bf10d0  (384 853 bytes)
+# -> 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c  (385 621 bytes)
 ```
 
 NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
-`JCsHndCJHwoJ256Dm4dARWsRDCwCjFY3k2meUq6wEMcB` (`near state` or the RPC `view_account`). The commit is part of
+`8jdpF6XEkVQ3Hun6pJrGzSEmPeGQk6JyZBuk2eRDtp6P` (`near state` or the RPC `view_account`). The commit is part of
 the metadata inside the wasm, so every commit gives its own hash; the `build` workflow
 (`.github/workflows/build.yml`) builds each change to the contract and prints both hashes.
-The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1; v16, CLAIMS 9.6; v17, CLAIMS 9.7; v18, CLAIMS 9.8; v19, CLAIMS 9.9); earlier versions
+The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1; v16, CLAIMS 9.6; v17, CLAIMS 9.7; v18, CLAIMS 9.8; v19, CLAIMS 9.9; v20, CLAIMS 9.10); earlier versions
 were built on a laptop and their bytes carry that machine's paths, so they cannot be rebuilt elsewhere.
 
 ## Use it from Claude Code

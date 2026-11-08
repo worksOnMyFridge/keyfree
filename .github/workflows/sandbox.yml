@@ -14,7 +14,7 @@ permissions:
 
 env:
   CARGO_NEAR_VERSION: "0.22.0"
-  # The build under test: v20 (the live policies run v19 until v20 is installed), its commit and sha256.
+  # The build under test: v20, the one the live policies run, its commit and sha256.
   LIVE_COMMIT: 29fa5c886b8d9838011cf80c3e4f082ca88fdc2e
   LIVE_SHA256: 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c
   KF_BUILD: "v20"

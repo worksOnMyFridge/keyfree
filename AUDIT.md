@@ -43,7 +43,7 @@ Z8 and Z12 and found three gaps, now closed:
 |---|---|---|---|
 | Z3b | `keyfree status` took the MPC to trust from `mpc_account` in keyfree.json, the file an attacker of Z3 would write; a failed `get_config` read as "older than v19" | fixed (tool) | The network's MPC is fixed in the tool; `mpc_account` only adds a warning; a failed read is said as such. Test: "Z3: status names the MPC..." (look-alike named in keyfree.json) |
 | Z9b | `keyfree_retry` took any path; "not found" and "outside the project" gave different answers, so a model could learn which paths exist | fixed (tool) | `keyfree_retry` goes through the same check; one answer for both. Test: "Z8 and Z9..." (retry, a missing file, a file outside) |
-| Z5b | After a member was replaced, an old role change kept its past `ready_at`, so one approval from the new member made it ready at once (and stale changes kept the alarm firing) | fixed (v20, not yet installed) | When the council changes, changes proposed by a member who left go, approvals and cancels of members who left are dropped, and a change below 2 of 3 starts its delay again when approved. Tests: `an_old_change_does_not_become_ready_at_once_after_the_council_changes`, `the_restarted_delay_holds`, `a_cancel_from_a_member_who_left_no_longer_counts`, `a_change_proposed_by_a_replaced_member_goes_with_it` |
+| Z5b | After a member was replaced, an old role change kept its past `ready_at`, so one approval from the new member made it ready at once (and stale changes kept the alarm firing) | fixed (v20, live) | When the council changes, changes proposed by a member who left go, approvals and cancels of members who left are dropped, and a change below 2 of 3 starts its delay again when approved. Tests: `an_old_change_does_not_become_ready_at_once_after_the_council_changes`, `the_restarted_delay_holds`, `a_cancel_from_a_member_who_left_no_longer_counts`, `a_change_proposed_by_a_replaced_member_goes_with_it` |
 | Z1b | The council-key scan missed key files next to the agent's keyfree.json when the agent runs elsewhere | fixed (tool) | The folder of `KEYFREE_CONFIG` and its `setup/` are scanned too. A key in an OS keychain or under another file name is not found: SECURITY.md says to keep council keys off that machine |
 
 ## Fourth review (code version v17, 2026-11-03): Y1..Y5
@@ -186,7 +186,8 @@ data and position; no narrowing method widens anything for zero, `u128::MAX` or 
   by the verification pass (V1..V7), which was not done by an independent reviewer.
 - v17 was seen by the fourth review, v18 (Y1) by the fifth, which found it correct. v19 (Z3..Z6) came after the
   fifth review: covered by the tests named above, the sandbox (17 of 17) and the live checks (CLAIMS 9.9), and
-  checked afterwards by a separate session (see the end of this section when it is done).
+  checked afterwards by a separate session ("Checked again after v19" above). v20 (Z5b) came out of that check: it is
+  covered by the tests named there, the sandbox (17 of 17) and CLAIMS 9.10; no independent reviewer has seen it.
 - The fourth review did not run the nearcore sandbox, a rebuild of the wasm or the page in a browser, and read the
   Read MPC payload's encoding only through the authors' golden tests.
 

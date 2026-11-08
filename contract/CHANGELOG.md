@@ -1,7 +1,7 @@
 # Policy contract versions
 
 Finding ids: F1..F20 and N1..N17 are the two security reviews in [AUDIT.md](../AUDIT.md). The live policy
-`policy13.keyfree-lab.testnet` runs v19; earlier versions ran on earlier testnet accounts (see `spikes/`).
+`policy13.keyfree-lab.testnet` runs v20; earlier versions ran on earlier testnet accounts (see `spikes/`).
 
 | Version | What changed |
 |---|---|
@@ -25,7 +25,7 @@ Finding ids: F1..F20 and N1..N17 are the two security reviews in [AUDIT.md](../A
 | v17 | After the verification pass (AUDIT.md, V1): a chain without a daily budget signs nothing. Before, it signed under the per-transaction caps alone, so opening a chain and forgetting its budget meant no daily limit. Now every signing path and both previews refuse with `no daily budget on chain N`, until a `SetBudget` rule has run its delay. The state layout did not change. A policy with a chain that has no budget stops signing on that chain when it upgrades, and signs again once the budget's rule has passed. Installed on the live policy without a key on 2026-11-03. |
 | v18 | After the fourth review (AUDIT.md, Y1): a `confirm` and a re-sign of the same line can overlap, and their answers can come in either order. A late signature no longer turns a confirmed line back into signed, a failed or released re-sign no longer makes a landed nonce stuck, and a confirmed line names the transaction Read MPC proved. No new state; `on_confirmed` takes the proved hash. Installed on the live policy without a key on 2026-11-03. |
 | v19 | After the fifth review, a lifecycle red team (AUDIT.md, Z3-Z6): `get_config` names the MPC account and the path the policy signs with, so anyone can check its address against the network's MPC (Z3); a gas limit must cover what each kind of transaction surely spends beyond the intrinsic gas, about 50 000 for `upgradeTo` and CREATE2's own 32 000 for a factory deploy, so no signature is spent on a transaction certain to revert (Z4); applying a role change removes only that change, so an approved replacement of a stolen key survives (Z5); a paused policy applies no rule and no upgrade, while a council member can still be replaced (Z6). No new state. Installed on both live policies without a key on 2026-11-07. |
-| v20 | After an independent check of v19's fixes: when the council changes, a role change proposed by a member who left goes, approvals and cancels of members who left no longer count, and a change that falls below the approvals it needs waits its full delay again from the approval that brings it back. Before, a new member's approval could make an old change ready at once. No new state. In the repository; not yet installed on the live policies (they run v19). |
+| v20 | After an independent check of v19's fixes: when the council changes, a role change proposed by a member who left goes, approvals and cancels of members who left no longer count, and a change that falls below the approvals it needs waits its full delay again from the approval that brings it back. Before, a new member's approval could make an old change ready at once. No new state. Installed on both live policies on 2026-11-08 (CLAIMS 9.10). |
 
 v1 to v14 were built on a laptop; their bytes carry that machine's paths and cannot be rebuilt elsewhere.
 From v14.1 on, `cargo near build reproducible-wasm` gives the live bytes (README, "Check which code the live
