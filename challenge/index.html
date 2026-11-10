@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Take the agent's key</title>
+<meta name="description" content="The real key of an AI agent on a live Keyfree policy, published on purpose. Each button signs a real NEAR testnet transaction with it from your browser and shows why it was refused.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https:; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1f23; --muted: #626872; --line: #e3e4e0;
+    --accent: #2f5bd3; --ok: #1d7a46; --ok-bg: #e5f4ea; --no: #b3261e; --no-bg: #fbe9e7; --warn: #8a5a00; --warn-bg: #fff3d6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121417; --panel: #1b1e23; --ink: #e8e9eb; --muted: #9aa1ab; --line: #2b2f36;
+      --accent: #7fa2ff; --ok: #6fd39a; --ok-bg: #16301f; --no: #ff8a80; --no-bg: #3a1714; --warn: #ffcf70; --warn-bg: #3a2e12;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 28px 16px 48px; overflow-x: clip; }
+  .kicker { font: 600 12px/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.1; margin: 0 0 14px; letter-spacing: -0.02em; }
+  h1 span { color: var(--ok); }
+  h2 { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 28px 0 10px; }
+  p.lead { font-size: 17px; color: var(--muted); margin: 0 0 18px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .story { border-left: 4px solid var(--no); background: var(--panel); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 0 0 16px; }
+  .story b { color: var(--no); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 10px; margin-top: 16px; }
+  .stats .panel { text-align: center; }
+  .big { font-size: 32px; font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; }
+  .big.good { color: var(--ok); }
+  .big.bad { color: var(--no); }
+  .attempt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 8px; }
+  .attempt > div:first-child { flex: 1 1 260px; min-width: 0; }
+  .attempt .what { font-weight: 600; }
+  .attempt .how { color: var(--muted); }
+  .result { flex: 1 1 100%; font-size: 14px; border-radius: 8px; padding: 8px 10px; }
+  .result:empty { display: none; }
+  .verdict { font-weight: 700; font-size: 12px; letter-spacing: 0.06em; margin-right: 2px; }
+  .refused { color: var(--ok); background: var(--ok-bg); }
+  .through { color: var(--no); background: var(--no-bg); }
+  .unknown { color: var(--warn); background: var(--warn-bg); }
+  .busy { color: var(--muted); background: var(--bg); }
+  button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button.main { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  textarea { width: 100%; min-height: 92px; font-family: var(--mono); font-size: 13px; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); resize: vertical; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  .muted { color: var(--muted); }
+  footer { margin-top: 28px; color: var(--muted); font-size: 14px; }
+  footer p { margin: 0 0 8px; }
+</style>
+</head>
+<body data-state="loading">
+<main>
+  <p class="kicker">Keyfree · live on NEAR testnet</p>
+  <h1>Here is the agent's key.<br><span>Try to steal something.</span></h1>
+  <p class="lead">This is the real key of an AI agent on a Keyfree policy, published on purpose. Each button signs a
+    real NEAR testnet transaction with it, right here in your browser, and shows what happened.</p>
+
+  <div class="story"><b>April 2026:</b> one stolen deployer key let an attacker upgrade Wasabi Protocol's contracts,
+    and about $5 million was taken
+    (<a href="https://www.halborn.com/blog/post/explained-the-wasabi-protocol-hack-april-2026">Halborn</a>). This agent has
+    a key too. Here it is.</div>
+
+  <div class="panel">
+    <div class="muted">Agent key · <a id="agent-link" href="https://testnet.nearblocks.io/address/challenge-agent.keyfree-lab.testnet">challenge-agent.keyfree-lab.testnet</a></div>
+    <div class="mono" id="pubkey">loading…</div>
+    <div class="muted">The private key: <a href="published-agent-key.json">published-agent-key.json</a>. Policy:
+      <a href="https://testnet.nearblocks.io/address/challenge.keyfree-lab.testnet">challenge.keyfree-lab.testnet</a>,
+      which allows one thing: Counter(1) on Base Sepolia.</div>
+  </div>
+
+  <div class="stats" aria-live="polite">
+    <div class="panel"><div class="big" id="keys">…</div><div class="muted">keys on the policy</div></div>
+    <div class="panel"><div class="big" id="allowed">…</div><div class="muted">allowed code hashes</div></div>
+    <div class="panel"><div class="big" id="balance">…</div><div class="muted">NEAR left for the agent's gas</div></div>
+    <div class="panel"><div class="big" id="score">0 of 0</div><div class="muted">refused for you</div></div>
+  </div>
+  <p class="muted" id="notice" hidden></p>
+
+  <h2>What a thief would try</h2>
+  <div class="row"><button class="main" id="all" disabled>Try all</button>
+    <span class="muted">One after another, a few seconds each.</span></div>
+  <div id="attempts"></div>
+
+  <h2>Or bring your own code</h2>
+  <textarea id="code" spellcheck="false" placeholder="0x6080… init code: bytecode with its constructor arguments"></textarea>
+  <div class="row"><button id="own" disabled>Ask the policy to deploy it on Base Sepolia</button></div>
+  <div class="result" id="own-result" aria-live="polite"></div>
+
+  <footer>
+    <p>A refusal by the policy is a real transaction you can open. A request the key itself may not make is turned
+      away by NEAR before it runs, so no transaction exists for it.</p>
+    <p>What would count as breaking it, and how to report it:
+      <a href="https://github.com/worksOnMyFridge/keyfree/tree/main/challenge">challenge/README.md</a>. The same attempts
+      from a terminal: <code>node challenge/try.mjs</code>. Testnet only, not professionally audited.</p>
+    <p>Gas comes from the agent's own account. If it runs dry, anyone can send it testnet NEAR from a
+      <a href="https://docs.near.org/getting-started/faucet">faucet</a>; the policy is unchanged either way.</p>
+  </footer>
+  <noscript><p>This page needs JavaScript to sign. Without it: <code>npm install && node challenge/try.mjs</code>.</p></noscript>
+</main>
+<script>
+"use strict";
+const POLICY = "challenge.keyfree-lab.testnet";
+const AGENT = "challenge-agent.keyfree-lab.testnet";
+const NODES = ["https://test.rpc.fastnear.com", "https://near-testnet.drpc.org", "https://rpc.testnet.near.org"];
+const BASE_SEPOLIA = 84532;
+// The creation code of the demo Counter (packages/keyfree/demo); the policy allows it only as Counter(1).
+const COUNTER = "0x6080604052348015600e575f5ffd5b50604051610114380380610114833981016040819052602b916031565b5f556047565b5f602082840312156040575f5ffd5b5051919050565b60c1806100535f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80638381f58a146034578063d09de08a14604d575b5f5ffd5b603b5f5481565b60405190815260200160405180910390f35b60536055565b005b5f805490806061836068565b9190505550565b5f60018201608457634e487b7160e01b5f52601160045260245ffd5b506001019056fea26469706673582212200c9626de9671bac324d6a6524734aaf238690d26f179b6773fda71d21013e53c64736f6c634300081c0033";
+const counter = (n) => COUNTER + BigInt(n).toString(16).padStart(64, "0");
+const TGAS = 10n ** 12n;
+const $ = (id) => document.getElementById(id);
+
+// ---- encoding: base58, borsh, the NEAR transaction ----
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function b58decode(s) {
+  let n = 0n;
+  for (const c of s) { const i = B58.indexOf(c); if (i < 0) throw new Error("not base58"); n = n * 58n + BigInt(i); }
+  const out = [];
+  while (n > 0n) { out.unshift(Number(n & 255n)); n >>= 8n; }
+  for (const c of s) { if (c !== "1") break; out.unshift(0); }
+  return new Uint8Array(out);
+}
+function b58encode(bytes) {
+  let n = 0n;
+  for (const x of bytes) n = n * 256n + BigInt(x);
+  let s = "";
+  while (n > 0n) { s = B58[Number(n % 58n)] + s; n /= 58n; }
+  for (const x of bytes) { if (x !== 0) break; s = "1" + s; }
+  return s;
+}
+const b64 = (bytes) => { let s = ""; for (const x of bytes) s += String.fromCharCode(x); return btoa(s); };
+class Borsh {
+  constructor() { this.b = []; }
+  u8(x) { this.b.push(x); return this; }
+  u32(x) { for (let i = 0; i < 4; i++) this.b.push((x >>> (8 * i)) & 255); return this; }
+  uint(x, bytes) { x = BigInt(x); for (let i = 0; i < bytes; i++) { this.b.push(Number(x & 255n)); x >>= 8n; } return this; }
+  raw(a) { for (const x of a) this.b.push(x); return this; }
+  vec(a) { this.u32(a.length); return this.raw(a); }
+  str(s) { return this.vec(new TextEncoder().encode(s)); }
+  key(pub) { return this.u8(0).raw(pub); } // ed25519
+  done() { return new Uint8Array(this.b); }
+}
+// Actions: { call, args, gas }, { transfer }, { addFullAccessKey }, { deleteAccount }. Enum tags as in nearcore.
+function encodeTx({ signer, pub, nonce, receiver, blockHash, actions }) {
+  const w = new Borsh().str(signer).key(pub).uint(nonce, 8).str(receiver).raw(blockHash).u32(actions.length);
+  for (const a of actions) {
+    if (a.call) w.u8(2).str(a.call).vec(new TextEncoder().encode(JSON.stringify(a.args))).uint(a.gas, 8).uint(0n, 16);
+    else if (a.transfer !== undefined) w.u8(3).uint(a.transfer, 16);
+    else if (a.addFullAccessKey) w.u8(5).key(a.addFullAccessKey).uint(0n, 8).u8(1);
+    else if (a.deleteAccount) w.u8(7).str(a.deleteAccount);
+    else throw new Error("unknown action");
+  }
+  return w.done();
+}
+// ---- Ed25519 signing (RFC 8032), in plain BigInt arithmetic so every browser signs the same way, with SHA-512 from
+// WebCrypto. Not constant-time: the only key it ever holds is published anyway. ----
+const P = 2n ** 255n - 19n;
+const L = 2n ** 252n + 27742317777372353535851937790883648493n;
+const mod = (a, m = P) => { const r = a % m; return r >= 0n ? r : r + m; };
+const powmod = (b, e) => { let r = 1n; b = mod(b); while (e > 0n) { if (e & 1n) r = r * b % P; b = b * b % P; e >>= 1n; } return r; };
+const D2 = mod(2n * -121665n * powmod(121666n, P - 2n));
+const G = [15112221349535400772501151409588531511454012693041857206046113283949847762202n, 46316835694926478169428394003475163141307993866256225615783033603165251855960n, 1n, 0n];
+G[3] = mod(G[0] * G[1]);
+function add([x1, y1, z1, t1], [x2, y2, z2, t2]) {
+  const a = mod((y1 - x1) * (y2 - x2)), b = mod((y1 + x1) * (y2 + x2)), c = mod(t1 * D2 * t2), d = mod(2n * z1 * z2);
+  const e = b - a, f = d - c, g = d + c, h = b + a;
+  return [mod(e * f), mod(g * h), mod(f * g), mod(e * h)];
+}
+function mul(n, pt) { let r = [0n, 1n, 1n, 0n]; while (n > 0n) { if (n & 1n) r = add(r, pt); pt = add(pt, pt); n >>= 1n; } return r; }
+const leInt = (bytes) => bytes.reduceRight((n, x) => n * 256n + BigInt(x), 0n);
+const leBytes = (n) => Uint8Array.from({ length: 32 }, (_, i) => Number((n >> BigInt(8 * i)) & 255n));
+function encodePoint([x, y, z]) {
+  const zi = powmod(z, P - 2n), out = leBytes(mod(y * zi));
+  out[31] |= Number(mod(x * zi) & 1n) << 7;
+  return out;
+}
+const sha512 = async (...parts) => new Uint8Array(await crypto.subtle.digest("SHA-512", Uint8Array.from(parts.flatMap((p) => [...p]))));
+async function importKey(secret) {
+  const raw = b58decode(secret.replace(/^ed25519:/, ""));
+  if (raw.length !== 64) throw new Error("not an ed25519 secret key");
+  const h = await sha512(raw.slice(0, 32));
+  h[0] &= 248; h[31] &= 127; h[31] |= 64;
+  const a = leInt(h.slice(0, 32)), pub = encodePoint(mul(a, G));
+  if (b58encode(pub) !== b58encode(raw.slice(32))) throw new Error("the secret key does not match its public key");
+  return { a, prefix: h.slice(32), pub };
+}
+async function sign(key, msg) {
+  const r = mod(leInt(await sha512(key.prefix, msg)), L);
+  const R = encodePoint(mul(r, G));
+  const k = mod(leInt(await sha512(R, key.pub, msg)), L);
+  return Uint8Array.from([...R, ...leBytes(mod(r + k * key.a, L))]);
+}
+async function signTx(key, fields) {
+  const tx = encodeTx({ ...fields, pub: key.pub });
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", tx));
+  const sig = await sign(key, hash);
+  return { hash: b58encode(hash), signed: b64(new Borsh().raw(tx).u8(0).raw(sig).done()) };
+}
+window.keyfreeChallenge = { encodeTx, importKey, signTx, b58encode }; // for the page's tests
+
+// ---- RPC: three public nodes; a network failure is never reported as a refusal ----
+class NetworkError extends Error {}
+async function rpc(method, params, ms = 15000) {
+  let last = "no node answered";
+  for (const url of NODES) {
+    try {
+      const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "kf", method, params }), signal: AbortSignal.timeout(ms) });
+      if (!r.ok) { last = `${new URL(url).host}: HTTP ${r.status}`; continue; }
+      const j = await r.json();
+      if (j && j.error) {
+        if (/InvalidTxError|INVALID_TRANSACTION/.test(JSON.stringify(j.error))) return { invalid: j.error };
+        last = `${new URL(url).host}: ${j.error.cause?.name ?? j.error.message ?? "error"}`; continue;
+      }
+      if (j && j.result !== undefined) return { result: j.result };
+      last = `${new URL(url).host}: no result`;
+    } catch (e) { last = `${new URL(url).host}: ${e.name === "TimeoutError" ? "timed out" : "unreachable"}`; }
+  }
+  throw new NetworkError(last);
+}
+const view = async (method, args = {}) => {
+  const { result } = await rpc("query", { request_type: "call_function", finality: "optimistic", account_id: POLICY, method_name: method, args_base64: b64(new TextEncoder().encode(JSON.stringify(args))) });
+  if (!Array.isArray(result?.result)) throw new NetworkError("unexpected answer");
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(result.result)));
+};
+
+// ---- reading what happened ----
+function keyReason(error) {
+  const s = JSON.stringify(error);
+  const m = /"MethodNameMismatch":\{"method_name":"([^"]+)"/.exec(s);
+  if (m) return `this key may not call ${m[1]}`;
+  if (/ReceiverMismatch/.test(s)) return `this key works only on ${POLICY}`;
+  if (/RequiresFullAccess/.test(s)) return "this needs a full-access key, and this key is not one";
+  if (/InvalidNonce/.test(s)) return null; // someone else used the key at the same moment: build it again
+  if (/NotEnoughAllowance|NotEnoughBalance|LackBalanceForState/.test(s)) return { empty: true };
+  return s.slice(0, 160);
+}
+function failureOf(result) {
+  const outcomes = [{ outcome: { status: result.status } }, ...(result.receipts_outcome ?? [])];
+  for (const o of outcomes) {
+    const f = o.outcome?.status?.Failure;
+    if (!f) continue;
+    const s = JSON.stringify(f).replace(/\\"/g, "\"");
+    return (/Smart contract panicked: ([^"]*)/.exec(s)?.[1] ?? s).slice(0, 160);
+  }
+  return "";
+}
+let key = null, refused = 0, tried = 0;
+
+async function send(receiver, actions) {
+  for (let i = 0; i < 3; i++) {
+    const [{ result: ak }, { result: block }] = await Promise.all([
+      rpc("query", { request_type: "view_access_key", finality: "final", account_id: AGENT, public_key: `ed25519:${b58encode(key.pub)}` }),
+      rpc("block", { finality: "final" }),
+    ]);
+    if (!ak || ak.nonce === undefined || !block?.header?.hash) throw new NetworkError("unexpected answer");
+    const tx = await signTx(key, { signer: AGENT, nonce: BigInt(ak.nonce) + 1n, receiver, blockHash: b58decode(block.header.hash), actions });
+    const out = await rpc("send_tx", { signed_tx_base64: tx.signed, wait_until: "EXECUTED_OPTIMISTIC" }, 60000);
+    if (out.invalid) {
+      const why = keyReason(out.invalid);
+      if (why === null) continue;
+      if (why.empty) return { kind: "unknown", text: "the agent's account is out of NEAR for gas, so nothing was sent. Anyone can top it up from a faucet." };
+      return { kind: "refused", text: `NEAR turned it away before it ran: ${why}. No transaction exists for it.` };
+    }
+    const why = failureOf(out.result);
+    if (why) return { kind: "refused", text: `the policy refused it: ${why}.`, hash: tx.hash };
+    return { kind: "through", text: "it went through.", hash: tx.hash };
+  }
+  return { kind: "unknown", text: "the key was busy with other people's attempts. Try again in a moment." };
+}
+
+function show(box, r) {
+  box.textContent = "";
+  box.className = `result ${r.kind}`;
+  const v = document.createElement("span");
+  v.className = "verdict";
+  v.textContent = { refused: "REFUSED", through: r.signed ? "SIGNED" : "GOT THROUGH", unknown: "NOT SENT", busy: "SENDING" }[r.kind];
+  box.append(v, document.createTextNode(` ${r.text}`));
+  if (r.hash) {
+    const a = document.createElement("a");
+    a.href = `https://testnet.nearblocks.io/txns/${r.hash}`;
+    a.textContent = " Open the transaction ↗";
+    box.append(a);
+  }
+}
+async function attempt(box, receiver, actions, allowedCode = false) {
+  show(box, { kind: "busy", text: "signing and sending…" });
+  let r;
+  try { r = await send(receiver, actions); }
+  catch (e) { r = { kind: "unknown", text: `could not reach NEAR testnet (${e instanceof NetworkError ? e.message : "error"}). Nothing is known about this attempt; try again.` }; }
+  if (r.kind === "through" && allowedCode) r = { ...r, signed: true, text: "this is the one code the rules allow (up to 5 a day), so the policy asked NEAR MPC to sign it. Not a break." };
+  else if (r.kind === "through") r = { ...r, text: "it went through. If the policy's rules, roles, code or keys changed, or NEAR left the agent other than as gas, please report it (challenge/README.md)." };
+  if (r.kind === "refused" || (r.kind === "through" && !r.signed)) { tried++; if (r.kind === "refused") refused++; }
+  $("score").textContent = `${refused} of ${tried}`;
+  show(box, r);
+  readState();
+  return r;
+}
+
+const ask = (over = {}) => ({ chain_id: BASE_SEPOLIA, init_code_hex: counter(1), gas_limit: 300000, max_fee_per_gas: 20000000, max_priority_fee_per_gas: 1000000, salt_hex: null, via_factory: null, ...over });
+const onPolicy = (call, args) => [POLICY, [{ call, args, gas: 250n * TGAS }]];
+const randomKey = () => crypto.getRandomValues(new Uint8Array(32));
+const ATTEMPTS = [
+  ["Deploy the allowed contract with my own constructor argument", "request_deploy · Counter(999)", () => onPolicy("request_deploy", ask({ init_code_hex: counter(999) }))],
+  ["Deploy code of my own", "request_deploy · 0x60006000f3", () => onPolicy("request_deploy", ask({ init_code_hex: "0x60006000f3" }))],
+  ["Deploy on a chain the rules do not open", "request_deploy · Ethereum Sepolia", () => onPolicy("request_deploy", ask({ chain_id: 11155111 }))],
+  ["Pay for more gas than the cap", "request_deploy · gas limit 5,000,000", () => onPolicy("request_deploy", ask({ gas_limit: 5000000 }))],
+  ["Pay a fee over the cap", "request_deploy · 60 gwei", () => onPolicy("request_deploy", ask({ max_fee_per_gas: 60000000000 }))],
+  ["Upgrade a proxy to my code", "request_proxy_upgrade", () => onPolicy("request_proxy_upgrade", { chain_id: BASE_SEPOLIA, proxy_hex: `0x${"11".repeat(20)}`, implementation_hex: `0x${"22".repeat(20)}`, gas_limit: 100000, max_fee_per_gas: 20000000, max_priority_fee_per_gas: 1000000 })],
+  ["Re-sign an old request with other code", "resign · Counter(999)", () => onPolicy("resign", { chain_id: BASE_SEPOLIA, nonce: 9999, init_code_hex: counter(999), gas_limit: 300000, max_fee_per_gas: 20000000, max_priority_fee_per_gas: 1000000 })],
+  ["Allow my code in the rules", "propose_rule", () => onPolicy("propose_rule", { change: { AllowCode: { code_hash: "00".repeat(32) } } })],
+  ["Make myself the owner", "propose_role · Owner", () => onPolicy("propose_role", { role: "Owner", account: AGENT })],
+  ["Replace the policy's code", "propose_upgrade", () => onPolicy("propose_upgrade", {})],
+  ["Pause the policy", "pause", () => onPolicy("pause", {})],
+  ["Ask the MPC network to sign directly", "v1.signer-prod.testnet · sign", () => ["v1.signer-prod.testnet", [{ call: "sign", args: { request: {} }, gas: 250n * TGAS }]]],
+  ["Send the agent's NEAR away", "transfer 0.1 NEAR", () => ["keyfree-lab.testnet", [{ transfer: 10n ** 23n }]]],
+  ["Give myself a full-access key", "add_key", () => [AGENT, [{ addFullAccessKey: randomKey() }]]],
+  ["Delete the agent's account", "delete_account", () => [AGENT, [{ deleteAccount: "keyfree-lab.testnet" }]]],
+];
+const buttons = [];
+for (const [what, how, build] of ATTEMPTS) {
+  const card = document.createElement("div");
+  card.className = "panel attempt";
+  const text = document.createElement("div");
+  const w = document.createElement("div"); w.className = "what"; w.textContent = what;
+  const h = document.createElement("div"); h.className = "how mono"; h.textContent = how;
+  text.append(w, h);
+  const b = document.createElement("button"); b.textContent = "Try"; b.disabled = true;
+  const box = document.createElement("div"); box.className = "result"; box.setAttribute("aria-live", "polite");
+  card.append(text, b, box);
+  $("attempts").append(card);
+  const run = async () => { b.disabled = true; const [to, acts] = build(); await attempt(box, to, acts); b.disabled = false; };
+  b.addEventListener("click", run);
+  buttons.push({ b, run });
+}
+$("all").addEventListener("click", async () => {
+  $("all").disabled = true;
+  for (const { run } of buttons) await run();
+  $("all").disabled = false;
+});
+$("own").addEventListener("click", async () => {
+  const code = $("code").value.trim().replace(/\s+/g, "");
+  const hex = code.startsWith("0x") ? code : `0x${code}`;
+  if (!/^0x([0-9a-fA-F]{2})+$/.test(hex) || hex.length > 2 + 2 * 24576) {
+    show($("own-result"), { kind: "unknown", text: "paste init code as hex: an even number of hex digits, up to 24 KB." });
+    return;
+  }
+  $("own").disabled = true;
+  const [to, acts] = onPolicy("request_deploy", ask({ init_code_hex: hex }));
+  await attempt($("own-result"), to, acts, hex.toLowerCase() === counter(1).toLowerCase());
+  $("own").disabled = false;
+});
+
+// ---- the live state: keys on the policy, allowed code, gas left ----
+async function readState() {
+  const set = (id, text, cls = "") => { $(id).textContent = text; $(id).className = `big ${cls}`; };
+  await Promise.all([
+    rpc("query", { request_type: "view_access_key_list", finality: "final", account_id: POLICY })
+      .then(({ result }) => { const n = result?.keys?.length; set("keys", n === undefined ? "unknown" : String(n), n === 0 ? "good" : n === undefined ? "" : "bad"); })
+      .catch(() => set("keys", "unknown")),
+    view("get_rules").then((r) => set("allowed", String(r.allowed_code.length))).catch(() => set("allowed", "unknown")),
+    rpc("query", { request_type: "view_account", finality: "final", account_id: AGENT })
+      .then(({ result }) => {
+        const y = BigInt(result.amount);
+        const near = `${y / 10n ** 24n}.${String((y % 10n ** 24n) / 10n ** 21n).padStart(3, "0")}`;
+        set("balance", near, y < 10n ** 23n ? "bad" : "");
+      })
+      .catch(() => set("balance", "unknown")),
+  ]);
+  document.body.dataset.state = "done";
+}
+
+(async () => {
+  try {
+    const file = await fetch("published-agent-key.json").then((r) => { if (!r.ok) throw new Error(); return r.json(); });
+    key = await importKey(file.private_key);
+    $("pubkey").textContent = `ed25519:${b58encode(key.pub)}`;
+    $("all").disabled = false;
+    $("own").disabled = false;
+    for (const { b } of buttons) b.disabled = false;
+  } catch {
+    $("pubkey").textContent = "not loaded";
+    $("notice").hidden = false;
+    $("notice").textContent = "The key file next to this page could not be loaded, so nothing can be signed here. The same attempts run from a terminal: npm install && node challenge/try.mjs";
+  }
+  await readState();
+})();
+</script>
+</body>
+</html>

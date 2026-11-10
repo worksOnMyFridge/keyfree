@@ -3,9 +3,9 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "Browser tests of the explorer page. The page itself is one static file with no dependencies.",
+  "description": "Browser tests of the explorer page and the challenge page. Each page is one static file with no dependencies.",
   "scripts": {
-    "test": "node --test --test-timeout=120000 explorer.test.mjs"
+    "test": "node --test --test-timeout=120000 explorer.test.mjs challenge.test.mjs"
   },
   "devDependencies": {
     "playwright": "1.56.1"
