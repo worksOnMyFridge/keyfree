@@ -5,6 +5,12 @@ published on purpose. The point of Keyfree is that a stolen agent key is not wor
 
 ## Try it
 
+In a browser: [the challenge page](https://worksonmyfridge.github.io/keyfree/challenge/) ([`index.html`](index.html) here)
+makes the same 15 attempts with the same key, one button each, plus a box for init code of your own. Nothing to
+install.
+
+From a terminal:
+
 ```bash
 npm install                  # repository root, Node 20+
 node challenge/try.mjs       # about a minute
@@ -34,6 +40,7 @@ None of this is a break, and all of it is expected:
 - Ask for `Counter(1)` on Base Sepolia, up to 5 signatures a day. The policy's address holds no ETH on purpose, so those
   transactions cannot land. The question is only what gets signed.
 - Spend the agent's own 1.2 test NEAR on gas. When it runs out the key stops working, and the policy is unchanged.
+  Anyone can top it up by sending testnet NEAR from a [faucet](https://docs.near.org/getting-started/faucet).
 - Leave a request unfinished, which holds up new requests until someone retries or releases it.
 
 ## What is being tested

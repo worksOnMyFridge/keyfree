@@ -107,6 +107,8 @@ Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, an
 ## Take the agent's key
 
 The key of an AI agent on a live policy is in this repository, published on purpose: [`challenge/`](challenge/).
+In a browser, [the challenge page](https://worksonmyfridge.github.io/keyfree/challenge/) (`challenge/index.html`) signs
+each attempt with that key and shows the refusal, with the transaction when the policy made one. From a terminal,
 `npm install && node challenge/try.mjs` uses it for everything it should not be able to do, on NEAR testnet, and each
 attempt is refused with its reason. The same page says what would count as breaking it.
 
