@@ -36,6 +36,28 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 
 Built for NEAR HACKATHON 2026 (security and open tracks). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
 
+## Why now
+
+Teams lose real money when one key can upgrade their contracts. In each case below a single stolen key was
+enough to point a proxy at new code, with no delay and no second signer:
+
+- **Wasabi Protocol, April 2026:** about $5 million on Ethereum, Base, Berachain and Blast. The deployer account
+  was the only admin; the attacker made a malicious contract an admin and upgraded the contracts in place
+  ([Halborn](https://www.halborn.com/blog/post/explained-the-wasabi-protocol-hack-april-2026): "the lack of multisig or a timelock on the account").
+- **Zoth, March 2025:** about $8.4 million. The attacker held the key of the deployer address and swapped the
+  vault's code for its own
+  ([Halborn](https://www.halborn.com/blog/post/explained-the-zoth-hack-march-2025): "the key that controlled the deployer address").
+- **DeltaPrime, September 2024:** nearly $6 million from its Arbitrum contracts, through the stolen key of its
+  proxy admin ([Halborn](https://www.halborn.com/blog/post/explained-the-deltaprime-hack-september-2024): "perform a malicious upgrade of its proxy contract").
+
+Under Keyfree no key can do this alone. The policy signs an upgrade only to the implementation the council
+allowed for that proxy, and allowing one waits a public delay that any other council member can cancel
+([What a stolen key gets](#what-a-stolen-key-gets)).
+
+A common hosted path for deploys and upgrades is closing too: OpenZeppelin set its Defender service to shut
+down on July 1, 2026, and named its open-source Relayer and Monitor in its place
+([OpenZeppelin](https://www.openzeppelin.com/news/doubling-down-on-open-source-and-phasing-out-defender): "with its final shutdown planned for July 1, 2026").
+
 ## For judges: where to check each point
 
 | Point | Where to check it |

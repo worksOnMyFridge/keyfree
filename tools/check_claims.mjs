@@ -3,7 +3,8 @@
 //     Ethereum Sepolia); a transaction a claim cites as a refusal must have failed, every other one succeeded;
 //  2. the live policy is what the docs say: no keys, the reproducible build's sha256 and size, its commit, budgets;
 //  3. every count the docs give (tests, attacks, methods, vectors) equals the repository's;
-//  4. every log line CLAIMS quotes is in the log it names.
+//  4. every log line CLAIMS quotes is in the log it names;
+//  5. every outside source the README quotes ([name](url): "words") still says those words.
 // Writes evidence/claims_check.md. Exit 1 on any mismatch.
 import fs from "node:fs";
 import crypto from "node:crypto";
@@ -71,7 +72,7 @@ for (const doc of DOCS) {
   });
 }
 
-console.log(`1/3 ${links.size} chain links in ${DOCS.join(", ")}`);
+console.log(`1/5 ${links.size} chain links in ${DOCS.join(", ")}`);
 // The policy's own ETH address is an account without code: its link is checked by its transaction count.
 const policyEth = (await view("get_eth_address")).toLowerCase();
 for (const { kind, id, where } of links.values()) {
@@ -115,7 +116,7 @@ for (const { kind, id, where } of links.values()) {
   await sleep(400);
 }
 
-console.log("2/3 the live policy");
+console.log("2/5 the live policy");
 {
   const keys = await rpc(NEAR, "query", { request_type: "view_access_key_list", finality: "final", account_id: POLICY });
   report(keys.result?.keys?.length === 0, `${POLICY} access keys`, `${keys.result?.keys?.length ?? "?"} (docs: 0)`);
@@ -141,7 +142,7 @@ console.log("2/3 the live policy");
   }
 }
 
-console.log("3/3 counts in the docs");
+console.log("3/5 counts in the docs");
 const count = (f, re) => (read(f).match(re) ?? []).length;
 // The live runs: the logs end their run with "n/n steps ok", and the docs say that n.
 const stepsOf = (f) => read(f).match(/^(\d+)\/\1 steps ok$/m)?.[1];
@@ -188,7 +189,7 @@ for (const [what, doc, re] of said) {
   report(found.every((n) => n === actual[what]), `${what} in ${doc}`, `docs ${found.join(", ")}, repository ${actual[what]}`);
 }
 
-console.log("4/4 log lines quoted in CLAIMS");
+console.log("4/5 log lines quoted in CLAIMS");
 read("CLAIMS.md").split("\n").forEach((line, i) => {
   const logs = [...new Set([...line.matchAll(/evidence\/([a-z0-9_]+\.log)/g)].map((m) => m[1]))];
   if (!logs.length) return;
@@ -199,8 +200,32 @@ read("CLAIMS.md").split("\n").forEach((line, i) => {
   for (const q of quotes) report(text.includes(q), `CLAIMS.md:${i + 1} quotes ${logs.join(", ")}`, `"${q.slice(0, 70)}${q.length > 70 ? "…" : ""}"${text.includes(q) ? "" : " not found"}`);
 });
 
+console.log("5/5 sources quoted in README");
+// Pages are compared as text: tags dropped, entities and curly quotes made plain, whitespace collapsed.
+const plain = (html) => html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")
+  .replace(/&nbsp;|&#160;/g, " ").replace(/&(rsquo|lsquo|#8217|#8216|#39|#x27);/g, "'").replace(/&(rdquo|ldquo|quot|#8220|#8221|#34);/g, "\"")
+  .replace(/&amp;/g, "&").replace(/[‘’]/g, "'").replace(/[“”]/g, "\"").replace(/\s+/g, " ");
+const page = async (url) => {
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await fetch(url, { headers: { "user-agent": "keyfree-check-claims" }, signal: AbortSignal.timeout(30000) });
+      if (r.ok) return plain(await r.text());
+    } catch {}
+    await sleep(2000);
+  }
+  return null;
+};
+const pages = new Map();
+for (const [i, line] of read("README.md").split("\n").entries()) {
+  for (const [, url, quote] of line.matchAll(/\]\((https:\/\/[^)\s]+)\): "([^"]+)"/g)) {
+    if (!pages.has(url)) pages.set(url, await page(url));
+    const text = pages.get(url);
+    report(Boolean(text?.includes(quote)), `README.md:${i + 1} quotes ${new URL(url).hostname}`, `"${quote}"${text === null ? " (page did not load)" : text.includes(quote) ? "" : " not found"}`);
+  }
+}
+
 const md = ["# Claims check", "", "Run: `npm run check:claims` (read-only, no keys; needs network). The docs against the chains and the",
-  "repository: every linked transaction and address, the live policy, every count, every quoted log line.", "",
+  "repository: every linked transaction and address, the live policy, every count, every quoted log line, every quoted source.", "",
   `Result: ${rows.length - bad} of ${rows.length} checks agree${bad ? `, **${bad} do not**` : ""}.`, "", "| | Check | Result |", "|---|---|---|",
   ...rows.map((r) => `| ${r.ok ? "ok" : "**FAIL**"} | ${r.what.replace(/\|/g, "/")} | ${r.detail.replace(/\|/g, "/")} |`), ""];
 fs.writeFileSync(path.join(root, "evidence", "claims_check.md"), md.join("\n"));
