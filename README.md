@@ -2,13 +2,16 @@
 
 **Your AI deploys contracts. Nobody holds the key.**
 
+Not a spending limit: Keyfree decides which code an AI agent may deploy and which upgrades it may make, and
+nobody holds the key that signs them.
+
 AI coding agents (Claude Code, Codex, CI bots) now deploy smart contracts, and to do it they get a private
 key: in `.env`, in CI secrets, on the laptop. Whoever controls the agent, a prompt injection in a README, or a
 stolen laptop controls that key, and with it the contracts and the money behind them.
 
 Keyfree removes the key. The agent asks; a contract on NEAR decides; NEAR MPC signs.
 
-This is not a spending limit on an agent's wallet. Keyfree guards a different moment: the deploy and the
+A spending limit on an agent's wallet guards payments. Keyfree guards a different moment: the deploy and the
 upgrade, where a contract learns who it pays and what its code may do. Nobody holds the EVM key for the
 policy's address: NEAR MPC signs for it, and the key exists only as shares across the MPC network, never whole.
 
@@ -31,7 +34,7 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 - After a deploy lands, **NEAR Read MPC** confirms the factory's `Deployed` log, so the policy's journal
   records what happened on chain, not what was intended.
 
-Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
+Built for NEAR HACKATHON 2026 (security and open tracks). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
 
 ## For judges: where to check each point
 
@@ -309,6 +312,9 @@ hours, not the demo's minutes.
 - **Built during the hackathon.** All Keyfree code was written in the NEAR HACKATHON window (from
   2026-10-19): the first experiments on 2026-10-25, the first commit in this repository on 2026-10-29 (UTC). There
   is no earlier Keyfree code.
+- **Related project.** The same author also entered
+  [Petlore](https://github.com/worksOnMyFridge/petlore). The two are independent and share no code,
+  contracts or accounts.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
 - **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Five security reviews were
