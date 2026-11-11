@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keyfree</title>
+<meta name="description" content="Keyfree decides which code an AI agent may deploy and which upgrades it may make, and nobody holds the key that signs them. Live on NEAR testnet.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https:; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1f23; --muted: #626872; --line: #e3e4e0;
+    --accent: #2f5bd3; --ok: #1d7a46; --ok-bg: #e5f4ea; --no: #b3261e; --no-bg: #fbe9e7; --warn: #8a5a00; --warn-bg: #fff3d6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121417; --panel: #1b1e23; --ink: #e8e9eb; --muted: #9aa1ab; --line: #2b2f36;
+      --accent: #7fa2ff; --ok: #6fd39a; --ok-bg: #16301f; --no: #ff8a80; --no-bg: #3a1714; --warn: #ffcf70; --warn-bg: #3a2e12;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 36px 16px 48px; overflow-x: clip; }
+  .kicker { font: 600 12px/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  h1 { font-size: clamp(30px, 7vw, 52px); line-height: 1.08; margin: 0 0 16px; letter-spacing: -0.02em; }
+  h1 span { color: var(--ok); }
+  h2 { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 36px 0 12px; }
+  h3 { font-size: 16px; margin: 0 0 6px; }
+  p { margin: 0 0 12px; }
+  p.lead { font-size: 18px; color: var(--muted); margin: 0 0 20px; max-width: 720px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+  .muted { color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 10px; }
+  .stats .panel { text-align: center; }
+  .stats .label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .big { font-size: 32px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+  .big.good { color: var(--ok); }
+  .big.bad { color: var(--no); }
+  .big.unknown { color: var(--warn); font-size: 22px; line-height: 1.6; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+  .steps .n { font: 600 12px var(--mono); color: var(--muted); letter-spacing: 0.1em; }
+  .doors { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+  a.door { display: block; padding: 20px 18px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  a.door:hover { border-color: var(--accent); text-decoration: none; }
+  a.door b { display: block; font-size: 18px; color: var(--accent); margin-bottom: 6px; }
+  a.door span { color: var(--muted); }
+  .facts { list-style: none; padding: 0; margin: 12px 0 0; }
+  .facts li { padding: 8px 0; border-top: 1px solid var(--line); }
+  .facts li:first-child { border-top: 0; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; border-top: 0; white-space: nowrap; }
+  @media (max-width: 640px) {
+    table, tbody, tr, td { display: block; width: 100%; }
+    thead { display: none; }
+    tr { padding: 8px 0; border-top: 1px solid var(--line); }
+    tr:first-child { border-top: 0; }
+    td { border: 0; padding: 2px 0; }
+    td:first-child { font-weight: 600; }
+  }
+  .video { display: inline-block; margin-top: 20px; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--accent); font-weight: 600; }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  footer p { margin: 0 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="kicker">Keyfree · live on NEAR testnet</p>
+  <h1>Your AI deploys contracts. <span>Nobody holds the key.</span></h1>
+  <p class="lead">Not a spending limit: Keyfree decides which code an AI agent may deploy and which upgrades it may make,
+    and nobody holds the key that signs them.</p>
+
+  <noscript><p class="panel">The live numbers need JavaScript. The policy is on
+    <a href="https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet">nearblocks</a>.</p></noscript>
+
+  <div class="stats" aria-label="Live numbers for the policy">
+    <div class="panel"><div class="big" id="keys">…</div><div class="label">access keys on the policy</div></div>
+    <div class="panel"><div class="big" id="build">…</div><div class="label">build of the policy code</div></div>
+    <div class="panel"><div class="big" id="signed">…</div><div class="label">transactions signed on its open chains</div></div>
+    <div class="panel"><div class="big" id="paused">…</div><div class="label">policy status</div></div>
+  </div>
+  <p class="muted" style="margin:10px 0 0;font-size:13px">Read from public NEAR nodes in your browser for
+    <code>policy13.keyfree-lab.testnet</code>. Anything that cannot be read says unknown.</p>
+  <div id="video-slot"></div>
+
+  <h2>Pick a door</h2>
+  <div class="doors">
+    <a class="door" href="challenge/"><b>Take the agent's key</b><span>A real agent key is published on purpose. Press a button and watch the refusal.</span></a>
+    <a class="door" href="explorer/"><b>See the live policy</b><span>Keys, rules, budgets, what is waiting, the journal.</span></a>
+    <a class="door" href="start/"><b>Run your own policy</b><span>Paste your contract, get its hash and the setup steps. No keys asked.</span></a>
+  </div>
+
+  <h2>How it works</h2>
+  <div class="steps">
+    <section class="panel"><div class="n">1</div><h3>The agent asks</h3>
+      <p class="muted" style="margin:0">The agent's NEAR key can only call the request methods; rules, roles and upgrades belong to a council of three humans.</p></section>
+    <section class="panel"><div class="n">2</div><h3>A contract on NEAR decides</h3>
+      <p class="muted" style="margin:0">The policy is a NEAR contract with no access keys. It holds the rules: which init code may be deployed, on which chains, with which caps and daily budget.</p></section>
+    <section class="panel"><div class="n">3</div><h3>NEAR MPC signs</h3>
+      <p class="muted" style="margin:0">The policy builds the EVM transaction itself and asks NEAR MPC to sign it for its own derived address. It never signs a hash someone hands it.</p></section>
+  </div>
+
+  <h2 id="why-now">Why now</h2>
+  <section class="panel">
+    <p style="margin:0">Teams lose real money when one key can upgrade their contracts. In each case below a single stolen key
+      was enough (<a href="https://github.com/worksOnMyFridge/keyfree#why-now" target="_blank" rel="noopener">sources</a>).</p>
+    <ul class="facts">
+      <li><b>Wasabi Protocol, April 2026:</b> about $5 million.</li>
+      <li><b>Zoth, March 2025:</b> about $8.4 million.</li>
+      <li><b>DeltaPrime, September 2024:</b> nearly $6 million.</li>
+    </ul>
+    <p class="muted" style="margin:10px 0 0">Each was one stolen key that could upgrade contracts.</p>
+  </section>
+
+  <h2>For judges</h2>
+  <section class="panel">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Criterion</th><th>Where to click</th></tr></thead>
+      <tbody>
+        <tr><td>Technical implementation</td><td><a href="https://github.com/worksOnMyFridge/keyfree/blob/main/CLAIMS.md" target="_blank" rel="noopener">CLAIMS.md</a>: every claim with its evidence; <code>npm run check:claims</code> re-checks them.</td></tr>
+        <tr><td>Design and use</td><td><a href="challenge/">The challenge</a> and <a href="explorer/">the explorer</a></td></tr>
+        <tr><td>Impact</td><td>The <a href="#why-now">Why now</a> section above, and <a href="https://github.com/worksOnMyFridge/keyfree/tree/main/examples/ci" target="_blank" rel="noopener">examples/ci</a></td></tr>
+        <tr><td>Originality</td><td><a href="https://github.com/worksOnMyFridge/keyfree#how-this-differs-from-other-ways-to-keep-the-key-from-the-agent" target="_blank" rel="noopener">How this differs from other ways to keep the key from the agent</a></td></tr>
+        <tr><td>What it takes to use it</td><td><a href="start/">Run your own policy</a></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <footer>
+    <p>Testnet only. Not professionally audited. Apache-2.0.</p>
+    <p><a href="https://github.com/worksOnMyFridge/keyfree" target="_blank" rel="noopener">GitHub repository</a> ·
+      <a href="https://github.com/worksOnMyFridge/keyfree/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a></p>
+    <p>Built for NEAR HACKATHON 2026 (security and open tracks).</p>
+  </footer>
+</main>
+<script>
+const POLICY = "policy13.keyfree-lab.testnet";
+const VIDEO_URL = "";
+const NEAR_NODES = ["https://test.rpc.fastnear.com", "https://near-testnet.drpc.org", "https://rpc.testnet.near.org"];
+const OPEN_CHAINS = [84532, 11155111];
+const NODE_TIMEOUT_MS = 8000;
+const $ = (id) => document.getElementById(id);
+
+// Same rule as the explorer: u64/u128 arrive as plain JSON numbers; long integers are read as exact strings.
+const parseExact = (text) => JSON.parse(text.replace(/"(?:[^"\\]|\\.)*"|-?\d{16,}/g, (m) => (m.startsWith('"') ? m : `"${m}"`)));
+
+let front = 0;
+async function ask(method, params) {
+  let why = "no node";
+  for (let i = 0; i < NEAR_NODES.length; i++) {
+    const at = (front + i) % NEAR_NODES.length;
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), NODE_TIMEOUT_MS);
+    try {
+      const r = await fetch(NEAR_NODES[at], { method: "POST", signal: stop.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = parseExact(await r.text());
+      if (j.error) {
+        const words = JSON.stringify(j.error);
+        // A contract's own refusal is an answer; no other node would say otherwise.
+        if (/GuestPanic|panicked|CONTRACT_EXECUTION_ERROR/.test(words)) throw Object.assign(new Error(words), { answer: true });
+        throw new Error(j.error.cause?.name ?? j.error.message ?? "RPC error");
+      }
+      if (!("result" in j)) throw new Error("not a JSON-RPC answer");
+      front = at;
+      return j.result;
+    } catch (e) {
+      if (e.answer) throw e;
+      why = e.name === "AbortError" ? "no answer in time" : e.message;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw new Error(why);
+}
+async function view(method, args = {}) {
+  const res = await ask("query", { request_type: "call_function", finality: "final", account_id: POLICY, method_name: method, args_base64: btoa(JSON.stringify(args)) });
+  if (res.error) throw new Error(String(res.error));
+  return parseExact(new TextDecoder().decode(new Uint8Array(res.result)) || "null");
+}
+const read = (p) => p.then((v) => v, () => null);
+
+// Every figure goes in with textContent: whatever a node says is text, never markup.
+function show(id, text, cls) {
+  const el = $(id);
+  el.textContent = text;
+  el.className = "big" + (cls ? " " + cls : "");
+}
+const unknown = (id) => show(id, "unknown", "unknown");
+const isCount = (n) => (typeof n === "number" && Number.isSafeInteger(n) && n >= 0) || (typeof n === "string" && /^\d{1,30}$/.test(n));
+
+async function load() {
+  const [keys, status, ...nonces] = await Promise.all([
+    read(ask("query", { request_type: "view_access_key_list", finality: "final", account_id: POLICY })),
+    read(view("get_status")),
+    ...OPEN_CHAINS.map((id) => read(view("get_next_nonce", { chain_id: id }))),
+  ]);
+
+  if (keys && Array.isArray(keys.keys)) show("keys", String(keys.keys.length), keys.keys.length === 0 ? "good" : "bad");
+  else unknown("keys");
+
+  const st = status !== null && typeof status === "object" && !Array.isArray(status) ? status : null;
+  if (st && typeof st.build === "string" && st.build) show("build", st.build.slice(0, 40));
+  else unknown("build");
+
+  // A partial sum would be a wrong number: one unreadable chain makes the whole total unknown.
+  if (nonces.every(isCount)) show("signed", nonces.reduce((sum, n) => sum + BigInt(n), 0n).toString());
+  else unknown("signed");
+
+  if (st && typeof st.paused === "boolean") show("paused", st.paused ? "paused" : "running", st.paused ? "bad" : "good");
+  else unknown("paused");
+}
+
+function video() {
+  if (!/^https:\/\/[^\s]+$/.test(VIDEO_URL)) return;
+  const a = document.createElement("a");
+  a.className = "video";
+  a.href = VIDEO_URL;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.textContent = "Watch the 95-second demo";
+  $("video-slot").appendChild(a);
+}
+
+video();
+load().catch(() => ["keys", "build", "signed", "paused"].forEach(unknown)).finally(() => { document.body.dataset.state = "done"; });
+</script>
+</body>
+</html>
