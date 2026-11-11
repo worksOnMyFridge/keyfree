@@ -247,6 +247,145 @@ test("nonsense from a node: unknown, no script error, nothing left loading", asy
   assert.deepEqual(problems, []);
 });
 
+// Pending changes: the council's working place. Answers for the three views the panel reads.
+const nowSec = () => Math.floor(Date.now() / 1000);
+const HASH = "ab".repeat(32);
+const rulesWith = (proposals) => JSON.stringify({ allowed_code: ["aa"], allowed_proxy_upgrades: [], max_gas_limit: 10000000, max_fee_cap: 50000000000, rules_delay_sec: 60, proposals });
+const rolesWith = (role_changes) => JSON.stringify({ owner: "owner.testnet", guardian: "guard.testnet", reserve: "reserve.testnet", agent: "agent.testnet", role_changes });
+const statusWith = (proposed) => JSON.stringify({ build: "v20", version: 10, paused: false, upgrade_delay_sec: 180, proposed });
+const AS = "--as <your council account>";
+const secondsIn = (s) => { const m = s.match(/ready in (?:(\d+) h )?(?:(\d+) min )?(\d+) s/); return m ? Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3]) : null; };
+const threeItems = () => ({
+  get_rules: rulesWith([{ id: 7, change: { AllowCode: { code_hash: HASH } }, ready_at: nowSec() + 2530 }]),
+  get_roles: rolesWith([{ role: "guardian", account: "new-guard.testnet", proposer: "reserve.testnet", ready_at: null }]),
+  get_status: statusWith([HASH, nowSec() + 7300]),
+});
+
+test("a pending rule: plain words, a live countdown, the exact cancel command", async (t) => {
+  const { page, text, problems } = await open(t, { over: threeItems() });
+  const all = await text("pending");
+  assert.match(all, /3 changes are waiting/);
+  assert.match(all, /Rule 7: allow new code ababababab…abababab/);
+  assert.match(all, /ready in 4\d min \d+ s/);
+  const cmds = await page.locator("#pending .cmd code").allInnerTexts();
+  assert.ok(cmds.includes(`keyfree rules cancel 7 ${AS}`), cmds.join("|"));
+  assert.match(await page.locator("#pending details code").first().textContent(), /"AllowCode"/);
+  assert.equal(await page.locator("#pending button.copy").count(), 3);
+  assert.match(await page.locator("section", { hasText: "Waiting for their delay" }).innerText(), /Any council member \(owner, guardian, reserve\) can cancel it until it is applied/);
+  assert.deepEqual(problems, []);
+});
+
+test("every rule variant is told in words", async (t) => {
+  const h = `0x${"11".repeat(20)}`, g = `0x${"22".repeat(20)}`;
+  const changes = [
+    [{ AllowChain: { chain_id: 84532, next_nonce: 0, min_fee_per_gas: 1 } }, /open chain 84532/],
+    [{ EnableChain: { chain_id: 84532 } }, /re-enable chain 84532/],
+    [{ SetFactory: { chain_id: 84532, factory_hex: h } }, new RegExp(`set the factory on chain 84532 to ${h}`)],
+    [{ SetLimits: { max_gas_limit: 5000000, max_fee_cap: "12345678901234567890" } }, /raise the caps to gas 5000000, fee 12345678901234567890 wei/],
+    [{ AllowProxyUpgrade: { chain_id: 84532, proxy_hex: h, implementation_hex: g } }, new RegExp(`allow one upgrade of proxy ${h} to ${g} on chain 84532`)],
+    [{ SetBudget: { chain_id: 84532, max_wei_per_day: "99999999999999999999", max_tx_per_day: 4 } }, /set the daily budget on chain 84532 to 4 transactions, 99999999999999999999 wei/],
+  ];
+  const { text } = await open(t, { over: { get_rules: rulesWith(changes.map(([change], i) => ({ id: i + 1, change, ready_at: nowSec() + 100 }))) } });
+  const all = await text("pending");
+  for (const [, re] of changes) assert.match(all, re);
+});
+
+test("a role change with no second approval yet, and a pending policy upgrade, carry their cancel commands", async (t) => {
+  const { page, text } = await open(t, { over: threeItems() });
+  const all = await text("pending");
+  assert.match(all, /make new-guard\.testnet the guardian, proposed by reserve\.testnet/);
+  assert.match(all, /waiting for a second approval/);
+  assert.match(all, /replace the policy's code with sha256 ababababab…abababab/);
+  const cmds = await page.locator("#pending .cmd code").allInnerTexts();
+  assert.ok(cmds.includes(`keyfree cancel-role reserve.testnet ${AS}`), cmds.join("|"));
+  assert.ok(cmds.includes(`keyfree cancel-upgrade ${AS}`), cmds.join("|"));
+});
+
+test("the countdown ticks without reading the chain again; a delay that has passed says so", async (t) => {
+  const { page, seen, text } = await open(t, { over: { get_rules: rulesWith([
+    { id: 1, change: { EnableChain: { chain_id: 1 } }, ready_at: nowSec() + 600 },
+    { id: 2, change: { EnableChain: { chain_id: 2 } }, ready_at: nowSec() - 30 },
+  ]) } });
+  const reads = seen.calls.length;
+  const first = secondsIn(await page.locator("#pending .count").first().innerText());
+  assert.ok(first > 0 && first <= 600, `first ${first}`);
+  await page.waitForTimeout(2200);
+  const later = secondsIn(await page.locator("#pending .count").first().innerText());
+  assert.ok(later < first, `${later} is not smaller than ${first}`);
+  assert.equal(seen.calls.length, reads, "the chain was read again");
+  const due = page.locator("#pending .count").nth(1);
+  assert.match(await due.innerText(), /the delay has passed: it can be applied now/);
+  assert.match(await due.getAttribute("class"), /warn/);
+  assert.doesNotMatch(await page.locator("#pending .count").first().getAttribute("class"), /warn/);
+  assert.match(await text("pending"), /2 changes are waiting/);
+});
+
+test("reading again replaces the countdown: one clock, not two", async (t) => {
+  const { page } = await open(t, { over: { get_rules: rulesWith([{ id: 1, change: { EnableChain: { chain_id: 1 } }, ready_at: nowSec() + 600 }]) } });
+  await page.evaluate(() => { window.__n = 0; const old = setInterval; window.setInterval = (...a) => { window.__n++; return old(...a); }; });
+  await page.locator("#reload").click();
+  await page.waitForFunction(() => document.body.dataset.state === "done");
+  assert.equal(await page.evaluate(() => window.__n), 1);
+});
+
+test("an unknown rule variant is shown as its JSON, nothing is dropped", async (t) => {
+  const { page, text } = await open(t, { over: { get_rules: rulesWith([
+    { id: 5, change: { FutureThing: { x: 1, y: "two" } }, ready_at: nowSec() + 100 },
+    { id: 6, change: "weird", ready_at: nowSec() + 100 },
+  ]) } });
+  const all = await text("pending");
+  assert.match(all, /2 changes are waiting/);
+  assert.match(all, /Rule 5: unknown kind of change \{"FutureThing":\{"x":1,"y":"two"\}\}/);
+  assert.match(all, /Rule 6: unknown kind of change "weird"/);
+  const cmds = await page.locator("#pending .cmd code").allInnerTexts();
+  assert.ok(cmds.includes(`keyfree rules cancel 5 ${AS}`) && cmds.includes(`keyfree rules cancel 6 ${AS}`));
+});
+
+test("hostile values from the node: no element, no command carrying them, an 'unexpected value' note", async (t) => {
+  const { page, text, problems } = await open(t, { over: {
+    get_rules: rulesWith([{ id: "7; rm -rf ~<img src=x onerror=window.__pwned=1>", change: { AllowCode: { code_hash: HASH } }, ready_at: nowSec() + 100 }]),
+    get_roles: rolesWith([
+      { role: "guardian", account: "a.testnet", proposer: "x; rm -rf ~", ready_at: null },
+      { role: "owner", account: "b.testnet", proposer: "<img src=x onerror=window.__pwned=1>", ready_at: nowSec() + 100 },
+    ]),
+  } });
+  assert.equal(await page.locator("main img, main script").count(), 0);
+  assert.equal(await page.evaluate(() => window.__pwned), undefined);
+  const cmds = await page.locator("#pending .cmd code").allInnerTexts();
+  assert.deepEqual(cmds, [], "a command was built from a hostile value");
+  assert.equal((await text("pending")).match(/nexpected value from the node/g).length, 3);
+  assert.match(await text("pending"), /x; rm -rf ~/); // shown as text only
+  assert.deepEqual(problems, []);
+});
+
+test("one of the three views fails: the pending panel says unknown, never 'Nothing is waiting'", async (t) => {
+  for (const view of ["get_rules", "get_roles", "get_status"]) {
+    const { text } = await open(t, { over: { [view]: "fail" } });
+    const all = await text("pending");
+    assert.match(all, /unknown/, view);
+    assert.match(all, /does not mean nothing is waiting/, view);
+    assert.doesNotMatch(all, /Nothing is waiting\./, view);
+  }
+});
+
+test("three pending items at 360px: no sideways scroll, long commands wrap", async (t) => {
+  const { page } = await open(t, { viewport: { width: 360, height: 800 }, over: {
+    ...threeItems(),
+    get_roles: rolesWith([{ role: "guardian", account: "x".repeat(60) + ".testnet", proposer: "reserve-with-a-very-long-account-name.testnet", ready_at: null }]),
+  } });
+  const m = await page.evaluate(() => ({
+    doc: document.documentElement.scrollWidth, win: innerWidth,
+    cut: [...document.querySelectorAll("#pending *")].filter((el) => el.getClientRects().length && el.getBoundingClientRect().right > el.closest(".panel").getBoundingClientRect().right + 1).map((el) => el.tagName),
+  }));
+  assert.ok(m.doc <= m.win, `page ${m.doc} wider than ${m.win}`);
+  assert.deepEqual(m.cut, []);
+  if (process.env.SHOTS) {
+    await page.screenshot({ path: `${process.env.SHOTS}/pending-360.png`, fullPage: true });
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.screenshot({ path: `${process.env.SHOTS}/pending-1100.png`, fullPage: true });
+  }
+});
+
 for (const [name, viewport] of [["phone", { width: 375, height: 812 }], ["small phone", { width: 320, height: 640 }], ["tablet", { width: 768, height: 1024 }]]) {
   for (const colorScheme of ["light", "dark"]) {
     test(`${name}, ${colorScheme}: no sideways scroll of the page, the panels fit`, async (t) => {
