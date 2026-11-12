@@ -1,8 +1,8 @@
 # Claims and evidence
 
 Every claim below points to something you can check yourself: a transaction, a line of the run log
-(`evidence/v13.log`, `evidence/v14.log`, `evidence/ethereum.log`), a test, or a read-only call. Everything
-ran on NEAR testnet and Base Sepolia on 2026-10-29, and on Ethereum Sepolia on 2026-11-01. `npm run check:claims`
+(`evidence/v13.log`, `evidence/v14.log`, `evidence/ethereum.log`), a test, or a read-only call. The first
+runs were on NEAR testnet and Base Sepolia on 2026-10-29 and on Ethereum Sepolia on 2026-11-01; later rows give their own dates. `npm run check:claims`
 checks every link here against the chains, every quoted log line against its log, and every count against the
 repository, read-only (`evidence/claims_check.md`); the `live` workflow runs it daily.
 
@@ -23,7 +23,7 @@ Live accounts and addresses:
 |---|---|---|
 | 1.1 | The policy account has no access keys at all. | Code, init and key deletion in one transaction: [7iawPybU…](https://testnet.nearblocks.io/txns/7iawPybUxDjWqQFXCayAFxecGLLbeiMGP8bczy9sMVbd) (`DeployContract`, `new`, `DeleteKey`). Check now: `view_access_key_list` for the policy returns `[]`. |
 | 1.2 | The ETH address is derived from NEAR MPC inside the contract, not typed in by anyone. | `setup()` asks the MPC for `derived_public_key` and keeps the address (`contract/src/lib.rs`, `on_derived`); log line `ETH address derived on-chain from the MPC` in `evidence/v13.log`. |
-| 1.3 | Every transaction was signed by NEAR MPC for that address; no private key was used anywhere. | All 13 Base Sepolia transactions in this file are sent from `0x43e3…fcb0`, nonces 0 to 12 in a row, value 0; on Ethereum Sepolia nonces 0 to 2 (CLAIMS 8). |
+| 1.3 | Every transaction was signed by NEAR MPC for that address; no private key was used anywhere. | `0x43e3…fcb0` has sent 14 Base Sepolia transactions, nonces 0 to 13 in a row; the 13 linked in this file each carry value 0. On Ethereum Sepolia nonces 0 to 2 (CLAIMS 8). The separate policy of section 10 signs for its own keyless address, `0x4ca9…031d`. |
 | 1.4 | The agent's NEAR key can only call the request methods on the policy. | `agent14` holds one function-call key, receiver = the policy: `request_deploy, request_proxy_upgrade, resign, resign_proxy_upgrade, retry, release, confirm, confirm_stuck` ([created](https://testnet.nearblocks.io/txns/o5Tb3Ny9JHus1kaFnYMfmV3DeqkQRjgKpEUcBA4XYun)). Calling anything else is refused by the protocol before the contract runs: `Access key does not allow method propose_rule` (`evidence/v13.log` attacks, `evidence/v14.log` allow). |
 | 1.5 | The contract was upgraded without any key, and its data survived. | a→b: [BqHPR1LD…](https://testnet.nearblocks.io/txns/BqHPR1LDasmmgLscAYESz7aGhBxdntom846MAsxgFPQp); b→v14: [C3J8KRin…](https://testnet.nearblocks.io/txns/C3J8KRino8NDCcKf9gChqooYM8bTAPQhHvAn9BAGf1cH), after the guardian read the 362 719 stored bytes and matched their sha256 `764eb8f8…` with the local build. `get_status` shows build `v14`, version 3; keys still `[]`; allowed codes, nonces and the journal are as before (`evidence/v14.log`, upgrade). |
 | 1.6 | The live code is a reproducible build, installed by the same keyless upgrade. | The `build` workflow ran `cargo near build reproducible-wasm` at commit `c2db57d` in the image pinned in `contract/Cargo.toml`: 355 905 bytes, sha256 `9dac5b92…f368`; the policy's `contract_source_metadata` names that commit and image. The owner proposed those bytes ([F9bEhNYB…](https://testnet.nearblocks.io/txns/F9bEhNYBJFt4N2oRc2T9s1DJ1dX9ksnpCUy1AfdBnsPP)), the guardian side read them back and matched the sha256, applying before the delay was refused, then [Ac89k49K…](https://testnet.nearblocks.io/txns/Ac89k49KnAUSPx31zkfEB79PNqsbeqtyyvTyv8HaxbQd) installed them: build `v14.1`, version 4, the account's code sha256 equals the build's, keys `[]`, 10 allowed codes and both chains' nonces unchanged (`evidence/v14.log`). |
@@ -160,7 +160,7 @@ helper) followed "Run your own policy" in the README with `setup/policy.mjs`, th
 - Only testnets: NEAR testnet, Base Sepolia and Ethereum Sepolia. Nothing on mainnet.
 - Journal confirmation on Ethereum: NEAR Read MPC does not read Ethereum yet (8.4).
 - Arbitrum: the contract knows the chain, but no deploy there has been run.
-- `release`, `retry` and `confirm_stuck` never ran on testnet: the real MPC did not fail. `retry` and `release` ran in a local nearcore node against a stand-in MPC that failed on purpose, also through the real tool (`evidence/sandbox.md`); `confirm_stuck` is covered by unit tests, and the tool has no command for it: when a late signature landed, `retry` says so and stops. `resign` and `resign_proxy_upgrade` ran live (9.5, 10.5).
+- The contract methods `release`, `retry` and `confirm_stuck` never ran on testnet: the real MPC did not fail. (The tool's `keyfree retry` command did run live: it went through `resign`, 10.5.) `retry` and `release` ran in a local nearcore node against a stand-in MPC that failed on purpose, also through the real tool (`evidence/sandbox.md`); `confirm_stuck` is covered by unit tests, and the tool has no command for it: when a late signature landed, `retry` says so and stops. `resign` and `resign_proxy_upgrade` ran live (9.5, 10.5).
 - Faults of a node were forced by a proxy or by fake nodes, apart from one real outage (10.5). A real gas spike after a broadcast did not happen: that case ran against a fake node only.
 - The explorer page ran on WebKit, Safari's engine on Linux, and in a phone-sized window: not on a physical iPhone or Android phone.
 - Calls other than `upgradeTo` on a proxy: the policy cannot sign them at all.

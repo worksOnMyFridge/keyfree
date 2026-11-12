@@ -12,7 +12,7 @@ install.
 From a terminal:
 
 ```bash
-npm install                  # repository root, Node 20+
+npm install                  # repository root, Node 20.3+
 node challenge/try.mjs       # about a minute
 ```
 

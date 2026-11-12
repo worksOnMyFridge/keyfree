@@ -11,7 +11,7 @@ check Keyfree; the current code is in `contract/`, `packages/keyfree/`, `v13/` a
 | `spike4.mjs` | a separate agent deploys; the policy's only key is deleted, the agent still deploys through the rules | `evidence/spike4.log` |
 | `spike5.mjs` | our CREATE2 factory, a keyless deploy through it, the journal confirmed by Read MPC | `evidence/spike5.log` |
 | `spike6.mjs` | upgrade of a keyless policy (build a -> b) through its own rules: sha256, delay, guardian can cancel | `evidence/spike6.log` |
-| `spike7.mjs` | keyless self-upgrade to v5; init code of 1 KB, 24 KB and 48 KB through the factory == viem | `evidence/spike7.log` |
+| `spike7.mjs` | keyless self-upgrade to v5; init code of 1 KB, 24 KB and 48 KB through the factory == viem | its log was not kept |
 | `spike8.mjs` | v6: keyless self-upgrade, closing a nonce gap, 48 KB init code with enough gas | `evidence/spike8.log` |
 | `payload_hash.mjs`, `log_payload_check.mjs` | predicting the Read MPC payload hash, checked against a real answer | |
 | `old_contract/` | the policy source of v1 to v5 | |

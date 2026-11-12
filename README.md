@@ -53,12 +53,12 @@ enough to point a proxy at new code, with no delay and no second signer:
 - **DeltaPrime, September 2024:** nearly $6 million from its Arbitrum contracts, through the stolen key of its
   proxy admin ([Halborn](https://www.halborn.com/blog/post/explained-the-deltaprime-hack-september-2024): "perform a malicious upgrade of its proxy contract").
 
-Under Keyfree no key can do this alone. The policy signs an upgrade only to the implementation the council
+Under Keyfree no single key can do this at once or out of sight. The policy signs an upgrade only to the implementation the council
 allowed for that proxy, and allowing one waits a public delay that any other council member can cancel
 ([What a stolen key gets](#what-a-stolen-key-gets)).
 
-A common hosted path for deploys and upgrades is closing too: OpenZeppelin set its Defender service to shut
-down on July 1, 2026, and named its open-source Relayer and Monitor in its place
+A common hosted path for deploys and upgrades got an end date too: OpenZeppelin announced that its Defender
+service would shut down on July 1, 2026, and named its open-source Relayer and Monitor in its place
 ([OpenZeppelin](https://www.openzeppelin.com/news/doubling-down-on-open-source-and-phasing-out-defender): "with its final shutdown planned for July 1, 2026").
 
 ## For judges: where to check each point
@@ -113,7 +113,7 @@ The key of an AI agent on a live policy is in this repository, published on purp
 In a browser, [the challenge page](https://worksonmyfridge.github.io/keyfree/challenge/) (`challenge/index.html`) signs
 each attempt with that key and shows the refusal, with the transaction when the policy made one. From a terminal,
 `npm install && node challenge/try.mjs` uses it for everything it should not be able to do, on NEAR testnet, and each
-attempt is refused with its reason. The same page says what would count as breaking it.
+attempt is refused with its reason. [`challenge/README.md`](challenge/README.md) says what would count as breaking it.
 
 ## See it in 2 minutes (browser only)
 
@@ -132,7 +132,7 @@ attempt is refused with its reason. The same page says what would count as break
 
 ## Try it in 10 minutes (no keys, no money)
 
-Node 20+.
+Node 20.3+.
 
 ```bash
 cd packages/keyfree
@@ -158,7 +158,7 @@ Reading and previewing need no key. Deploying needs the agent's key for this pol
 
 ```bash
 (cd packages/keyfree && npm install)   # once
-npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20+
+npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20.3+
 ```
 
 65 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
@@ -190,7 +190,9 @@ Locally (Linux or macOS arm64): `POLICY_WASM=<wasm> MOCK_WASM=<wasm> npm run tes
 Every CLI command and MCP tool also ran for real on a separate policy, with its refusals: 133 steps in
 [`evidence/tool_live.log`](evidence/tool_live.log) (`npm run live` in `packages/keyfree`). `npm audit` reports `tmp`
 through solc-js 0.8.28; the build only calls solc's `compile()`, not the command-line code that uses `tmp`, and
-another solc version would change the bytecode and with it the allowed code hashes.
+another solc version would change the bytecode and with it the allowed code hashes. It also reports `tar` through
+near-sandbox 0.3.4, which uses it to unpack the nearcore release it downloads for the local test node. Both are
+tools of this repository's tests: the `keyfree` package's own audit is clean, and CI checks that on every push.
 
 The contract tests include golden tests: the policy's transaction bytes for 1 KB, 24 KB and 48 KB of init code
 and for a proxy upgrade equal viem's (`evidence/golden_rlp.json`, made by `golden_vectors.mjs`, offline), and the journal's payload
@@ -268,7 +270,7 @@ upgrade is where a contract learns who it pays.
 
 `setup/policy.mjs` installs a policy of your own on NEAR testnet, on exactly the code the demo policy runs:
 it takes the wasm from the demo policy on chain and installs it only if its sha256 equals the one
-`setup/config.example.json` gives for the reproducible build above (a number in this repository: to check it, rebuild). You need Node 20+, a testnet account with about 7 NEAR whose key is in
+`setup/config.example.json` gives for the reproducible build above (a number in this repository: to check it, rebuild). You need Node 20.3+, a testnet account with about 7 NEAR whose key is in
 `~/.near-credentials/testnet/`, and later a little Base Sepolia ETH from a faucet.
 
 [The own-policy page](https://worksonmyfridge.github.io/keyfree/start/) (`start/index.html`) writes `setup/config.json` and the
@@ -321,8 +323,8 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `sandbox/` | the policy in a local nearcore node: the tests and a stand-in MPC contract (`mock-mpc`, test keys anyone can recompute) |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
 | `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal), one file with no dependencies, tested in Chromium, Firefox and WebKit against nodes that fail on purpose (`explorer` workflow); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
-| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy and `tools/check_claims.mjs` (every link, quoted log line and count in the docs), daily; `watch`: the council's alarm, every 15 minutes; `explorer`: the page's tests in three browsers |
-| `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
+| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy and `tools/check_claims.mjs` (every link, quoted log line and count in the docs), daily; `watch`: the council's alarm, every 15 minutes; `explorer`: the site's four pages in three browsers |
+| `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests, and the reports of the fourth and fifth reviews ([AUDIT.md](AUDIT.md)) |
 
 ## Security
 
@@ -348,7 +350,8 @@ hours, not the demo's minutes.
   [Petlore](https://github.com/worksOnMyFridge/petlore). The two are independent and share no code,
   contracts or accounts.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
-  (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
+  (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt); in the contract also `hex` and `bs58`. The
+  tests add @ethereumjs/evm, near-sandbox, Playwright and TypeScript. Everything else is ours.
 - **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Five security reviews were
   done by separate AI reviewer sessions, the fourth on another model (Claude Fable 5.1), the fifth on the whole
   lifecycle (install, setup, the alarm, CI); none of them is a professional audit. Their findings are fixed with tests or stated as limits ([AUDIT.md](AUDIT.md)).
