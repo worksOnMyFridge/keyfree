@@ -352,9 +352,6 @@ hours, not the demo's minutes.
 - **Built during the hackathon.** All Keyfree code was written in the NEAR HACKATHON window (from
   2026-10-19): the first experiments on 2026-10-25, the first commit in this repository on 2026-10-29 (UTC). There
   is no earlier Keyfree code.
-- **Related project.** The same author also entered
-  [Petlore](https://github.com/worksOnMyFridge/petlore). The two are independent and share no code,
-  contracts or accounts.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
   (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt); in the contract also `hex` and `bs58`. The
   tests add @ethereumjs/evm, near-sandbox, Playwright and TypeScript. Everything else is ours.
