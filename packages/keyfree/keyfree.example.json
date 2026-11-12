@@ -9,6 +9,6 @@
   "fee_multiplier": 1.2,
   "chains": [
     { "name": "base-sepolia", "chain_id": 84532, "rpc": "https://sepolia.base.org", "rpc_fallbacks": ["https://base-sepolia-rpc.publicnode.com"], "explorer": "https://sepolia.basescan.org" },
-    { "name": "ethereum-sepolia", "chain_id": 11155111, "rpc": "https://ethereum-sepolia-rpc.publicnode.com", "explorer": "https://sepolia.etherscan.io" }
+    { "name": "ethereum-sepolia", "chain_id": 11155111, "rpc": "https://ethereum-sepolia-rpc.publicnode.com", "rpc_fallbacks": ["https://ethereum-sepolia.gateway.tatum.io"], "explorer": "https://sepolia.etherscan.io" }
   ]
 }
