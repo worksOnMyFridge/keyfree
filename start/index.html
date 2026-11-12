@@ -158,6 +158,8 @@
     <div class="head"><b>The commands, in order</b></div>
     <p class="hint" style="margin-bottom:12px">Run them from the repository root (Node 20.3+). The owner's key is read from <code>~/.near-credentials/testnet/&lt;owner&gt;.json</code>.</p>
     <div id="cmds"><p class="empty">Fix the fields above.</p></div>
+    <p class="hint" id="watch" hidden>Once it is installed, watch it live: <a id="watch-link" href="../explorer/">the explorer, opened on your policy</a>
+      shows its keys, its rules, what is waiting, and every request your agent makes with the policy's answer.</p>
   </div>
 
   <footer>
@@ -543,6 +545,9 @@ function commandList() {
 
 function renderCommands() {
   const box = $("cmds");
+  // The explorer reads any testnet policy by name. The link carries only a name that passed the account checks.
+  $("watch").hidden = !state.cfg;
+  if (state.cfg) $("watch-link").setAttribute("href", `../explorer/?policy=${encodeURIComponent(state.cfg.policy)}`);
   if (!state.cfg) { box.replaceChildren(el("p", { class: "empty", text: "Fix the fields in step 2." })); return; }
   box.replaceChildren(el("div", { class: "step" }, el("p", { class: "what", text: "First save the JSON above as setup/config.json." })));
   let n = 0;

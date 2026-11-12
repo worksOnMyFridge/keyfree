@@ -332,6 +332,17 @@ test("the commands: in order, each copyable, the allow-code one carries the hash
   assert.ok((await page.locator("#cmds pre").allInnerTexts()).includes("node setup/policy.mjs factory ethereum-sepolia"));
 });
 
+test("the watch link opens the explorer on the policy named in the form, and hides while a field is wrong", async (t) => {
+  const { page } = await open(t);
+  await page.locator("#owner").fill("alice.testnet");
+  const { policy } = await cfgOf(page);
+  assert.match(policy, /\.alice\.testnet$/);
+  assert.equal(await page.locator("#watch").isVisible(), true);
+  assert.equal(await page.locator("#watch-link").getAttribute("href"), `../explorer/?policy=${policy}`);
+  await page.locator("#owner").fill("Alice.testnet");
+  assert.equal(await page.locator("#watch").isVisible(), false);
+});
+
 test("copy buttons put the text on the clipboard", async (t) => {
   const { page, ctx } = await open(t);
   try { await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(base).origin }); } catch { t.skip("no clipboard permission in this browser"); return; }
