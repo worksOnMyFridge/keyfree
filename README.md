@@ -36,8 +36,8 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 
 Built for NEAR HACKATHON 2026 (security and open tracks). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
 
-The site: [worksonmyfridge.github.io/keyfree](https://worksonmyfridge.github.io/keyfree/). It has the live policy, the
-agent key you can try, and a page that prepares a policy of your own.
+The site: [worksonmyfridge.github.io/keyfree](https://worksonmyfridge.github.io/keyfree/). It has the explorer, where you watch
+the live policy or your own, the agent key you can try, and a page that prepares a policy of your own.
 
 ## Why now
 
@@ -66,7 +66,7 @@ service would shut down on July 1, 2026, and named its open-source Relayer and M
 | Point | Where to check it |
 |---|---|
 | Technical implementation | `npm run check:claims` (read-only, no keys) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Five security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
-| Design | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy |
+| Design | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy, or any testnet policy by its address: its rules, what is waiting, and every call with the policy's answer |
 | Impact | The problem: an agent that deploys holds a key that can be stolen or talked into anything. [`examples/ci`](examples/ci): a GitHub Actions job that deploys through the policy with no EVM key and fails before signing when a change asks for other code. [Where the money goes](#where-the-money-goes): a live treasury upgraded only as the council allowed, and real Claude Code sessions that a poisoned README could not get past the policy ([evidence/injection_live.md](evidence/injection_live.md)). There are no users yet |
 | Originality | [How this differs](#how-this-differs-from-other-ways-to-keep-the-key-from-the-agent): one public contract on NEAR holds the rules for every EVM chain, signs only what it built itself, and upgrades itself without a key |
 | Sustainability: what it takes to use it | [Run your own policy](#run-your-own-policy): `setup/policy.mjs` installs a policy on the same code in a few steps, with about 7 testnet NEAR and a little Base Sepolia ETH. The [`watch`](.github/workflows/watch.yml) workflow is the council's alarm, ready to fork. Apache-2.0. Before real money it needs a professional audit: [SECURITY.md](SECURITY.md) lists the known limits |
@@ -297,6 +297,12 @@ of the accounts it creates stay in `setup/*_key.json` (gitignored, readable only
 confirms the policy signs through the network's MPC. Then allow your code with `keyfree rules allow-code <hash> --config setup/keyfree.json`
 (`keyfree hash` prints it) and give the agent `KEYFREE_AGENT_KEY=setup/agent_key.json`.
 
+To watch it, open [the explorer](https://worksonmyfridge.github.io/keyfree/explorer/) with `?policy=<your policy account>` at the
+end of the address: the page that shows the demo policy reads yours. It lists every call to the policy with who
+made it and, for a refusal, the reason; the day's budget, the agent's gas, and each change that is waiting with the
+command that cancels it. It reads again every 30 seconds. The list of calls comes from the NearBlocks indexer, a
+third party; everything else is read from public nodes.
+
 How the demo policy itself got here, stage by stage, with logs: `v13/run.mjs` (install, rules, factory,
 deploys from 22 B to 48 KB, Read MPC confirmation, refusals, guardian replacement, keyless upgrade;
 `evidence/v13.log`), `v14/run.mjs` (treasury proxy and its allowed upgrade, `evidence/v14.log`),
@@ -322,7 +328,7 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `sandbox/` | the policy in a local nearcore node: the tests and a stand-in MPC contract (`mock-mpc`, test keys anyone can recompute) |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
-| `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal), one file with no dependencies, tested in Chromium, Firefox and WebKit against nodes that fail on purpose (`explorer` workflow); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
+| `explorer/` | a read-only page of the live policy, or of any testnet policy with `?policy=<account>` (keys, rules, budgets, pending changes, journal, a live refusal, and every call to the policy with the reason for each refusal; read again every 30 seconds), one file with no dependencies, tested in Chromium, Firefox and WebKit against nodes that fail on purpose (`explorer` workflow); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
 | `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy and `tools/check_claims.mjs` (every link, quoted log line and count in the docs), daily; `watch`: the council's alarm, every 15 minutes; `explorer`: the site's four pages in three browsers |
 | `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests, and the reports of the fourth and fifth reviews ([AUDIT.md](AUDIT.md)) |
 
