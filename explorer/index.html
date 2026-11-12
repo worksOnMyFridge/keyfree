@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Keyfree Policy Explorer</title>
-<meta name="description" content="Read-only view of the live Keyfree policy on NEAR testnet: keys, rules, budgets, pending changes with the exact command to cancel each one, and the journal, read straight from public RPCs.">
+<meta name="description" content="Read-only view of a Keyfree policy on NEAR testnet: keys, rules, budgets, what happened on it with the reason for each refusal, pending changes with the exact command to cancel each one, and the journal, read straight from public RPCs.">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https:; img-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <link rel="icon" href="data:,">
@@ -41,22 +41,48 @@
   .ok { color: var(--ok); background: var(--ok-bg); }
   .no { color: var(--no); background: var(--no-bg); }
   .warn { color: var(--warn); background: var(--warn-bg); }
+  .info { color: var(--accent); background: var(--bg); border: 1px solid var(--line); }
   .muted { color: var(--muted); }
+  .small { font-size: 12px; }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { text-align: left; padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; border-top: 0; white-space: nowrap; }
   button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
   button:hover { border-color: var(--accent); }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  input[type="text"] { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); width: 300px; max-width: 100%; min-width: 0; }
   .try { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
   button:disabled { opacity: 0.55; cursor: default; }
   .banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; border-radius: 10px; padding: 12px 16px; margin: 0 0 16px; }
-  .banner[hidden] { display: none; }
+  /* `hidden` must win over a class that sets display (a flex row, a banner). */
+  [hidden] { display: none !important; }
   .answer { border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 14px; }
   footer { margin-top: 28px; color: var(--muted); font-size: 13px; }
+  footer label { white-space: nowrap; }
   .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 4px; }
   .bar > i { display: block; height: 100%; background: var(--accent); }
   .row.long > span:first-child { flex: 0 1 auto; }
+  /* Which policy is being read, and a box to read another one. */
+  .watching { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 20px; }
+  .watching .watch-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+  .watching button { padding: 6px 14px; }
+  /* At a glance: five tiles that fit however wide the window is. */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 12px; }
+  .tile { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+  .tile .tl { color: var(--muted); font-size: 13px; }
+  .tile .tv { font-size: 22px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .tile .tv .pill { font-size: 12px; vertical-align: middle; }
+  .tile .tn { font-size: 12px; color: var(--muted); min-height: 1em; overflow-wrap: anywhere; }
+  /* Activity: one entry each, newest first. */
+  .feed { list-style: none; margin: 0; padding: 0; }
+  .ev { border-top: 1px solid var(--line); padding: 10px 0; display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+  .ev:first-child { border-top: 0; }
+  .ev-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+  .ev-meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  .ev details { color: var(--muted); font-size: 13px; }
+  .ev summary { cursor: pointer; }
+  .log { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; padding: 2px 0; }
   /* Pending changes: one card each, with the live countdown and the command a council member runs to cancel it. */
   .pend { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 12px; }
   .card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-width: 0; }
@@ -87,15 +113,36 @@
   <h1>Keyfree Policy Explorer</h1>
   <p class="lead"><a href="../">&larr; Keyfree</a> · <a href="../challenge/">Take the agent's key</a>: it is published on purpose, for you to try. ·
     <a href="../start/">Run your own policy</a></p>
-  <p class="lead">The live policy on NEAR testnet, read from public RPCs in your browser. Nothing here holds a key or
-    signs anything. The policy is a NEAR contract with no access keys; NEAR MPC signs EVM transactions for its address
-    only when the contract's rules allow them.</p>
+  <p class="lead">A Keyfree policy on NEAR testnet, read from public RPCs in your browser: the live demo policy, or yours. Nothing here
+    holds a key or signs anything. The policy is a NEAR contract with no access keys; NEAR MPC signs EVM transactions for its
+    address only when the contract's rules allow them.</p>
+  <div class="watching" id="watching">
+    <span class="muted">Watching</span> <span id="w-account" class="mono"></span> <span id="w-pill" class="pill info"></span>
+    <a id="w-back" hidden>Back to the demo policy</a>
+    <span class="watch-box">
+      <input id="w-input" type="text" maxlength="80" placeholder="your-policy.testnet" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="NEAR testnet account of a policy to watch">
+      <button id="w-go" type="button">Watch</button>
+      <span id="w-msg" class="muted small" role="status"></span>
+    </span>
+  </div>
 
   <noscript><p class="banner warn">This page reads the policy with JavaScript in your browser. Without it, see the policy on
     <a href="https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet">nearblocks</a>.</p></noscript>
+  <div id="param-banner" class="banner warn" role="status" hidden><span id="param-text"></span></div>
   <div id="banner" class="banner warn" role="status" hidden><span id="banner-text"></span></div>
 
   <div class="grid">
+    <section class="panel wide" id="glance">
+      <h2>At a glance</h2>
+      <div class="tiles">
+        <div class="tile"><div class="tl">Signed today</div><div class="tv" id="g-signed">reading…</div><div class="tn" id="g-signed-note"></div></div>
+        <div class="tile"><div class="tl">Refused in the last 24 h</div><div class="tv" id="g-refused">reading…</div><div class="tn" id="g-refused-note"></div></div>
+        <div class="tile"><div class="tl">Agent's gas</div><div class="tv" id="g-gas">reading…</div><div class="tn" id="g-gas-note"></div></div>
+        <div class="tile"><div class="tl">Changes waiting</div><div class="tv" id="g-waiting">reading…</div><div class="tn" id="g-waiting-note"></div></div>
+        <div class="tile"><div class="tl">Request in flight</div><div class="tv" id="g-open">reading…</div><div class="tn" id="g-open-note"></div></div>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>Access keys on the policy</h2>
       <div class="big" id="keys">…</div>
@@ -121,6 +168,27 @@
       <div class="row"><span>Delay for upgrades, roles</span><span id="udelay">…</span></div>
     </section>
 
+    <section class="panel wide" id="activity-panel">
+      <h2>What happened on this policy</h2>
+      <p class="muted" style="margin:-6px 0 10px">Every call to the policy, newest first, listed by the NearBlocks indexer; the reasons
+        are read from the chain itself. Accepted means the call ran. Whether a signature came out is in its details and in the Journal.</p>
+      <div class="try" id="feed-controls" hidden>
+        <button type="button" data-f="all" aria-pressed="true">All</button>
+        <button type="button" data-f="agent" aria-pressed="false">Agent</button>
+        <button type="button" data-f="council" aria-pressed="false">Council</button>
+        <button type="button" data-f="refused" aria-pressed="false">Refused</button>
+      </div>
+      <div id="activity" class="muted">reading…</div>
+      <div class="try"><button type="button" id="feed-more" hidden>Show more</button></div>
+    </section>
+
+    <section class="panel wide" id="pending-panel">
+      <h2>Waiting for their delay</h2>
+      <p class="muted" style="margin:-6px 0 10px">Anything here widens what the agent may do. Any council member (owner,
+        guardian, reserve) can cancel it until it is applied.</p>
+      <div id="pending" class="muted">loading…</div>
+    </section>
+
     <section class="panel wide">
       <h2>Chains</h2>
       <p class="muted" style="margin:-6px 0 10px">The same keyless address on every chain the council opened:
@@ -132,15 +200,8 @@
     </section>
 
     <section class="panel wide">
-      <h2>Waiting for their delay</h2>
-      <p class="muted" style="margin:-6px 0 10px">Anything here widens what the agent may do. Any council member (owner,
-        guardian, reserve) can cancel it until it is applied.</p>
-      <div id="pending" class="muted">loading…</div>
-    </section>
-
-    <section class="panel wide">
       <h2>Ask the policy yourself</h2>
-      <p class="muted" style="margin:-6px 0 4px">A read-only <code>preview</code> call: the policy builds the transaction
+      <p class="muted" style="margin:-6px 0 4px" id="ask-text">A read-only <code>preview</code> call: the policy builds the transaction
         it would sign, or refuses with its reason. Counter(1) is on the allow list; Counter(999) is the same contract with
         another constructor argument, so it is other code.</p>
       <div class="try">
@@ -171,18 +232,28 @@
   <footer>
     Read at <span id="when">…</span> from public nodes (<span id="nodes">…</span>); if one fails the next is asked.
     <button id="reload">Read again</button>
-    Explorers: <a href="https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet">nearblocks</a>.
+    <label><input type="checkbox" id="auto" checked> Refresh every 30 s</label>
+    Explorers: <a id="foot-scan" href="https://testnet.nearblocks.io/address/policy13.keyfree-lab.testnet">nearblocks</a>.
   </footer>
 </main>
 
 <script>
-const POLICY = "policy13.keyfree-lab.testnet";
+// This page reads NEAR testnet, so only a testnet account name is taken from the address. Anything else shows the demo
+// policy and says so: the page never reads, and never links to, a name it did not check.
+const DEMO = "policy13.keyfree-lab.testnet";
+const TESTNET_ACCOUNT = /^[a-z0-9._-]{2,64}\.testnet$/;
+const asked = new URLSearchParams(location.search).get("policy");
+const POLICY = asked !== null && TESTNET_ACCOUNT.test(asked) ? asked : DEMO;
+const BAD_PARAM = asked !== null && asked !== "" && !TESTNET_ACCOUNT.test(asked) ? asked : null;
+const IS_DEMO = POLICY === DEMO;
 // The reproducible build the README names: its commit and the code hash NEAR shows for those bytes. "Source commit" is
 // only what the code says about itself; this comparison is what ties the running code to the source.
 const BUILD = { commit: "29fa5c886b8d9838011cf80c3e4f082ca88fdc2e", code_hash: "8jdpF6XEkVQ3Hun6pJrGzSEmPeGQk6JyZBuk2eRDtp6P" };
 // Public nodes do go down, and the page is the first thing a stranger sees: each list is tried in order, and the one
 // that answered stays in front. A node gets a few seconds, then the next one is asked.
 const NEAR_NODES = ["https://test.rpc.fastnear.com", "https://near-testnet.drpc.org", "https://rpc.testnet.near.org"];
+// A transaction older than about two days is only kept by archival nodes; a normal node says it no longer has it.
+const TX_NODES = ["https://archival-rpc.testnet.fastnear.com", "https://archival-rpc.testnet.near.org", ...NEAR_NODES];
 const CHAINS = [
   { id: 84532, name: "Base Sepolia", nodes: ["https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com"], scan: "https://sepolia.basescan.org" },
   { id: 11155111, name: "Ethereum Sepolia", nodes: ["https://ethereum-sepolia-rpc.publicnode.com", "https://ethereum-sepolia.gateway.tatum.io"], scan: "https://sepolia.etherscan.io" },
@@ -198,6 +269,11 @@ const link = (href, text) => (/^https:\/\//.test(href) ? `<a href="${esc(href)}"
 const near = (a) => link(`https://testnet.nearblocks.io/address/${encodeURIComponent(a)}`, a);
 const secs = (s) => (s >= 3600 ? `${(s / 3600).toFixed(1)} h` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`);
 const UNKNOWN = `<span class="pill warn">unknown</span>`;
+// A read again every 30 s must not touch what it did not change: an open <details>, a selected command or a running
+// countdown would be thrown away with the markup. So a panel is written only when its HTML is not what was written last.
+const written = new WeakMap();
+const setHtml = (el, html) => { if (written.get(el) !== html) { el.innerHTML = html; written.set(el, html); } };
+const put = (id, html) => setHtml($(id), html);
 
 // Amounts are BigInts or decimal strings, never JavaScript numbers. Shown to four significant digits, cut rather than
 // rounded, so a small amount is never shown as zero; the exact value is in the tooltip.
@@ -216,6 +292,7 @@ const parseExact = (text) => JSON.parse(text.replace(/"(?:[^"\\]|\\.)*"|-?\d{16,
 
 class Refused extends Error {}   // the contract said no: its own words
 class NoAnswer extends Error {}  // no node answered: this says nothing about the policy
+class NoAccount extends Error {} // the node said the account does not exist: a definite answer, no other node knows better
 
 const front = new Map();
 const used = {};
@@ -230,16 +307,18 @@ async function ask(nodes, method, params) {
       const r = await fetch(nodes[at], { method: "POST", signal: stop.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = parseExact(await r.text());
+      // The transaction lookup uses its own list, so the footer keeps naming only the nodes that served the policy.
+      const mark = () => { front.set(nodes, at); if (nodes !== TX_NODES) used[nodes === NEAR_NODES ? "NEAR" : "EVM"] = nodes[at]; };
+      if (j.error?.cause?.name === "UNKNOWN_ACCOUNT") { mark(); throw new NoAccount(j.error.cause.name); }
       // A contract's panic can come as an RPC error too: that is an answer, and no other node would say otherwise.
       const words = j.error && JSON.stringify(j.error);
       if (words && /GuestPanic|panicked|CONTRACT_EXECUTION_ERROR/.test(words)) throw new Refused(words);
       if (j.error) throw new Error(j.error.cause?.name ?? j.error.message ?? "RPC error");
       if (!("result" in j)) throw new Error("not a JSON-RPC answer");
-      front.set(nodes, at);
-      used[nodes === NEAR_NODES ? "NEAR" : "EVM"] = nodes[at];
+      mark();
       return j.result;
     } catch (e) {
-      if (e instanceof Refused) throw e;
+      if (e instanceof Refused || e instanceof NoAccount) throw e;
       why = e.name === "AbortError" ? "no answer in time" : e.message;
     } finally {
       clearTimeout(timer);
@@ -261,6 +340,8 @@ async function view(method, args = {}) {
 const panicText = (e) => { const m = String(e.message).match(/panic_msg: \\*"(.+?)\\*"|panicked: ([^"\\]+)/); return m ? (m[1] || m[2]) : String(e.message); };
 // The value, or null when it could not be read. `undefined` is never shown as a fact.
 const read = (p) => p.then((v) => v, () => null);
+// Same, but keeps the error: "the account is not there" and "it is not a policy" are answers, "no node answered" is not.
+const probe = (p) => p.then((v) => ({ v }), (e) => ({ e }));
 const isObject = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
 
 // Pending changes. Text from the chain is escaped everywhere; an id or an account goes into a command only when it has
@@ -339,7 +420,7 @@ function showPending(html, live) {
   clearInterval(ticker);
   ticker = null;
   $("pending").className = live ? "" : "muted";
-  $("pending").innerHTML = html;
+  put("pending", html);
   if (live) { tickAll(); ticker = setInterval(tickAll, 1000); }
 }
 document.addEventListener("click", (e) => {
@@ -351,57 +432,135 @@ document.addEventListener("click", (e) => {
   } catch { /* no clipboard: the text stays selectable */ }
 });
 
+// ---- which policy, and the box to read another one ----
+// What the last read found: the roles (the feed names the sender by them), and whether the account is a policy at all.
+const state = { roles: null, absent: null };
+(function watching() {
+  $("w-account").innerHTML = near(POLICY);
+  $("w-pill").textContent = IS_DEMO ? "demo policy" : "chosen policy";
+  if (!IS_DEMO) { $("w-back").href = location.pathname; $("w-back").hidden = false; }
+  $("foot-scan").href = `https://testnet.nearblocks.io/address/${encodeURIComponent(POLICY)}`;
+  if (BAD_PARAM !== null) {
+    $("param-text").textContent = `The name in the address is not a NEAR testnet account: ${BAD_PARAM.slice(0, 80)}${BAD_PARAM.length > 80 ? "…" : ""}. The demo policy is shown instead.`;
+    $("param-banner").hidden = false;
+  }
+  if (!IS_DEMO) {
+    $("ask-text").textContent = "A read-only preview call: the policy builds the transaction it would sign, or refuses with its reason. "
+      + "The same two previews (Counter(1) and Counter(999) on Base Sepolia) are asked of this policy, and it answers by its own rules.";
+  }
+  // A button and the Enter key: the page's CSP forbids a form submit.
+  const go = () => {
+    const v = $("w-input").value.trim();
+    if (!TESTNET_ACCOUNT.test(v)) { $("w-msg").textContent = "That is not a NEAR testnet account: use a name ending in .testnet, lower case."; return; }
+    $("w-msg").textContent = "";
+    location.search = `?policy=${encodeURIComponent(v)}`;
+  };
+  $("w-go").addEventListener("click", go);
+  $("w-input").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+})();
+
+// ---- At a glance ----
+const tile = (name, html, note = "") => { put(`g-${name}`, html); put(`g-${name}-note`, esc(note)); };
+// Signed today: only said when every chain's budget was read, and the list of chains itself (from the rules) was.
+function signedTile(rows, ru) {
+  if (!ru) return tile("signed", UNKNOWN);
+  let spent = 0n, cap = 0n, any = false;
+  for (const r of rows) {
+    if (r.budget === undefined) return tile("signed", UNKNOWN);
+    if (r.budget === null) continue;
+    try { spent += BigInt(r.budget.used_tx_today); cap += BigInt(r.budget.max_tx_per_day); any = true; } catch { return tile("signed", UNKNOWN); }
+  }
+  tile("signed", `${spent} of ${cap}`, any ? "UTC day" : "no budget set: nothing can be signed");
+}
+const YOCTO_PER_NEAR = 10n ** 24n;
+async function gasTile(ro) {
+  if (!ro) return tile("gas", UNKNOWN);
+  if (!ro.agent) return tile("gas", `<span class="muted">no agent</span>`);
+  if (typeof ro.agent !== "string" || !SAFE_ACCOUNT.test(ro.agent)) return tile("gas", UNKNOWN);
+  try {
+    const a = await ask(NEAR_NODES, "query", { request_type: "view_account", finality: "final", account_id: ro.agent });
+    const amount = BigInt(a.amount);
+    tile("gas", `<span title="${esc(amount)} yoctoNEAR">${units(amount, 24)} NEAR</span>${amount < YOCTO_PER_NEAR / 10n ? ` <span class="pill warn">low</span>` : ""}`);
+  } catch (e) {
+    tile("gas", e instanceof NoAccount ? `<span class="pill warn">agent account not found</span>` : UNKNOWN);
+  }
+}
+function openTile(o) {
+  const nonce = (x) => (x === null ? null : (typeof x === "number" && Number.isSafeInteger(x) && x >= 0) || (typeof x === "string" && /^\d{1,20}$/.test(x)) ? String(x) : undefined);
+  const [pending, stuck] = isObject(o) ? [nonce(o.pending), nonce(o.stuck)] : [undefined, undefined];
+  if (pending === undefined || stuck === undefined) return tile("open", UNKNOWN);
+  const lines = [];
+  if (stuck !== null) lines.push(`<span class="pill warn">nonce ${esc(stuck)} did not finish</span>`);
+  if (pending !== null) lines.push(`nonce ${esc(pending)} is being signed`);
+  tile("open", lines.join("<br>") || "none", stuck !== null ? "the agent retries it: keyfree retry" : "");
+}
+
 async function loadOnce() {
   delete used.NEAR;
   delete used.EVM;
-  const [status, roles, rules, address, keys, account, source] = await Promise.all([
-    read(view("get_status")), read(view("get_roles")), read(view("get_rules")), read(view("get_eth_address")),
+  const [statusP, roles, rules, address, keys, accountP, source, open] = await Promise.all([
+    probe(view("get_status")), read(view("get_roles")), read(view("get_rules")), read(view("get_eth_address")),
     read(ask(NEAR_NODES, "query", { request_type: "view_access_key_list", finality: "final", account_id: POLICY })),
-    read(ask(NEAR_NODES, "query", { request_type: "view_account", finality: "final", account_id: POLICY })),
-    read(view("contract_source_metadata")),
+    probe(ask(NEAR_NODES, "query", { request_type: "view_account", finality: "final", account_id: POLICY })),
+    read(view("contract_source_metadata")), read(view("get_open")),
   ]);
-  const st = isObject(status) ? status : null;
+  const account = accountP.v ?? null;
+  // Tell the three ways of not reading it apart: there is no such account, the account is not a policy, or no node answered.
+  const noAccount = accountP.e instanceof NoAccount || statusP.e instanceof NoAccount;
+  const notPolicy = !noAccount && statusP.e instanceof Refused;
+  const st = isObject(statusP.v) ? statusP.v : null;
   const ro = isObject(roles) ? roles : null;
   const ru = isObject(rules) && Array.isArray(rules.allowed_code) ? rules : null;
   const eaddr = typeof address === "string" && /^0x[0-9a-fA-F]{40}$/.test(address) ? address : null;
+  state.roles = ro;
+  state.absent = noAccount ? "none" : notPolicy ? "other" : null;
+  const gas = gasTile(ro);
 
   if (Array.isArray(keys?.keys)) {
     const n = keys.keys.length;
-    $("keys").innerHTML = `<span style="color:var(${n === 0 ? "--ok" : "--no"})">${n}</span>`;
-    $("keys-note").textContent = n === 0 ? "Anyone with a key could replace the code. There is none." : "Whoever holds these keys can replace the code: this policy does not keep its promise.";
+    put("keys", `<span style="color:var(${n === 0 ? "--ok" : "--no"})">${n}</span>`);
+    put("keys-note", esc(n === 0 ? "Anyone with a key could replace the code. There is none." : "Whoever holds these keys can replace the code: this policy does not keep its promise."));
   } else {
-    $("keys").innerHTML = UNKNOWN;
-    $("keys-note").textContent = "Could not read the account. This says nothing about its keys.";
+    put("keys", UNKNOWN);
+    put("keys-note", esc("Could not read the account. This says nothing about its keys."));
   }
-  $("account").innerHTML = near(POLICY);
-  $("build").innerHTML = st ? esc(`${st.build}, version ${st.version}`) : UNKNOWN;
+  put("account", near(POLICY));
+  put("build", st ? esc(`${st.build}, version ${st.version}`) : UNKNOWN);
   const commit = typeof source?.link === "string" ? source.link.split("/tree/")[1] : null;
-  $("source").innerHTML = commit ? link(source.link, short(commit, 4)) : source ? `<span class="muted">not published</span>` : UNKNOWN;
-  $("codehash").innerHTML = !account?.code_hash ? UNKNOWN : `${esc(short(account.code_hash, 8))} ${account.code_hash === BUILD.code_hash
+  put("source", commit ? link(source.link, short(commit, 4)) : source ? `<span class="muted">not published</span>` : UNKNOWN);
+  put("codehash", !account?.code_hash ? UNKNOWN : `${esc(short(account.code_hash, 8))} ${account.code_hash === BUILD.code_hash
     ? `<span class="pill ok">the reproducible build of ${esc(short(BUILD.commit, 4))}</span>`
-    : `<span class="pill no">not the build the README names</span>`}`;
-  $("paused").innerHTML = !st ? UNKNOWN : st.paused ? `<span class="pill no">paused</span>` : `<span class="pill ok">running</span>`;
-  for (const r of ["owner", "guardian", "reserve", "agent"]) $(r).innerHTML = !ro ? UNKNOWN : ro[r] ? near(ro[r]) : `<span class="muted">none</span>`;
-  $("rdelay").innerHTML = ru ? esc(secs(ru.rules_delay_sec)) : UNKNOWN;
-  $("udelay").innerHTML = st ? esc(secs(st.upgrade_delay_sec)) : UNKNOWN;
-  $("eth").innerHTML = eaddr ? link(`${CHAINS[0].scan}/address/${eaddr}`, eaddr) : UNKNOWN;
-  $("codes").innerHTML = ru ? esc(ru.allowed_code.length) : UNKNOWN;
-  $("upgrades").innerHTML = ru ? esc((ru.allowed_proxy_upgrades || []).length) : UNKNOWN;
+    : `<span class="pill no">not the build the README names</span>`}`);
+  put("paused", !st ? UNKNOWN : st.paused ? `<span class="pill no">paused</span>` : `<span class="pill ok">running</span>`);
+  for (const r of ["owner", "guardian", "reserve", "agent"]) put(r, !ro ? UNKNOWN : ro[r] ? near(ro[r]) : `<span class="muted">none</span>`);
+  put("rdelay", ru ? esc(secs(ru.rules_delay_sec)) : UNKNOWN);
+  put("udelay", st ? esc(secs(st.upgrade_delay_sec)) : UNKNOWN);
+  put("eth", eaddr ? link(`${CHAINS[0].scan}/address/${eaddr}`, eaddr) : UNKNOWN);
+  put("codes", ru ? esc(ru.allowed_code.length) : UNKNOWN);
+  put("upgrades", ru ? esc((ru.allowed_proxy_upgrades || []).length) : UNKNOWN);
   try {
-    $("caps").textContent = `gas ${BigInt(ru.max_gas_limit).toLocaleString("en")}, fee ${units(ru.max_fee_cap, 9)} gwei`;
+    put("caps", esc(`gas ${BigInt(ru.max_gas_limit).toLocaleString("en")}, fee ${units(ru.max_fee_cap, 9)} gwei`));
   } catch {
-    $("caps").innerHTML = UNKNOWN;
+    put("caps", UNKNOWN);
   }
 
-  // Chains: nonce in the policy, balance on the chain, the day's budget if one is set.
-  const rows = await Promise.all(CHAINS.map(async (c) => {
+  // Chains: the two this page has public nodes for, then any other chain the policy has a budget for.
+  const extra = [];
+  for (const b of Array.isArray(ru?.budgets) ? ru.budgets : []) {
+    if (isObject(b) && Number.isSafeInteger(b.chain_id) && b.chain_id >= 0 && !CHAINS.some((c) => c.id === b.chain_id) && !extra.some((c) => c.id === b.chain_id)) {
+      extra.push({ id: b.chain_id, name: `chain ${b.chain_id}`, nodes: null, scan: null });
+    }
+  }
+  // Nonce in the policy, balance on the chain, the day's budget if one is set.
+  const rows = await Promise.all([...CHAINS, ...extra].map(async (c) => {
     const [next, bal, budget] = await Promise.all([
       view("get_next_nonce", { chain_id: c.id }).catch(() => undefined),
-      eaddr ? ask(c.nodes, "eth_getBalance", [eaddr, "latest"]).catch(() => null) : null,
-      // A contract with no such method has no budgets; a node that did not answer tells nothing.
-      view("get_budget", { chain_id: c.id }).catch((e) => (e instanceof Refused ? null : undefined)),
+      eaddr && c.nodes ? ask(c.nodes, "eth_getBalance", [eaddr, "latest"]).catch(() => null) : null,
+      // A contract with no such method has no budgets; a node that did not answer tells nothing. An account that is not
+      // a policy at all has no budgets either, but that is not "none set": it is not known.
+      view("get_budget", { chain_id: c.id }).catch((e) => (e instanceof Refused && !notPolicy ? null : undefined)),
     ]);
-    let money = UNKNOWN;
+    let money = c.nodes ? UNKNOWN : `<span class="muted">no public node for this chain on this page</span>`;
     try { if (bal) money = eth(BigInt(bal)); } catch { /* not a number: stays unknown */ }
     let b = budget === null ? `<span class="muted">none set: this chain signs nothing</span>` : UNKNOWN;
     try {
@@ -412,9 +571,13 @@ async function loadOnce() {
       }
     } catch { b = UNKNOWN; }
     const nonce = next === undefined ? UNKNOWN : next === null ? `<span class="pill no">not open</span>` : esc(next);
-    return { c, next, row: `<tr><td data-label="Chain"><span>${esc(c.name)} <span class="muted">${c.id}</span></span></td><td data-label="Next nonce">${nonce}</td><td data-label="ETH on the address">${money}</td><td data-label="Daily budget (UTC day)" class="block">${b}</td></tr>` };
+    const label = c.nodes ? `${esc(c.name)} <span class="muted">${c.id}</span>` : esc(c.name);
+    return { c, next, budget, row: `<tr><td data-label="Chain"><span>${label}</span></td><td data-label="Next nonce">${nonce}</td><td data-label="ETH on the address">${money}</td><td data-label="Daily budget (UTC day)" class="block">${b}</td></tr>` };
   }));
-  $("chains").innerHTML = rows.map((r) => r.row).join("");
+  put("chains", rows.map((r) => r.row).join(""));
+  signedTile(rows, ru);
+  openTile(open);
+  await gas;
 
   // Pending widenings: only said to be empty when all three sources were read.
   if (st && ro && ru) {
@@ -426,8 +589,10 @@ async function loadOnce() {
     showPending(cards.length
       ? `<div class="banner warn" role="status">${cards.length === 1 ? "1 change is waiting" : `${cards.length} changes are waiting`}</div><ul class="pend">${cards.join("")}</ul>`
       : "Nothing is waiting.", cards.length > 0);
+    tile("waiting", `<a href="#pending-panel">${cards.length}</a>`);
   } else {
     showPending(`${UNKNOWN} Could not read the proposals. This does not mean nothing is waiting.`, false);
+    tile("waiting", UNKNOWN);
   }
 
   // Journal: the newest lines of each open chain. A line that could not be read is shown as such, not dropped.
@@ -440,43 +605,325 @@ async function loadOnce() {
   const unread = rows.some((r) => r.next === undefined);
   const hex = (x) => typeof x === "string" && /^0x[0-9a-fA-F]+$/.test(x) && !/^0x0+$/.test(x);
   const shown = got.filter((l) => l.failed || isObject(l.e));
-  $("journal").innerHTML = shown.map(({ c, k, e, failed }) => {
+  put("journal", shown.map(({ c, k, e, failed }) => {
     if (failed) return `<tr><td data-label="Chain">${esc(c.name)}</td><td data-label="Nonce">${k}</td><td colspan="4" class="muted">could not read this line</td></tr>`;
     const target = e.kind === "proxy_upgrade" ? e.proxy : e.address;
     const pill = e.status === "confirmed" ? "ok" : e.status === "signed" ? "warn" : "no";
+    // A chain this page has no explorer for gets the plain value, not a link.
+    const onChain = (path, v) => (c.scan ? link(`${c.scan}/${path}/${v}`, short(v)) : esc(short(v)));
     return `<tr><td data-label="Chain">${esc(c.name)}</td><td data-label="Nonce">${k}</td><td data-label="Kind">${e.kind === "proxy_upgrade" ? "proxy upgrade" : "deploy"}</td><td data-label="Status"><span class="pill ${pill}">${esc(e.status)}</span></td>`
-      + `<td class="mono" data-label="Contract">${hex(target) ? link(`${c.scan}/address/${target}`, short(target)) : `<span class="muted">plain CREATE</span>`}</td>`
-      + `<td class="mono" data-label="Transaction">${hex(e.tx_hash) ? link(`${c.scan}/tx/${e.tx_hash}`, short(e.tx_hash)) : "—"}</td></tr>`;
-  }).join("") || `<tr><td colspan="6" class="muted">${unread ? "could not read the journal" : "no lines"}</td></tr>`;
+      + `<td class="mono" data-label="Contract">${hex(target) ? onChain("address", target) : `<span class="muted">plain CREATE</span>`}</td>`
+      + `<td class="mono" data-label="Transaction">${hex(e.tx_hash) ? onChain("tx", e.tx_hash) : "—"}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="muted">${unread ? "could not read the journal" : "no lines"}</td></tr>`);
 
   const everyPartRead = st && ro && ru && eaddr && keys && account;
   $("banner").hidden = Boolean(everyPartRead);
   if (!everyPartRead) {
     const none = !st && !ro && !ru && !keys && !account;
-    $("banner-text").textContent = none
-      ? `None of the public NEAR nodes answered (${NEAR_NODES.map((u) => new URL(u).host).join(", ")}). Nothing below is known right now. The contract itself does not depend on them.`
-      : "Some of the policy could not be read from the public nodes. What could not be read is marked unknown.";
+    put("banner-text", esc(noAccount ? `No such account on NEAR testnet: ${POLICY}`
+      : notPolicy ? `${POLICY} does not answer as a Keyfree policy.`
+      : none ? `None of the public NEAR nodes answered (${NEAR_NODES.map((u) => new URL(u).host).join(", ")}). Nothing below is known right now. The contract itself does not depend on them.`
+      : "Some of the policy could not be read from the public nodes. What could not be read is marked unknown."));
   }
   $("when").textContent = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
   $("nodes").textContent = [used.NEAR ? `NEAR ${new URL(used.NEAR).host}` : "no NEAR node answered", used.EVM ? `EVM ${new URL(used.EVM).host} and others` : "no EVM node answered"].join("; ");
+  try { renderFeed(); } catch { /* the roles may have changed who a row's sender is; the feed never breaks this read */ }
 }
 
-let run = 0;
-async function load() {
+// A read is a first load or a click (the page says it is reading), or a background one (it says nothing unless
+// something changed).
+let run = 0, reads = 0, lastRead = 0, inFlight = false;
+async function load(background = false) {
   const mine = ++run;
-  document.body.dataset.state = "reading";
-  $("reload").disabled = true;
+  inFlight = true;
+  if (!background) {
+    document.body.dataset.state = "reading";
+    $("reload").disabled = true;
+  }
   try {
     await loadOnce();
   } catch (e) {
     $("banner").hidden = false;
-    $("banner-text").textContent = `Could not read the policy: ${e.message || e}`;
+    put("banner-text", esc(`Could not read the policy: ${e.message || e}`));
   }
   if (mine === run) {
     document.body.dataset.state = "done";
     $("reload").disabled = false;
+    inFlight = false;
+  }
+  lastRead = Date.now();
+  document.body.dataset.reads = String(++reads);
+}
+
+// ---- What happened: the NearBlocks indexer lists the transactions, the chain says why each was refused ----
+// The indexer allows only about 7 requests a minute without a key: one request per read covers the latest 100
+// transactions, and an answer is kept for a minute (also across a reload) so that nothing asks it more often.
+const INDEXER = `https://api-testnet.nearblocks.io/v3/accounts/${POLICY}/txns?limit=100`;
+// The 30 s clock lands a little short of a full minute after the last request, so 58 s counts as a minute.
+const FEED_GAP_MS = 58000, FEED_ROWS = 12, FEED_KEY = `keyfree-feed:${POLICY}`;
+const METHOD = /^[a-z_0-9]{1,64}$/, ACTION_KIND = /^[A-Z_]{1,32}$/, DIGITS = /^\d{1,21}$/, TX_ID = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
+const WHAT = new Map(Object.entries({
+  request_deploy: "asked to deploy a contract", request_proxy_upgrade: "asked to upgrade a proxy",
+  resign: "asked to sign again with other fees", resign_proxy_upgrade: "asked to sign again with other fees",
+  retry: "retried an unfinished request", release: "released an unfinished request",
+  confirm: "asked NEAR to check that a transaction landed", confirm_stuck: "asked NEAR to check that a transaction landed",
+  propose_rule: "proposed a rule change", cancel_rule: "cancelled a rule change", apply_rule: "applied a rule change",
+  propose_role: "proposed a role change", approve_role: "approved a role change", cancel_role: "cancelled a role change", apply_role: "applied a role change",
+  propose_upgrade: "proposed a policy upgrade", cancel_upgrade: "cancelled a policy upgrade", apply_upgrade: "applied a policy upgrade",
+  pause: "paused the policy", unpause: "voted to unpause", revoke_agent: "revoked the agent", remove_code: "removed allowed code",
+  disable_chain: "disabled a chain", remove_factory: "removed a factory", remove_proxy_upgrade: "removed an allowed proxy upgrade",
+  lower_limits: "lowered the caps", lower_budget: "lowered a daily budget", sweep: "cleaned old journal lines",
+  setup: "asked NEAR MPC for the address", new: "created the policy", finish_retire: "finished retiring the policy", migrate: "migrated the state",
+}));
+const KINDS = new Map(Object.entries({
+  TRANSFER: "sent NEAR to the policy", DEPLOY_CONTRACT: "deployed code", ADD_KEY: "added an access key",
+  DELETE_KEY: "deleted an access key", CREATE_ACCOUNT: "created the account",
+}));
+function ago(ns) {
+  if (!DIGITS.test(ns)) return "time unknown";
+  const ms = Number(BigInt(ns) / 1000000n), d = new Date(ms);
+  if (!Number.isFinite(ms) || Number.isNaN(d.getTime())) return "time unknown";
+  const s = (Date.now() - ms) / 1000;
+  if (s < 0 || s > 5 * 365 * 86400 || ms < 1.5e12) return `${d.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 172800) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} days ago`;
+}
+const tsMs = (ns) => { if (!DIGITS.test(ns)) return null; const ms = Number(BigInt(ns) / 1000000n); return Number.isFinite(ms) && ms >= 1.5e12 ? ms : null; };
+// One entry, whatever it came from (the indexer, or the copy kept in sessionStorage): every field is checked here.
+function fit(m) {
+  if (!isObject(m) || typeof m.ok !== "boolean" || typeof m.signer !== "string" || !SAFE_ACCOUNT.test(m.signer)) return null;
+  const str = (v, re) => (typeof v === "string" && re.test(v) ? v : "");
+  return { ok: m.ok, signer: m.signer, method: str(m.method, METHOD), kind: str(m.kind, ACTION_KIND), ts: str(m.ts, DIGITS), hash: str(m.hash, TX_ID) };
+}
+function digest(j) {
+  const rows = j.data.slice(0, 100);
+  // Rows we can read: an account and a boolean outcome. If there are rows and none can be read, the answer is not understood.
+  if (rows.length && !rows.some((t) => isObject(t) && typeof t.signer_account_id === "string" && typeof t.outcomes?.status === "boolean")) throw new Error("shape");
+  const mine = [];
+  let oldest = null, skipped = 0;
+  for (const t of rows) {
+    if (!isObject(t)) continue;
+    const at = typeof t.block_timestamp === "string" ? tsMs(t.block_timestamp) : null;
+    if (at !== null && (oldest === null || at < oldest)) oldest = at;
+    if (t.receiver_account_id !== POLICY) continue;
+    const acts = Array.isArray(t.actions) ? t.actions.filter(isObject) : [];
+    const call = acts.find((a) => a.action === "FUNCTION_CALL");
+    const first = call ?? acts[0];
+    const m = fit({ ok: t.outcomes?.status, signer: t.signer_account_id, method: call?.method, kind: first?.action, ts: t.block_timestamp, hash: t.transaction_hash });
+    if (m) mine.push(m); else skipped++;
+  }
+  return { mine, more: Boolean(j.meta?.next_page), seen: rows.length, oldest, skipped };
+}
+async function readFeed() {
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), 10000);
+  try {
+    const r = await fetch(INDEXER, { signal: stop.signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const text = await r.text();
+    if (text.length > 4e6) throw new Error("too big");
+    const j = JSON.parse(text);
+    if (!isObject(j) || !Array.isArray(j.data)) throw new Error("shape");
+    return digest(j);
+  } finally {
+    clearTimeout(timer);
   }
 }
+const feed = { good: null, tried: 0, failed: false, answered: false, prev: new Set(), fresh: new Set(), filter: "all", shown: FEED_ROWS, busy: false };
+const rowId = (m) => m.hash || `${m.ts}:${m.signer}:${m.method || m.kind}`;
+function saveFeed() {
+  try { sessionStorage.setItem(FEED_KEY, JSON.stringify({ tried: feed.tried, failed: feed.failed, at: feed.good?.at ?? 0, res: feed.good?.res ?? null })); } catch { /* no storage: the indexer is asked again next time */ }
+}
+(function restoreFeed() {
+  try {
+    const k = JSON.parse(sessionStorage.getItem(FEED_KEY) ?? "null");
+    if (!isObject(k) || !Number.isFinite(k.tried) || k.tried > Date.now()) return;
+    const r = k.res;
+    if (isObject(r) && Array.isArray(r.mine) && Number.isFinite(k.at) && k.at <= Date.now()) {
+      const mine = r.mine.map(fit).filter(Boolean);
+      feed.good = { at: k.at, res: { mine, more: r.more === true, seen: Number.isSafeInteger(r.seen) ? r.seen : mine.length, oldest: Number.isFinite(r.oldest) ? r.oldest : null, skipped: Number.isSafeInteger(r.skipped) ? r.skipped : 0 } };
+      feed.answered = true;
+      feed.prev = new Set(mine.map(rowId));
+    }
+    feed.tried = k.tried;
+    feed.failed = k.failed === true;
+  } catch { /* nothing kept */ }
+})();
+
+// What the chain says about one transaction: why it failed, what the policy wrote, which signature came out of it.
+const details = new Map();
+const SIGNED = /^keyfree: signed chain (\d+) nonce (\d+) tx (0x[0-9a-f]{64})$/;
+function failureOf(result) {
+  const outcomes = [{ outcome: { status: result.status } }, ...(Array.isArray(result.receipts_outcome) ? result.receipts_outcome : [])];
+  for (const o of outcomes) {
+    const f = o?.outcome?.status?.Failure;
+    if (!f) continue;
+    const s = JSON.stringify(f).replace(/\\"/g, "\"");
+    return (/Smart contract panicked: ([^"]*)/.exec(s)?.[1] ?? s).slice(0, 160);
+  }
+  return null;
+}
+function detailsOf(result) {
+  const logs = [];
+  let signed = null;
+  for (const o of (Array.isArray(result.receipts_outcome) ? result.receipts_outcome : []).slice(0, 200)) {
+    for (const line of Array.isArray(o?.outcome?.logs) ? o.outcome.logs : []) {
+      if (typeof line !== "string" || !line.startsWith("keyfree: ")) continue;
+      if (logs.length < 8) logs.push(line.slice(0, 300));
+      const m = line.length <= 300 ? SIGNED.exec(line) : null;
+      if (m && !signed && CHAINS.some((c) => String(c.id) === m[1])) signed = { chain: Number(m[1]), nonce: m[2], tx: m[3] };
+    }
+  }
+  return { reason: failureOf(result), logs, signed };
+}
+// A kept copy is read as carefully as a fresh answer.
+function fitDetail(d) {
+  if (!isObject(d) || !Array.isArray(d.logs)) return null;
+  const s = d.signed;
+  const signed = isObject(s) && CHAINS.some((c) => c.id === s.chain) && /^\d{1,20}$/.test(s.nonce) && /^0x[0-9a-f]{64}$/.test(s.tx) ? { chain: s.chain, nonce: s.nonce, tx: s.tx } : null;
+  return { state: "ok", reason: typeof d.reason === "string" ? d.reason.slice(0, 160) : null, logs: d.logs.filter((l) => typeof l === "string").slice(0, 8).map((l) => l.slice(0, 300)), signed };
+}
+const queue = [];
+let active = 0;
+async function fetchDetail(m) {
+  const key = `keyfree-tx:${m.hash}`;
+  try { const d = fitDetail(JSON.parse(sessionStorage.getItem(key) ?? "null")); if (d) return d; } catch { /* not kept */ }
+  const result = await ask(TX_NODES, "tx", { tx_hash: m.hash, sender_account_id: m.signer, wait_until: "NONE" });
+  if (!isObject(result)) throw new NoAnswer("not a transaction");
+  const d = detailsOf(result);
+  // A finished transaction never changes, so its answer is kept; one still running is asked again.
+  if (isObject(result.status)) { try { sessionStorage.setItem(key, JSON.stringify(d)); } catch { /* no storage */ } }
+  return fitDetail(d);
+}
+function pump() {
+  while (active < 3 && queue.length) {
+    const m = queue.shift();
+    active++;
+    fetchDetail(m).then((d) => details.set(m.hash, d), () => details.set(m.hash, { state: "failed", t: Date.now() }))
+      .finally(() => { active--; try { renderFeed(); } catch { /* never breaks the page */ } pump(); });
+  }
+}
+function wantDetails(list) {
+  for (const m of list) {
+    const d = details.get(m.hash);
+    if (!m.hash || d?.state === "ok" || d?.state === "loading" || (d?.state === "failed" && Date.now() - d.t < 60000)) continue;
+    details.set(m.hash, { state: "loading" });
+    queue.push(m);
+  }
+  pump();
+}
+
+const COUNCIL = ["owner", "guardian", "reserve"];
+const roleOf = (acct) => (acct === POLICY ? "the policy itself" : !state.roles ? null : ["owner", "guardian", "reserve", "agent"].find((r) => state.roles[r] === acct) ?? "someone else");
+const openRows = new Set(); // rows whose "What the policy wrote" the reader opened: a redraw keeps them open
+document.addEventListener("toggle", (e) => {
+  const h = e.target instanceof Element ? e.target.dataset.h : null;
+  if (!h || !e.target.closest("#activity")) return;
+  if (e.target.open) openRows.add(h); else openRows.delete(h);
+}, true);
+function rowHtml(m) {
+  const d = m.hash ? details.get(m.hash) : null;
+  const what = m.method ? (WHAT.has(m.method) ? `${esc(WHAT.get(m.method))} <span class="mono small muted">${esc(m.method)}</span>` : `<span class="mono">${esc(m.method)}</span>`)
+    : m.kind === "FUNCTION_CALL" ? `<span class="muted">a call whose method name could not be read</span>`
+    : m.kind ? (KINDS.has(m.kind) ? `${esc(KINDS.get(m.kind))} <span class="mono small muted">${esc(m.kind)}</span>` : `<span class="mono">${esc(m.kind)}</span>`)
+    : `<span class="muted">an action this page cannot read</span>`;
+  const role = roleOf(m.signer);
+  const who = `${role ? `<strong>${esc(role)}</strong> ` : ""}<span class="mono" title="${esc(m.signer)}">${esc(short(m.signer, 12))}</span>`;
+  const reason = m.ok ? "" : ` <span style="color:var(--no)">— ${esc(!m.hash ? "reason not read (no transaction id)" : d?.state === "ok" ? (d.reason ?? "no failure text found in the transaction")
+    : d?.state === "failed" ? "reason not read (no node answered)" : "reading the reason…")}</span>`;
+  const chain = d?.state === "ok" && d.signed ? CHAINS.find((c) => c.id === d.signed.chain) : null;
+  const signed = chain ? `<div>Signed: nonce ${esc(d.signed.nonce)} on ${esc(chain.name)} ${link(`${chain.scan}/tx/${d.signed.tx}`, short(d.signed.tx, 8))}</div>` : "";
+  const logs = d?.state === "ok" && d.logs.length
+    ? `<details data-h="${esc(m.hash)}"${openRows.has(m.hash) ? " open" : ""}><summary>What the policy wrote</summary>${d.logs.map((l) => `<div class="log">${esc(l)}</div>`).join("")}</details>` : "";
+  return `<li class="ev"><div class="ev-top"><span class="pill ${m.ok ? "ok" : "no"}">${m.ok ? "ACCEPTED" : "REFUSED"}</span>`
+    + `${feed.fresh.has(rowId(m)) ? ` <span class="pill info">new</span>` : ""}<span>${what}${reason}</span></div>`
+    + `<div class="ev-meta"><span>${who}</span><span>${esc(ago(m.ts))}</span>${m.hash ? link(`https://testnet.nearblocks.io/txns/${m.hash}`, "Open ↗") : ""}</div>${signed}${logs}</li>`;
+}
+const asOf = (at) => `${new Date(at).toISOString().slice(11, 16)} UTC`;
+function refusedTile() {
+  if (!feed.good) return tile("refused", UNKNOWN);
+  const { mine, more, oldest } = feed.good.res;
+  const since = Date.now() - 864e5;
+  let n = 0, partial = more && (oldest === null || oldest > since);
+  for (const m of mine) {
+    if (m.ok) continue;
+    const at = tsMs(m.ts);
+    if (at === null) partial = true; else if (at >= since) n++;
+  }
+  tile("refused", `<span${n > 0 ? ` style="color:var(--no)"` : ""}>${partial ? "at least " : ""}${n}</span>`, feed.failed ? `as of ${asOf(feed.good.at)}` : "all signers");
+}
+function renderFeed() {
+  // An account that is not a policy has transactions too, but they are not a policy's record: nothing is listed as one.
+  if (state.absent) {
+    tile("refused", UNKNOWN);
+    $("feed-controls").hidden = true;
+    $("feed-more").hidden = true;
+    $("activity").className = "muted";
+    return put("activity", esc(state.absent === "none" ? "Nothing to list: there is no such account." : "Not listed: this account does not answer as a Keyfree policy."));
+  }
+  if (!feed.good && !feed.failed) return; // nothing asked yet, or the answer is on its way
+  refusedTile();
+  const box = $("activity");
+  box.className = "";
+  if (!feed.good) {
+    $("feed-controls").hidden = true;
+    $("feed-more").hidden = true;
+    box.className = "muted";
+    return put("activity", `${UNKNOWN} the indexer did not answer. Everything else on this page is read from the chain and does not depend on it.`);
+  }
+  const { mine, more, seen, skipped } = feed.good.res;
+  const pass = { all: () => true, refused: (m) => !m.ok, agent: (m) => roleOf(m.signer) === "agent", council: (m) => COUNCIL.includes(roleOf(m.signer)) }[feed.filter];
+  const unplaced = (feed.filter === "agent" || feed.filter === "council") && !state.roles;
+  const list = unplaced ? [] : mine.filter(pass);
+  const rows = list.slice(0, feed.shown);
+  wantDetails(rows);
+  const notes = [
+    feed.failed ? `Showing the last good answer, as of ${asOf(feed.good.at)}; the indexer did not answer just now.` : "",
+    seen === 0 ? "" : `Read the latest ${seen} transactions on the policy${more ? "; there are older ones, not read here." : "."}`,
+    skipped ? `${skipped} could not be understood and are left out.` : "",
+  ].filter(Boolean);
+  const empty = unplaced ? `${UNKNOWN} the roles could not be read, so rows cannot be sorted by who sent them.`
+    : seen === 0 ? "No transactions seen yet." : mine.length === 0 ? "None of the transactions read was a call to the policy." : "Nothing in what was read matches this filter.";
+  $("feed-controls").hidden = mine.length === 0;
+  $("feed-more").hidden = list.length <= feed.shown;
+  put("activity", `${notes.map((n) => `<p class="muted small" style="margin:0 0 8px">${esc(n)}</p>`).join("")}`
+    + (rows.length ? `<ul class="feed">${rows.map(rowHtml).join("")}</ul>` : `<div class="muted">${empty}</div>`));
+}
+async function loadFeed() {
+  if (feed.busy) return;
+  feed.busy = true;
+  document.body.dataset.feed = "loading";
+  try {
+    if (Date.now() - feed.tried >= FEED_GAP_MS) {
+      const at = Date.now();
+      feed.tried = at;
+      try {
+        const res = await readFeed();
+        const now = new Set(res.mine.map(rowId));
+        feed.fresh = feed.answered ? new Set([...now].filter((id) => !feed.prev.has(id))) : new Set();
+        feed.prev = now;
+        feed.answered = true;
+        feed.good = { at, res };
+        feed.failed = false;
+      } catch { feed.failed = true; }
+      saveFeed();
+    }
+    renderFeed();
+  } catch { /* the feed never breaks the page */ }
+  document.body.dataset.feed = "done";
+  feed.busy = false;
+}
+$("feed-controls").addEventListener("click", (e) => {
+  const b = e.target instanceof Element ? e.target.closest("button[data-f]") : null;
+  if (!b) return;
+  feed.filter = b.dataset.f;
+  feed.shown = FEED_ROWS;
+  document.querySelectorAll("#feed-controls button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  renderFeed();
+});
+$("feed-more").addEventListener("click", () => { feed.shown += FEED_ROWS; renderFeed(); });
 
 async function preview(arg) {
   const out = $("answer");
@@ -498,8 +945,22 @@ async function preview(arg) {
 }
 
 document.querySelectorAll("button[data-arg]").forEach((b) => b.addEventListener("click", () => preview(b.dataset.arg)));
-$("reload").addEventListener("click", load);
+$("reload").addEventListener("click", () => load());
+
+// ---- auto-refresh: every 30 s while the tab is in view; the box is remembered where storage works ----
+try { if (localStorage.getItem("keyfree-auto") === "0") $("auto").checked = false; } catch { /* no storage: on */ }
+$("auto").addEventListener("change", () => { try { localStorage.setItem("keyfree-auto", $("auto").checked ? "1" : "0"); } catch { /* not remembered */ } });
+const REFRESH_MS = 30000;
+function refresh() {
+  if (!$("auto").checked || document.visibilityState !== "visible") return;
+  if (!inFlight) load(true);
+  loadFeed(); // obeys its own once-a-minute rule
+}
+setInterval(refresh, REFRESH_MS);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - lastRead >= REFRESH_MS) refresh(); });
+
 load();
+loadFeed();
 </script>
 </body>
 </html>
