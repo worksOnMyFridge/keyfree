@@ -25,26 +25,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Pin a commit of the keyfree repository you have read (here: the one that added the action). Never a branch:
+      # whoever can push to it would run code next to your agent key.
+      - uses: worksOnMyFridge/keyfree/action@f68a611e5804e1023ca4251ed6da9e92d9fa9595 # a commit of this repository you have read
         with:
-          repository: worksOnMyFridge/keyfree
-          # A commit of this repository you have read (here: the v20 tool). Never a branch: whoever can push to it
-          # would run code next to your agent key.
-          ref: 29fa5c886b8d9838011cf80c3e4f082ca88fdc2e
-          path: .keyfree
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      - name: Build the keyfree tool
-        working-directory: .keyfree/packages/keyfree
-        run: npm ci --ignore-scripts && npm run build
-      - name: Deploy through the policy
-        env:
-          KEYFREE: .keyfree/packages/keyfree/dist/cli.js
-          CONFIG: keyfree.json
-          CHAIN: base-sepolia
-          ARTIFACT: out/Counter.sol/Counter.json
-          ARGS: ${{ inputs.args }}
-          AGENT_KEY_JSON: ${{ secrets.KEYFREE_AGENT_KEY }}
-        run: bash .keyfree/examples/ci/keyfree-deploy.sh
+          chain: base-sepolia
+          artifact: out/Counter.sol/Counter.json
+          args: ${{ inputs.args }}
+          agent-key: ${{ secrets.KEYFREE_AGENT_KEY }}
