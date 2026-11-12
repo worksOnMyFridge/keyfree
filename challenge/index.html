@@ -57,11 +57,21 @@
   textarea { width: 100%; min-height: 92px; font-family: var(--mono); font-size: 13px; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); resize: vertical; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
   .muted { color: var(--muted); }
+  .feed-head { font-size: 20px; font-weight: 700; line-height: 1.25; color: var(--ok); overflow-wrap: anywhere; }
+  .feed-line { margin: 6px 0 0; color: var(--muted); }
+  .feed-list { list-style: none; margin: 12px 0 0; padding: 0; }
+  .feed-list:empty { display: none; }
+  .feed-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 7px 0; border-top: 1px solid var(--line); min-width: 0; }
+  .feed-list .tag { min-width: 76px; text-align: center; font-weight: 700; font-size: 12px; letter-spacing: 0.06em; border-radius: 6px; padding: 2px 8px; }
+  .feed-list .tag.allowed { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }
+  .feed-list .m { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+  .feed-list .t { color: var(--muted); font-size: 14px; }
+  .feed-note { font-size: 14px; margin: 12px 0 0; }
   footer { margin-top: 28px; color: var(--muted); font-size: 14px; }
   footer p { margin: 0 0 8px; }
 </style>
 </head>
-<body data-state="loading">
+<body data-state="loading" data-feed="loading">
 <main>
   <p class="kicker">Keyfree · live on NEAR testnet</p>
   <h1>Here is the agent's key.<br><span>Try to steal something.</span></h1>
@@ -88,6 +98,15 @@
     <div class="panel"><div class="big" id="score">0 of 0</div><div class="muted">refused for you</div></div>
   </div>
   <p class="muted" id="notice" hidden></p>
+
+  <h2>What everyone has tried</h2>
+  <div class="panel" id="feed">
+    <div id="feed-body" aria-live="polite"><div class="result busy">Reading the public record…</div></div>
+    <p class="muted feed-note">Only attempts that reached the policy are counted. An attempt the key itself may not make is
+      turned away by NEAR before it runs and leaves no transaction, so the real number of refusals is higher. The indexer
+      says only that a transaction failed at the policy; open one to read the policy's reason.</p>
+    <div class="row"><button id="feed-refresh" disabled>Refresh</button><span class="muted">Source: NearBlocks indexer.</span></div>
+  </div>
 
   <h2>What a thief would try</h2>
   <div class="row"><button class="main" id="all" disabled>Try all</button>
@@ -381,6 +400,99 @@ async function readState() {
   document.body.dataset.state = "done";
 }
 
+// ---- the public record: what everyone tried, from the NearBlocks indexer (a third party: the page works without it) ----
+const INDEXER = `https://api-testnet.nearblocks.io/v3/accounts/${POLICY}/txns?limit=25`;
+const FEED_PAGES = 4, FEED_ROWS = 8;
+async function readFeed() {
+  const signal = AbortSignal.timeout(10000);
+  const rows = [];
+  let cursor = "", more = false;
+  for (let page = 0; page < FEED_PAGES; page++) {
+    let j;
+    try {
+      const r = await fetch(cursor ? `${INDEXER}&next=${encodeURIComponent(cursor)}` : INDEXER, { signal });
+      if (!r.ok) throw new Error("HTTP");
+      j = await r.json();
+      if (!j || !Array.isArray(j.data)) throw new Error("shape");
+    } catch (e) {
+      if (page === 0) throw e;
+      more = true; break; // a later page failed: what was read is still true, but it is not everything
+    }
+    rows.push(...j.data);
+    const next = j.meta?.next_page;
+    cursor = typeof next === "string" && /^[A-Za-z0-9+/=_-]{1,2048}$/.test(next) ? next : "";
+    if (next && !cursor) more = true;
+    if (!next || !cursor) break;
+    if (page === FEED_PAGES - 1) more = true;
+  }
+  // Rows we can read: an account and a boolean outcome. If none can be read, the answer is not understood.
+  if (!rows.some((t) => typeof t?.signer_account_id === "string" && typeof t?.outcomes?.status === "boolean")) throw new Error("shape");
+  const mine = [];
+  for (const t of rows) {
+    // Only the agent's own transactions to the policy are attempts; the council setting the policy up is not.
+    if (!t || t.signer_account_id !== AGENT || t.receiver_account_id !== POLICY || typeof t.outcomes?.status !== "boolean") continue;
+    const call = Array.isArray(t.actions) ? t.actions.find((a) => a && a.action === "FUNCTION_CALL") : null;
+    mine.push({
+      ok: t.outcomes.status,
+      method: typeof call?.method === "string" && /^[a-z_0-9]{1,64}$/.test(call.method) ? call.method : "unknown method",
+      ts: typeof t.block_timestamp === "string" ? t.block_timestamp : "",
+      hash: typeof t.transaction_hash === "string" && /^[1-9A-HJ-NP-Za-km-z]{43,44}$/.test(t.transaction_hash) ? t.transaction_hash : "",
+    });
+  }
+  return { mine, more, seen: rows.length };
+}
+function ago(ns) {
+  if (!/^\d{1,21}$/.test(ns)) return "time unknown";
+  const ms = Number(BigInt(ns) / 1000000n), d = new Date(ms);
+  if (!Number.isFinite(ms) || Number.isNaN(d.getTime())) return "time unknown";
+  const s = (Date.now() - ms) / 1000;
+  if (s < 0 || s > 5 * 365 * 86400 || ms < 1.5e12) return `${d.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 172800) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} days ago`;
+}
+function renderFeed(res) {
+  const box = $("feed-body");
+  box.textContent = "";
+  const add = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; e.textContent = text; box.append(e); return e; };
+  if (!res) { add("div", "result unknown", "unknown: the indexer did not answer. The buttons below work without it."); return; }
+  const { mine, more, seen } = res;
+  const refusedN = mine.filter((t) => !t.ok).length, okN = mine.length - refusedN;
+  const noun = (n) => (n === 1 ? "attempt" : "attempts");
+  add("div", "feed-head", refusedN === 0 && more ? "None refused in the part of the record that was read"
+    : `${more ? "At least " : ""}${refusedN} ${noun(refusedN)} refused by the policy`);
+  add("p", "feed-line", `Succeeded: ${more ? "at least " : ""}${okN}. These are requests for the one allowed code (Counter(1)) or housekeeping calls the key is allowed to make. Allowed by the rules, not a break.`);
+  add("p", "feed-line", more ? `Counted from the latest ${seen} transactions on the policy; there are older ones.` : `Counted from all ${seen} transactions on the policy.`);
+  const list = add("ul", "feed-list", "");
+  for (const t of mine.slice(0, FEED_ROWS)) {
+    const li = document.createElement("li");
+    const tag = document.createElement("span"); tag.className = `tag ${t.ok ? "allowed" : "refused"}`; tag.textContent = t.ok ? "ALLOWED" : "REFUSED";
+    const m = document.createElement("span"); m.className = "m mono"; m.textContent = t.method;
+    const w = document.createElement("span"); w.className = "t"; w.textContent = ago(t.ts);
+    li.append(tag, m, w);
+    if (t.hash) {
+      const a = document.createElement("a"); a.href = `https://testnet.nearblocks.io/txns/${t.hash}`; a.textContent = "Open ↗";
+      li.append(a);
+    }
+    list.append(li);
+  }
+}
+let feedBusy = false;
+async function loadFeed() {
+  if (feedBusy) return;
+  feedBusy = true;
+  $("feed-refresh").disabled = true;
+  document.body.dataset.feed = "loading";
+  let res = null;
+  try { res = await readFeed(); } catch { res = null; }
+  renderFeed(res);
+  document.body.dataset.feed = "done";
+  feedBusy = false;
+  setTimeout(() => { $("feed-refresh").disabled = false; }, 10000); // be gentle with the indexer
+}
+$("feed-refresh").addEventListener("click", loadFeed);
+
 (async () => {
   try {
     const file = await fetch("published-agent-key.json").then((r) => { if (!r.ok) throw new Error(); return r.json(); });
@@ -396,6 +508,7 @@ async function readState() {
   }
   await readState();
 })();
+loadFeed(); // not awaited: the feed never delays the rest of the page
 </script>
 </body>
 </html>
