@@ -7,12 +7,12 @@ Result: 144 of 144 checks agree.
 
 | | Check | Result |
 |---|---|---|
-| ok | NEAR account policy13.keyfree-lab.testnet README.md:117 +1 | exists, code hash 8jdpF6XE… |
-| ok | NEAR tx 7iawPybU… README.md:119 +1 | policy13.keyfree-lab.testnet -> policy13.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
-| ok | Base Sepolia address 0x43e3cb8d… README.md:120 +1 | the policy's keyless address (get_eth_address), 14 transactions sent |
+| ok | NEAR account policy13.keyfree-lab.testnet README.md:120 +1 | exists, code hash 8jdpF6XE… |
+| ok | NEAR tx 7iawPybU… README.md:122 +1 | policy13.keyfree-lab.testnet -> policy13.keyfree-lab.testnet DeployContract+new+DeleteKey: success |
+| ok | Base Sepolia address 0x43e3cb8d… README.md:123 +1 | the policy's keyless address (get_eth_address), 14 transactions sent |
 | ok | README: nonces of the keyless address on Base Sepolia | docs 0..13, chain 0..13 |
-| ok | Base Sepolia tx 0x59ec9422… README.md:123 +1 | block 51898531, status success |
-| ok | Ethereum Sepolia address 0x43e3cb8d… README.md:125 | the policy's keyless address (get_eth_address), 3 transactions sent |
+| ok | Base Sepolia tx 0x59ec9422… README.md:126 +1 | block 51898531, status success |
+| ok | Ethereum Sepolia address 0x43e3cb8d… README.md:128 | the policy's keyless address (get_eth_address), 3 transactions sent |
 | ok | Base Sepolia address 0x4b78615d… CLAIMS.md:15 | contract, 673 bytes of code |
 | ok | Ethereum Sepolia address 0xca875b5d… CLAIMS.md:16 | contract, 673 bytes of code |
 | ok | Base Sepolia address 0x5319b76f… CLAIMS.md:18 +1 | contract, 559 bytes of code |
@@ -147,7 +147,7 @@ Result: 144 of 144 checks agree.
 | ok | CLAIMS.md:154 quotes challenge_live.log | "proxy upgrade not on the allow list" |
 | ok | CLAIMS.md:154 quotes challenge_live.log | "Access key does not allow method propose_rule" |
 | ok | CLAIMS.md:154 quotes challenge_live.log | "Access key requires full access" |
-| ok | README.md:46 quotes www.halborn.com | "the lack of multisig or a timelock on the account" |
-| ok | README.md:49 quotes www.halborn.com | "the key that controlled the deployer address" |
-| ok | README.md:51 quotes www.halborn.com | "perform a malicious upgrade of its proxy contract" |
-| ok | README.md:59 quotes www.openzeppelin.com | "with its final shutdown planned for July 1, 2026" |
+| ok | README.md:49 quotes www.halborn.com | "the lack of multisig or a timelock on the account" |
+| ok | README.md:52 quotes www.halborn.com | "the key that controlled the deployer address" |
+| ok | README.md:54 quotes www.halborn.com | "perform a malicious upgrade of its proxy contract" |
+| ok | README.md:62 quotes www.openzeppelin.com | "with its final shutdown planned for July 1, 2026" |

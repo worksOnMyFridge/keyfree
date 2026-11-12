@@ -1,4 +1,4 @@
-# The explorer and challenge pages in the browsers people use: Chromium, Firefox and WebKit (Safari's engine),
+# The site's pages (home, explorer, challenge, own policy) in the browsers people use: Chromium, Firefox and WebKit (Safari's engine),
 # with stubbed nodes that fail on purpose, then the explorer once through the real public nodes. Nothing here
 # sends a transaction; the only key is the one the challenge publishes on purpose.
 name: explorer
@@ -6,7 +6,7 @@ name: explorer
 on:
   workflow_dispatch:
   push:
-    paths: ["explorer/**", "challenge/index.html", "challenge/published-agent-key.json", ".github/workflows/explorer.yml"]
+    paths: ["explorer/**", "index.html", "start/**", "challenge/index.html", "challenge/published-agent-key.json", ".github/workflows/explorer.yml"]
 
 permissions:
   contents: read

@@ -36,6 +36,9 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 
 Built for NEAR HACKATHON 2026 (security and open tracks). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
 
+The site: [worksonmyfridge.github.io/keyfree](https://worksonmyfridge.github.io/keyfree/). It has the live policy, the
+agent key you can try, and a page that prepares a policy of your own.
+
 ## Why now
 
 Teams lose real money when one key can upgrade their contracts. In each case below a single stolen key was
@@ -268,6 +271,9 @@ it takes the wasm from the demo policy on chain and installs it only if its sha2
 `setup/config.example.json` gives for the reproducible build above (a number in this repository: to check it, rebuild). You need Node 20+, a testnet account with about 7 NEAR whose key is in
 `~/.near-credentials/testnet/`, and later a little Base Sepolia ETH from a faucet.
 
+[The own-policy page](https://worksonmyfridge.github.io/keyfree/start/) (`start/index.html`) writes `setup/config.json` and the
+code hash for your contract in a browser. It asks for no key and makes no network request.
+
 ```bash
 npm install                                           # repository root
 cp setup/config.example.json setup/config.json        # put your account in "owner", sub-accounts for the rest
@@ -305,6 +311,8 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
 | `packages/keyfree/demo/` | `Counter`; `vault-kit`, a prompt-injection example (its README swaps the vault owner); `treasury`, the upgradeable treasury (proxy, v1, v2) |
 | `examples/ci/` | a GitHub Actions workflow and the script it runs: deploy from CI through the policy, with only the agent's NEAR function-call key as a secret |
+| `action/` | the same as a one-step GitHub Action; it has not run in a separate repository yet |
+| `index.html`, `start/` | the site's home page, and the page that prepares your own policy: its code hash, `setup/config.json` and the commands |
 | `setup/` | your own policy on testnet, on the code the demo policy runs (README, "Run your own policy") |
 | `v13/`, `v14/` | the end-to-end testnet scripts that built the demo policy, with their logs in `evidence/` |
 | `tools/` | small viem and NEAR helpers the scripts share, and `check_claims.mjs`: the docs against the chains |
