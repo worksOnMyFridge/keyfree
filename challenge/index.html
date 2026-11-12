@@ -402,8 +402,10 @@ async function readState() {
 }
 
 // ---- the public record: what everyone tried, from the NearBlocks indexer (a third party: the page works without it) ----
-const INDEXER = `https://api-testnet.nearblocks.io/v3/accounts/${POLICY}/txns?limit=25`;
-const FEED_PAGES = 4, FEED_ROWS = 8;
+const INDEXER = `https://api-testnet.nearblocks.io/v3/accounts/${POLICY}/txns?limit=100`;
+// The indexer allows only a few requests a minute without a key: one request covers 100 transactions, a second
+// one is the most a load makes, and an answer is kept for a minute so that a reload asks nothing.
+const FEED_PAGES = 2, FEED_ROWS = 8, FEED_KEEP_MS = 60000;
 async function readFeed() {
   const signal = AbortSignal.timeout(10000);
   const rows = [];
@@ -480,19 +482,30 @@ function renderFeed(res) {
   }
 }
 let feedBusy = false;
-async function loadFeed() {
+const kept = () => {
+  try {
+    const k = JSON.parse(sessionStorage.getItem("keyfree-feed") ?? "null");
+    return k && Date.now() - k.at < FEED_KEEP_MS && k.at <= Date.now() && Array.isArray(k.res?.mine) ? k.res : null;
+  } catch { return null; }
+};
+async function loadFeed(fresh) {
   if (feedBusy) return;
   feedBusy = true;
   $("feed-refresh").disabled = true;
   document.body.dataset.feed = "loading";
-  let res = null;
-  try { res = await readFeed(); } catch { res = null; }
+  let res = fresh === true ? null : kept();
+  if (!res) {
+    try {
+      res = await readFeed();
+      try { sessionStorage.setItem("keyfree-feed", JSON.stringify({ at: Date.now(), res })); } catch { /* no storage: ask again next time */ }
+    } catch { res = null; }
+  }
   renderFeed(res);
   document.body.dataset.feed = "done";
   feedBusy = false;
   setTimeout(() => { $("feed-refresh").disabled = false; }, 10000); // be gentle with the indexer
 }
-$("feed-refresh").addEventListener("click", loadFeed);
+$("feed-refresh").addEventListener("click", () => loadFeed(true));
 
 (async () => {
   try {

@@ -243,7 +243,7 @@ test("the record: the agent's refusals are counted, its allowed requests are sai
   assert.match(all, /Only attempts that reached the policy are counted\. An attempt the key itself may not make is\s+turned away by NEAR before it runs and leaves no transaction, so the real number of refusals is higher\./);
   assert.match(all, /Source: NearBlocks indexer\./);
   assert.equal(seen.indexer.length, 1, "one request when there is no next page");
-  assert.match(seen.indexer[0], /\/v3\/accounts\/challenge\.keyfree-lab\.testnet\/txns\?limit=25$/);
+  assert.match(seen.indexer[0], /\/v3\/accounts\/challenge\.keyfree-lab\.testnet\/txns\?limit=100$/);
   assert.deepEqual(problems, []);
 });
 
@@ -253,15 +253,24 @@ test("the record: at most the latest 8 are listed", { skip: Boolean(process.env.
   assert.match(await feedText(page), /25 attempts refused by the policy/);
 });
 
-test("the record: more pages than were read means 'at least', and paging stops after 4 requests", { skip: Boolean(process.env.LIVE) }, async (t) => {
+test("the record: more pages than were read means 'at least', and paging stops after 2 requests", { skip: Boolean(process.env.LIVE) }, async (t) => {
   const { page, seen } = await open(t, { indexer: (n) => feedPage(Array.from({ length: 25 }, (_, i) => row(n * 25 + i)), `cursor${n}`) });
-  assert.equal(seen.indexer.length, 4);
+  assert.equal(seen.indexer.length, 2);
   assert.match(seen.indexer[1], /[?&]next=cursor0$/);
-  assert.match(seen.indexer[3], /[?&]next=cursor2$/);
-  assert.match(await feedText(page), /At least 100 attempts refused by the policy/);
+  assert.match(await feedText(page), /At least 50 attempts refused by the policy/);
   assert.match(await feedText(page), /Succeeded: at least 0/);
   await new Promise((r) => setTimeout(r, 1500));
-  assert.equal(seen.indexer.length, 4, "no polling");
+  assert.equal(seen.indexer.length, 2, "no polling");
+});
+
+test("the record: a reload within a minute asks the indexer nothing and shows the same count", { skip: Boolean(process.env.LIVE) }, async (t) => {
+  const { page, seen } = await open(t, { indexer: () => feedPage([row(0), row(1), row(2)]) });
+  assert.equal(seen.indexer.length, 1);
+  assert.match(await feedText(page), /^3 attempts refused by the policy/);
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.feed === "done");
+  assert.match(await feedText(page), /^3 attempts refused by the policy/);
+  assert.equal(seen.indexer.length, 1, "the kept answer was used");
 });
 
 test("the record: it stops when there is no next page", { skip: Boolean(process.env.LIVE) }, async (t) => {
