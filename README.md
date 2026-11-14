@@ -65,7 +65,7 @@ service would shut down on July 1, 2026, and named its open-source Relayer and M
 
 | Point | Where to check it |
 |---|---|
-| Technical implementation | `npm run check:claims` (read-only, no keys) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Five security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
+| Technical implementation | `npm run check:claims` (read-only, no keys, about 3 minutes; it runs right after `git clone`, before anything is installed) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Five security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
 | Design | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy, or any testnet policy by its address: its rules, what is waiting, and every call with the policy's answer |
 | Impact | The problem: an agent that deploys holds a key that can be stolen or talked into anything. [`examples/ci`](examples/ci): a GitHub Actions job that deploys through the policy with no EVM key and fails before signing when a change asks for other code. [Where the money goes](#where-the-money-goes): a live treasury upgraded only as the council allowed, and real Claude Code sessions that a poisoned README could not get past the policy ([evidence/injection_live.md](evidence/injection_live.md)). There are no users yet |
 | Originality | [How this differs](#how-this-differs-from-other-ways-to-keep-the-key-from-the-agent): one public contract on NEAR holds the rules for every EVM chain, signs only what it built itself, and upgrades itself without a key |
@@ -132,7 +132,7 @@ attempt is refused with its reason. [`challenge/README.md`](challenge/README.md)
 
 ## Try it in 10 minutes (no keys, no money)
 
-Node 20.3+.
+Node 20.3+. The commands in this file are written for bash; on Windows use Git Bash or WSL.
 
 ```bash
 cd packages/keyfree
@@ -158,7 +158,8 @@ Reading and previewing need no key. Deploying needs the agent's key for this pol
 
 ```bash
 (cd packages/keyfree && npm install)   # once
-npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20.3+
+npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20.3+;
+                                       # a few minutes the first time, while cargo compiles
 ```
 
 65 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
@@ -174,7 +175,8 @@ From the repository root:
 ```bash
 (cd contract && cargo test -- --test-threads=1)       # 189 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
-(cd packages/keyfree && npm test && npm run smoke)    # 83 tool tests; MCP self-check against the live policy
+(cd packages/keyfree && npm install && npm run build && npm test && npm run smoke)
+                                                      # 83 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
 
@@ -216,6 +218,11 @@ sha256sum target/near/keyfree_policy.wasm
 # -> 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c  (385 621 bytes)
 ```
 
+cargo-near is a release binary from `github.com/near/cargo-near` (`.github/workflows/build.yml` installs it that
+way and checks its checksum); on macOS `shasum -a 256` stands in for `sha256sum`. Without Docker,
+`npm run check:claims` shows the other half: the code on the account has exactly this sha256 and size, and its
+metadata names this commit. Only the build shows that the commit gives these bytes.
+
 NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
 `8jdpF6XEkVQ3Hun6pJrGzSEmPeGQk6JyZBuk2eRDtp6P` (`near state` or the RPC `view_account`). The commit is part of
 the metadata inside the wasm, so every commit gives its own hash; the `build` workflow
@@ -225,8 +232,10 @@ were built on a laptop and their bytes carry that machine's paths, so they canno
 
 ## Use it from Claude Code
 
-`packages/keyfree/demo/.mcp.json` registers the MCP server. Open Claude Code in `packages/keyfree/demo` and
-ask it to deploy `Counter`. Without the agent key the read-only tools still work (`keyfree_status`,
+`packages/keyfree/demo/.mcp.json` registers the MCP server. Do the steps of
+[Try it in 10 minutes](#try-it-in-10-minutes-no-keys-no-money) first: they build the tool and write
+`demo/keyfree.json`. Then open Claude Code in `packages/keyfree/demo`, approve the project's `keyfree` server when
+it asks, and ask it to deploy `Counter`. Without the agent key the read-only tools still work (`keyfree_status`,
 `keyfree_preview`, `keyfree_journal`, `keyfree_code_hash`), including the refusals.
 
 The agent gets nine tools, all on the request side (deploy, proxy upgrade, preview, retry, confirm, read). There is no tool for rules, roles, pause or upgrades,
