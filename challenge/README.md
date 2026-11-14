@@ -22,6 +22,23 @@ the policy back: still 0 keys, the same roles, the same allowed code.
 
 `node challenge/try.mjs --allowed` also asks for the one thing the rules allow.
 
+[`more.mjs`](more.mjs) is our own attempt to break it, made on 2026-11-14, the day the repository opened:
+
+```bash
+node challenge/more.mjs --free    # nothing is sent: 88 malformed requests to the policy's read-only preview
+node challenge/more.mjs           # the same, then 20 real calls (about 0.004 NEAR of the agent's gas)
+```
+
+`preview` runs the checks of a real request, so it can be asked anything for free: other chains, changed code,
+numbers past every limit, wrong types, duplicate and extra fields, broken JSON. It accepted 10 of the 88, and each
+of the 10 decodes to exactly the allowed transaction: create `Counter(1)` on Base Sepolia, value 0. The real calls
+put other content on a nonce the policy had already signed, forge confirmations, pack two calls into one
+transaction, call the policy's own callbacks, and give the allowed request too little gas to finish: 20 of 20
+refused, and no request was left half-done. `--allowed` adds a race of two allowed requests for one nonce: one was
+signed, the other was told `another request is being signed`. Not tried by this script: a relayer sending for the
+agent (meta-transactions), a forged log on the EVM chain itself, and calls from an account with no role; the last
+two are covered by the tests, not by a live run.
+
 ## What counts as breaking it
 
 Any one of these, using only the published key:
