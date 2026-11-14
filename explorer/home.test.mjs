@@ -127,10 +127,14 @@ test("the three doors link to challenge/, explorer/ and start/", async (t) => {
   assert.deepEqual(hrefs, ["challenge/", "explorer/", "start/"]);
 });
 
-test("no video button while VIDEO_URL is empty", async (t) => {
+test("one video button, and it opens the demo post in a new tab", async (t) => {
   const { page } = await open(t);
-  assert.equal(await page.locator("a.video").count(), 0);
-  assert.doesNotMatch(await page.locator("body").innerText(), /demo|video/i);
+  const a = page.locator("a.video");
+  assert.equal(await a.count(), 1);
+  assert.match(await a.getAttribute("href"), /^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/);
+  assert.equal(await a.getAttribute("target"), "_blank");
+  assert.equal(await a.getAttribute("rel"), "noopener");
+  assert.equal(await a.innerText(), "Watch the 95-second demo");
 });
 
 test("the facts and footer are there, with the sources link", async (t) => {
