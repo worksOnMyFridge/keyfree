@@ -153,12 +153,14 @@ const toolTests = (() => {
   const pkg = path.join(root, "packages", "keyfree");
   if (!fs.existsSync(path.join(pkg, "dist", "cli.js"))) return null;
   const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", "test/unit.test.mjs", "test/cli.test.mjs", "test/attacks.test.mjs", "test/faults.test.mjs"], { cwd: pkg, encoding: "utf8" });
-  return Number(r.stdout.match(/^# tests (\d+)/m)?.[1] ?? NaN);
+  const n = (k) => Number(r.stdout.match(new RegExp(`^# ${k} (\\d+)`, "m"))?.[1] ?? NaN);
+  // A test file that dies part-way reports fewer tests: that is a failed run, not a wrong number in the docs.
+  return { count: n("tests"), bad: n("fail") + n("cancelled") };
 })();
 const catalog = JSON.parse(read("attacks/catalog.json")).groups.flatMap((g) => g.attacks);
 const actual = {
   "contract tests": count("contract/src/tests.rs", /#\[test\]/g),
-  "tool tests": toolTests,
+  "tool tests": toolTests && toolTests.count,
   "factory tests": count("factory/factory.test.mjs", /^\s*test\(/gm),
   "sandbox tests": count("sandbox/policy.test.mjs", /^test\(/gm),
   "offline attacks": catalog.filter((a) => !a.liveOnly).length,
@@ -186,6 +188,7 @@ for (const [what, doc, re] of said) {
   const found = [...read(doc).matchAll(re)].map((m) => Number(m[1]));
   if (!found.length) { report(false, `${what} in ${doc}`, "the sentence was not found (docs changed? update this check)"); continue; }
   if (actual[what] === null) { report(true, `${what} in ${doc}`, `${found.join(", ")} (not counted: build packages/keyfree first)`); continue; }
+  if (what === "tool tests" && toolTests.bad !== 0) { report(false, `${what} in ${doc}`, `the tool tests did not all pass on this run, so they are not counted: run (cd packages/keyfree && npm test), then this check again`); continue; }
   report(found.every((n) => n === actual[what]), `${what} in ${doc}`, `docs ${found.join(", ")}, repository ${actual[what]}`);
 }
 
