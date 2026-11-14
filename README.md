@@ -113,7 +113,10 @@ The key of an AI agent on a live policy is in this repository, published on purp
 In a browser, [the challenge page](https://worksonmyfridge.github.io/keyfree/challenge/) (`challenge/index.html`) signs
 each attempt with that key and shows the refusal, with the transaction when the policy made one. From a terminal,
 `npm install && node challenge/try.mjs` uses it for everything it should not be able to do, on NEAR testnet, and each
-attempt is refused with its reason. [`challenge/README.md`](challenge/README.md) says what would count as breaking it.
+attempt is refused with its reason. `node challenge/more.mjs` goes further, the way we tried to break it ourselves the
+day the repository opened: 88 malformed requests to the policy's free `preview`, where whatever is accepted must be
+exactly the allowed transaction, then 20 more real calls. [`challenge/README.md`](challenge/README.md) says what would
+count as breaking it.
 
 ## See it in 2 minutes (browser only)
 
@@ -122,7 +125,7 @@ attempt is refused with its reason. [`challenge/README.md`](challenge/README.md)
    [one transaction](https://testnet.nearblocks.io/txns/7iawPybUxDjWqQFXCayAFxecGLLbeiMGP8bczy9sMVbd).
 2. Open its ETH address [`0x43e3…fcb0`](https://sepolia.basescan.org/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0) on Base Sepolia.
    You see twelve contract deploys and two treasury upgrades, nonces 0 to 13, from an address whose private
-   key does not exist.
+   key nobody holds: it exists only as shares across the NEAR MPC network.
 3. Open [this deploy](https://sepolia.basescan.org/tx/0x59ec94223de38de6bcbb12515c2facacd4578ce80483f734100869ae4f4e7120).
    A Claude Code session made it after one sentence: "deploy Counter with start 1 to Base Sepolia through keyfree".
 4. The same keyless address on [Ethereum Sepolia](https://sepolia.etherscan.io/address/0x43e3cb8d471680307f0c232e5ac190828681fcb0):
@@ -230,6 +233,19 @@ the metadata inside the wasm, so every commit gives its own hash; the `build` wo
 The policy moved to reproducible builds on 2026-11-01 through its own keyless upgrades (v14.1, CLAIMS 1.6; v15, CLAIMS 9.1; v16, CLAIMS 9.6; v17, CLAIMS 9.7; v18, CLAIMS 9.8; v19, CLAIMS 9.9; v20, CLAIMS 9.10); earlier versions
 were built on a laptop and their bytes carry that machine's paths, so they cannot be rebuilt elsewhere.
 
+## Can the policy's own code change
+
+Yes, in one way only. The owner proposes new code (`propose_upgrade`): it is stored on chain and anyone can read it
+from that moment. It waits `upgrade_delay_sec`; any council member can cancel it (`cancel_upgrade`); after the
+delay the owner applies it (`apply_upgrade`), and not while the policy is paused. Applying early is refused with
+`upgrade delay not over`: the explorer's list of calls shows that refusal on the demo policy. The demo policy's
+delay is 180 s, short on purpose so that a whole cycle can be watched; the challenge policy's is one day.
+
+A scanner that goes by method names reports this as an upgrade with no delay, because the delay is the
+contract's own and not a standard plugin. It will also list `request_deploy` and the proxy methods as ways to
+change the code, and `sweep` as a way to move funds: the first are requests about EVM contracts, and `sweep`
+only empties the state of a policy the council has already retired.
+
 ## Use it from Claude Code
 
 `packages/keyfree/demo/.mcp.json` registers the MCP server. Do the steps of
@@ -267,7 +283,8 @@ a list of methods. The live agent `agent14.keyfree-lab.testnet` has one key, for
 | | Rules live in | Can sign beyond the rules | Rules for deploys and upgrades |
 |---|---|---|---|
 | Private key in `.env` or CI secrets | nowhere | whoever reads the file | none |
-| Wallet services with policies in a TEE (Coinbase CDP, OutLayer agent custody) | the provider's service or enclave | the provider's infrastructure | limits on transfers and calls; no allow list of init code in their docs (checked 2026-11-01) |
+| Wallet services with policies in a TEE (Coinbase CDP, OutLayer agent custody, Turnkey) | the provider's service or enclave | the provider's infrastructure | limits on transfers and calls; no allow list of init code in their docs (checked 2026-11-01). Turnkey's guide for contract teams has a rule for deploys and one for upgrades: which wallet may create contracts on which chain, and which wallet may call `upgradeTo` on which proxy, not which code (read 2026-11-14) |
+| Deployment pipelines approved by a multisig (Sphinx, OpenZeppelin Defender Deploy) | a Safe module or the service, on each chain | the Safe owners: what they did not approve cannot run | people approve every deployment as a batch of exact transactions; nothing lets an agent deploy approved code on its own later. Sphinx's hosted service has been shut down and its code is open; Defender closes on 2026-07-01 (read 2026-11-14) |
 | Spending limits on an agent's wallet (a vault contract and a key that can only call it) | the vault contract | the vault's owner | none: they limit payments, not which code gets deployed |
 | Other policy contracts on NEAR that sign through Chain Signatures (the same technique as here, used for payments and trading orders; at least one runs on NEAR mainnet) | a contract on NEAR that builds or decodes the EVM transaction and checks it before it asks NEAR MPC | nobody but the contract, where its account has no keys | none in the five READMEs read: recipients, amounts, budgets and markets, not which code gets deployed (read 2026-11-14) |
 | Safe with modules | a contract on each chain | the Safe owners | per chain; the agent needs its own key for the module |
