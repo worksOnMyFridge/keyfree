@@ -260,6 +260,7 @@ a list of methods. The live agent `agent14.keyfree-lab.testnet` has one key, for
 | Private key in `.env` or CI secrets | nowhere | whoever reads the file | none |
 | Wallet services with policies in a TEE (Coinbase CDP, OutLayer agent custody) | the provider's service or enclave | the provider's infrastructure | limits on transfers and calls; no allow list of init code in their docs (checked 2026-11-01) |
 | Spending limits on an agent's wallet (a vault contract and a key that can only call it) | the vault contract | the vault's owner | none: they limit payments, not which code gets deployed |
+| Other policy contracts on NEAR that sign through Chain Signatures (the same technique as here, used for payments and trading orders; at least one runs on NEAR mainnet) | a contract on NEAR that builds or decodes the EVM transaction and checks it before it asks NEAR MPC | nobody but the contract, where its account has no keys | none in the five READMEs read: recipients, amounts, budgets and markets, not which code gets deployed (read 2026-11-14) |
 | Safe with modules | a contract on each chain | the Safe owners | per chain; the agent needs its own key for the module |
 | Keyfree | one public contract on NEAR, for every EVM chain it opens | nobody: the policy has no key, and NEAR MPC signs only what the contract built | the hash of the whole init code, exact proxy upgrades, a public delay for anything that widens power |
 
