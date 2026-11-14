@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --ignore-scripts
+      # The own-policy page's hashes are compared with viem's, which is among the repository root's packages.
+      - run: npm ci --ignore-scripts
+        working-directory: .
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Stubbed nodes
         env:
