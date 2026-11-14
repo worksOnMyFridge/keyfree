@@ -2,13 +2,16 @@
 
 **Your AI deploys contracts. Nobody holds the key.**
 
+Not a spending limit: Keyfree decides which code an AI agent may deploy and which upgrades it may make, and
+nobody holds the key that signs them.
+
 AI coding agents (Claude Code, Codex, CI bots) now deploy smart contracts, and to do it they get a private
 key: in `.env`, in CI secrets, on the laptop. Whoever controls the agent, a prompt injection in a README, or a
 stolen laptop controls that key, and with it the contracts and the money behind them.
 
 Keyfree removes the key. The agent asks; a contract on NEAR decides; NEAR MPC signs.
 
-This is not a spending limit on an agent's wallet. Keyfree guards a different moment: the deploy and the
+A spending limit on an agent's wallet guards payments. Keyfree guards a different moment: the deploy and the
 upgrade, where a contract learns who it pays and what its code may do. Nobody holds the EVM key for the
 policy's address: NEAR MPC signs for it, and the key exists only as shares across the MPC network, never whole.
 
@@ -31,17 +34,42 @@ AI agent ──MCP──> keyfree tool ──> policy contract on NEAR ──> N
 - After a deploy lands, **NEAR Read MPC** confirms the factory's `Deployed` log, so the policy's journal
   records what happened on chain, not what was intended.
 
-Built for NEAR HACKATHON 2026 (security track). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
+Built for NEAR HACKATHON 2026 (security and open tracks). Live on NEAR testnet, Base Sepolia and Ethereum Sepolia.
+
+The site: [worksonmyfridge.github.io/keyfree](https://worksonmyfridge.github.io/keyfree/). It has the explorer, where you watch
+the live policy or your own, the agent key you can try, and a page that prepares a policy of your own.
+
+## Why now
+
+Teams lose real money when one key can upgrade their contracts. In each case below a single stolen key was
+enough to point a proxy at new code, with no delay and no second signer:
+
+- **Wasabi Protocol, April 2026:** about $5 million on Ethereum, Base, Berachain and Blast. The deployer account
+  was the only admin; the attacker made a malicious contract an admin and upgraded the contracts in place
+  ([Halborn](https://www.halborn.com/blog/post/explained-the-wasabi-protocol-hack-april-2026): "the lack of multisig or a timelock on the account").
+- **Zoth, March 2025:** about $8.4 million. The attacker held the key of the deployer address and swapped the
+  vault's code for its own
+  ([Halborn](https://www.halborn.com/blog/post/explained-the-zoth-hack-march-2025): "the key that controlled the deployer address").
+- **DeltaPrime, September 2024:** nearly $6 million from its Arbitrum contracts, through the stolen key of its
+  proxy admin ([Halborn](https://www.halborn.com/blog/post/explained-the-deltaprime-hack-september-2024): "perform a malicious upgrade of its proxy contract").
+
+Under Keyfree no single key can do this at once or out of sight. The policy signs an upgrade only to the implementation the council
+allowed for that proxy, and allowing one waits a public delay that any other council member can cancel
+([What a stolen key gets](#what-a-stolen-key-gets)).
+
+A common hosted path for deploys and upgrades got an end date too: OpenZeppelin announced that its Defender
+service would shut down on July 1, 2026, and named its open-source Relayer and Monitor in its place
+([OpenZeppelin](https://www.openzeppelin.com/news/doubling-down-on-open-source-and-phasing-out-defender): "with its final shutdown planned for July 1, 2026").
 
 ## For judges: where to check each point
 
 | Point | Where to check it |
 |---|---|
-| Technical implementation | `npm run check:claims` (read-only, no keys) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Five security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
-| Design and use | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy |
+| Technical implementation | `npm run check:claims` (read-only, no keys, about 3 minutes; it runs right after `git clone`, before anything is installed) checks every transaction, link, quoted log line and count in these documents against the chains and the repository. [CLAIMS.md](CLAIMS.md): every claim with its evidence. `npm run attacks`: 65 attacks on the real policy code on near-sdk's mocked chain, and the wasm itself in a local nearcore node ([Run the tests](#run-the-tests)). [Check which code the live policy runs](#check-which-code-the-live-policy-runs): rebuild it and compare. Five security reviews by separate AI sessions, not a professional audit, and what changed after each: [AUDIT.md](AUDIT.md) |
+| Design | [See it in 2 minutes](#see-it-in-2-minutes-browser-only) in a browser, then [Use it from Claude Code](#use-it-from-claude-code): the agent gets nine MCP tools and every refusal says why. The read-only page in `explorer/` shows the live policy, or any testnet policy by its address: its rules, what is waiting, and every call with the policy's answer |
 | Impact | The problem: an agent that deploys holds a key that can be stolen or talked into anything. [`examples/ci`](examples/ci): a GitHub Actions job that deploys through the policy with no EVM key and fails before signing when a change asks for other code. [Where the money goes](#where-the-money-goes): a live treasury upgraded only as the council allowed, and real Claude Code sessions that a poisoned README could not get past the policy ([evidence/injection_live.md](evidence/injection_live.md)). There are no users yet |
 | Originality | [How this differs](#how-this-differs-from-other-ways-to-keep-the-key-from-the-agent): one public contract on NEAR holds the rules for every EVM chain, signs only what it built itself, and upgrades itself without a key |
-| What it takes to use it | [Run your own policy](#run-your-own-policy): `setup/policy.mjs` installs a policy on the same code in a few steps, with about 7 testnet NEAR and a little Base Sepolia ETH. The [`watch`](.github/workflows/watch.yml) workflow is the council's alarm, ready to fork. Apache-2.0. Before real money it needs a professional audit: [SECURITY.md](SECURITY.md) lists the known limits |
+| Sustainability: what it takes to use it | [Run your own policy](#run-your-own-policy): `setup/policy.mjs` installs a policy on the same code in a few steps, with about 7 testnet NEAR and a little Base Sepolia ETH. The [`watch`](.github/workflows/watch.yml) workflow is the council's alarm, ready to fork. Apache-2.0. Before real money it needs a professional audit: [SECURITY.md](SECURITY.md) lists the known limits |
 
 ## Where the money goes
 
@@ -82,8 +110,10 @@ Besides deploys, `upgradeTo` on a proxy is the only call the policy can sign, an
 ## Take the agent's key
 
 The key of an AI agent on a live policy is in this repository, published on purpose: [`challenge/`](challenge/).
+In a browser, [the challenge page](https://worksonmyfridge.github.io/keyfree/challenge/) (`challenge/index.html`) signs
+each attempt with that key and shows the refusal, with the transaction when the policy made one. From a terminal,
 `npm install && node challenge/try.mjs` uses it for everything it should not be able to do, on NEAR testnet, and each
-attempt is refused with its reason. The same page says what would count as breaking it.
+attempt is refused with its reason. [`challenge/README.md`](challenge/README.md) says what would count as breaking it.
 
 ## See it in 2 minutes (browser only)
 
@@ -102,7 +132,7 @@ attempt is refused with its reason. The same page says what would count as break
 
 ## Try it in 10 minutes (no keys, no money)
 
-Node 20+.
+Node 20.3+. The commands in this file are written for bash; on Windows use Git Bash or WSL.
 
 ```bash
 cd packages/keyfree
@@ -128,7 +158,8 @@ Reading and previewing need no key. Deploying needs the agent's key for this pol
 
 ```bash
 (cd packages/keyfree && npm install)   # once
-npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20+
+npm run attacks                        # from the repository root; needs Rust (cargo) and Node 20.3+;
+                                       # a few minutes the first time, while cargo compiles
 ```
 
 65 attacks, offline, in four groups: the agent or a prompt injection, a thief with one or two council keys, a
@@ -144,7 +175,8 @@ From the repository root:
 ```bash
 (cd contract && cargo test -- --test-threads=1)       # 189 tests of the policy (Rust, near-sdk 5.29);
                                                       # on Windows set AWS_LC_SYS_PREBUILT_NASM=1 first
-(cd packages/keyfree && npm test && npm run smoke)    # 83 tool tests; MCP self-check against the live policy
+(cd packages/keyfree && npm install && npm run build && npm test && npm run smoke)
+                                                      # 83 tool tests; MCP self-check against the live policy
 npm install && npm run test:factory                   # 6 tests of the CREATE2 factory on an in-process EVM
 ```
 
@@ -160,7 +192,9 @@ Locally (Linux or macOS arm64): `POLICY_WASM=<wasm> MOCK_WASM=<wasm> npm run tes
 Every CLI command and MCP tool also ran for real on a separate policy, with its refusals: 133 steps in
 [`evidence/tool_live.log`](evidence/tool_live.log) (`npm run live` in `packages/keyfree`). `npm audit` reports `tmp`
 through solc-js 0.8.28; the build only calls solc's `compile()`, not the command-line code that uses `tmp`, and
-another solc version would change the bytecode and with it the allowed code hashes.
+another solc version would change the bytecode and with it the allowed code hashes. It also reports `tar` through
+near-sandbox 0.3.4, which uses it to unpack the nearcore release it downloads for the local test node. Both are
+tools of this repository's tests: the `keyfree` package's own audit is clean, and CI checks that on every push.
 
 The contract tests include golden tests: the policy's transaction bytes for 1 KB, 24 KB and 48 KB of init code
 and for a proxy upgrade equal viem's (`evidence/golden_rlp.json`, made by `golden_vectors.mjs`, offline), and the journal's payload
@@ -184,6 +218,11 @@ sha256sum target/near/keyfree_policy.wasm
 # -> 72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c  (385 621 bytes)
 ```
 
+cargo-near is a release binary from `github.com/near/cargo-near` (`.github/workflows/build.yml` installs it that
+way and checks its checksum); on macOS `shasum -a 256` stands in for `sha256sum`. Without Docker,
+`npm run check:claims` shows the other half: the code on the account has exactly this sha256 and size, and its
+metadata names this commit. Only the build shows that the commit gives these bytes.
+
 NEAR shows an account's code hash as base58 of that sha256: for `policy13.keyfree-lab.testnet` it is
 `8jdpF6XEkVQ3Hun6pJrGzSEmPeGQk6JyZBuk2eRDtp6P` (`near state` or the RPC `view_account`). The commit is part of
 the metadata inside the wasm, so every commit gives its own hash; the `build` workflow
@@ -193,8 +232,10 @@ were built on a laptop and their bytes carry that machine's paths, so they canno
 
 ## Use it from Claude Code
 
-`packages/keyfree/demo/.mcp.json` registers the MCP server. Open Claude Code in `packages/keyfree/demo` and
-ask it to deploy `Counter`. Without the agent key the read-only tools still work (`keyfree_status`,
+`packages/keyfree/demo/.mcp.json` registers the MCP server. Do the steps of
+[Try it in 10 minutes](#try-it-in-10-minutes-no-keys-no-money) first: they build the tool and write
+`demo/keyfree.json`. Then open Claude Code in `packages/keyfree/demo`, approve the project's `keyfree` server when
+it asks, and ask it to deploy `Counter`. Without the agent key the read-only tools still work (`keyfree_status`,
 `keyfree_preview`, `keyfree_journal`, `keyfree_code_hash`), including the refusals.
 
 The agent gets nine tools, all on the request side (deploy, proxy upgrade, preview, retry, confirm, read). There is no tool for rules, roles, pause or upgrades,
@@ -228,6 +269,7 @@ a list of methods. The live agent `agent14.keyfree-lab.testnet` has one key, for
 | Private key in `.env` or CI secrets | nowhere | whoever reads the file | none |
 | Wallet services with policies in a TEE (Coinbase CDP, OutLayer agent custody) | the provider's service or enclave | the provider's infrastructure | limits on transfers and calls; no allow list of init code in their docs (checked 2026-11-01) |
 | Spending limits on an agent's wallet (a vault contract and a key that can only call it) | the vault contract | the vault's owner | none: they limit payments, not which code gets deployed |
+| Other policy contracts on NEAR that sign through Chain Signatures (the same technique as here, used for payments and trading orders; at least one runs on NEAR mainnet) | a contract on NEAR that builds or decodes the EVM transaction and checks it before it asks NEAR MPC | nobody but the contract, where its account has no keys | none in the five READMEs read: recipients, amounts, budgets and markets, not which code gets deployed (read 2026-11-14) |
 | Safe with modules | a contract on each chain | the Safe owners | per chain; the agent needs its own key for the module |
 | Keyfree | one public contract on NEAR, for every EVM chain it opens | nobody: the policy has no key, and NEAR MPC signs only what the contract built | the hash of the whole init code, exact proxy upgrades, a public delay for anything that widens power |
 
@@ -238,8 +280,11 @@ upgrade is where a contract learns who it pays.
 
 `setup/policy.mjs` installs a policy of your own on NEAR testnet, on exactly the code the demo policy runs:
 it takes the wasm from the demo policy on chain and installs it only if its sha256 equals the one
-`setup/config.example.json` gives for the reproducible build above (a number in this repository: to check it, rebuild). You need Node 20+, a testnet account with about 7 NEAR whose key is in
+`setup/config.example.json` gives for the reproducible build above (a number in this repository: to check it, rebuild). You need Node 20.3+, a testnet account with about 7 NEAR whose key is in
 `~/.near-credentials/testnet/`, and later a little Base Sepolia ETH from a faucet.
+
+[The own-policy page](https://worksonmyfridge.github.io/keyfree/start/) (`start/index.html`) writes `setup/config.json` and the
+code hash for your contract in a browser. It asks for no key and makes no network request.
 
 ```bash
 npm install                                           # repository root
@@ -262,6 +307,12 @@ of the accounts it creates stay in `setup/*_key.json` (gitignored, readable only
 confirms the policy signs through the network's MPC. Then allow your code with `keyfree rules allow-code <hash> --config setup/keyfree.json`
 (`keyfree hash` prints it) and give the agent `KEYFREE_AGENT_KEY=setup/agent_key.json`.
 
+To watch it, open [the explorer](https://worksonmyfridge.github.io/keyfree/explorer/) with `?policy=<your policy account>` at the
+end of the address: the page that shows the demo policy reads yours. It lists every call to the policy with who
+made it and, for a refusal, the reason; the day's budget, the agent's gas, and each change that is waiting with the
+command that cancels it. It reads again every 30 seconds. The list of calls comes from the NearBlocks indexer, a
+third party; everything else is read from public nodes.
+
 How the demo policy itself got here, stage by stage, with logs: `v13/run.mjs` (install, rules, factory,
 deploys from 22 B to 48 KB, Read MPC confirmation, refusals, guardian replacement, keyless upgrade;
 `evidence/v13.log`), `v14/run.mjs` (treasury proxy and its allowed upgrade, `evidence/v14.log`),
@@ -278,6 +329,8 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `packages/keyfree/` | `keyfree` CLI and `keyfree-mcp` MCP server (TypeScript, viem, near-api-js) |
 | `packages/keyfree/demo/` | `Counter`; `vault-kit`, a prompt-injection example (its README swaps the vault owner); `treasury`, the upgradeable treasury (proxy, v1, v2) |
 | `examples/ci/` | a GitHub Actions workflow and the script it runs: deploy from CI through the policy, with only the agent's NEAR function-call key as a secret |
+| `action/` | the same as a one-step GitHub Action; it has not run in a separate repository yet |
+| `index.html`, `start/` | the site's home page, and the page that prepares your own policy: its code hash, `setup/config.json` and the commands |
 | `setup/` | your own policy on testnet, on the code the demo policy runs (README, "Run your own policy") |
 | `v13/`, `v14/` | the end-to-end testnet scripts that built the demo policy, with their logs in `evidence/` |
 | `tools/` | small viem and NEAR helpers the scripts share, and `check_claims.mjs`: the docs against the chains |
@@ -285,9 +338,9 @@ reproducible builds) and `v14/budget.mjs` (the daily budget).
 | `attacks/` | the attack catalog and `npm run attacks` |
 | `sandbox/` | the policy in a local nearcore node: the tests and a stand-in MPC contract (`mock-mpc`, test keys anyone can recompute) |
 | `evidence/` | logs of the live runs, golden vectors, the attack table |
-| `explorer/` | a read-only page of the live policy (keys, rules, budgets, pending changes, journal, a live refusal), one file with no dependencies, tested in Chromium, Firefox and WebKit against nodes that fail on purpose (`explorer` workflow); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
-| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy and `tools/check_claims.mjs` (every link, quoted log line and count in the docs), daily; `watch`: the council's alarm, every 15 minutes; `explorer`: the page's tests in three browsers |
-| `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests ([AUDIT.md](AUDIT.md)) |
+| `explorer/` | a read-only page of the live policy, or of any testnet policy with `?policy=<account>` (keys, rules, budgets, pending changes, journal, a live refusal, and every call to the policy with the reason for each refusal; read again every 30 seconds), one file with no dependencies, tested in Chromium, Firefox and WebKit against nodes that fail on purpose (`explorer` workflow); serve it with any static server (`python -m http.server -d explorer`), it needs no key |
+| `.github/workflows/` | `ci`: tests and the attack bench, dependency audits (`cargo audit`, `npm audit`) and a secret scan of the whole history (gitleaks, rules in `.gitleaks.toml`) on every push, and the tool on Windows, Linux and macOS with Node 20, 22 and 24; `build`: the reproducible build of the policy; `sandbox`: the live wasm in a local nearcore node; `live`: the README's read-only paths against the live policy and `tools/check_claims.mjs` (every link, quoted log line and count in the docs), daily; `watch`: the council's alarm, every 15 minutes; `explorer`: the site's four pages in three browsers |
+| `audit/` | the attack catalogs the third review checked against (contracts and MPC; AI agents and MCP) and the second review's probe tests, and the reports of the fourth and fifth reviews ([AUDIT.md](AUDIT.md)) |
 
 ## Security
 
@@ -310,7 +363,8 @@ hours, not the demo's minutes.
   2026-10-19): the first experiments on 2026-10-25, the first commit in this repository on 2026-10-29 (UTC). There
   is no earlier Keyfree code.
 - **Libraries.** near-sdk, omni-transaction, viem, near-api-js, the MCP TypeScript SDK
-  (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt). Everything else is ours.
+  (`@modelcontextprotocol/server`), zod, solc-js, binaryen (wasm-opt); in the contract also `hex` and `bs58`. The
+  tests add @ethereumjs/evm, near-sandbox, Playwright and TypeScript. Everything else is ours.
 - **AI use.** Most of the code and tests were written with Claude Code (Anthropic). Five security reviews were
   done by separate AI reviewer sessions, the fourth on another model (Claude Fable 5.1), the fifth on the whole
   lifecycle (install, setup, the alarm, CI); none of them is a professional audit. Their findings are fixed with tests or stated as limits ([AUDIT.md](AUDIT.md)).

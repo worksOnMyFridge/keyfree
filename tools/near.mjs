@@ -12,6 +12,8 @@ export const provider = new JsonRpcProvider({ url: process.env.NEAR_RPC || "http
 
 export function loadAccount(accountId = ACCOUNT) {
   const f = path.join(os.homedir(), ".near-credentials", "testnet", `${accountId}.json`);
+  // Said in words: a missing key is the first thing a newcomer meets, and a bare ENOENT does not say what to do.
+  if (!fs.existsSync(f)) throw new Error(`no key for ${accountId}: this step signs as that account and reads its key from ~/.near-credentials/testnet/${accountId}.json`);
   const { private_key } = JSON.parse(fs.readFileSync(f, "utf8"));
   return new Account(accountId, provider, private_key);
 }

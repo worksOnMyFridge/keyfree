@@ -3,6 +3,7 @@
 // KEYFREE_SMOKE_DEPLOY=1 also deploys demo/Counter(1) for real (its code hash must be on the allow list).
 // Env: KEYFREE_CONFIG (keyfree.json), KEYFREE_AGENT_KEY (agent key file). Run: npm run build && npm run smoke
 import { strict as assert } from "node:assert";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/client";
@@ -10,10 +11,14 @@ import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotoc
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const artifact = path.join(root, "demo", "out", "Counter.sol", "Counter.json");
+// demo/keyfree.json is the copy the README's ten-minute path makes. Without it the example itself is read: it names
+// the same live policy, so the check also runs straight after a build.
+const demoConfig = path.join(root, "demo", "keyfree.json");
+const config = process.env.KEYFREE_CONFIG ?? (fs.existsSync(demoConfig) ? demoConfig : path.join(root, "keyfree.example.json"));
 const client = new Client({ name: "keyfree-smoke", version: "0.1.0" });
 await client.connect(new StdioClientTransport({
   command: "node", args: [path.join(root, "dist", "mcp.js")],
-  env: { ...getDefaultEnvironment(), KEYFREE_CONFIG: process.env.KEYFREE_CONFIG ?? path.join(root, "demo", "keyfree.json"), KEYFREE_AGENT_KEY: process.env.KEYFREE_AGENT_KEY ?? "" },
+  env: { ...getDefaultEnvironment(), KEYFREE_CONFIG: config, KEYFREE_AGENT_KEY: process.env.KEYFREE_AGENT_KEY ?? "" },
 }));
 const call = async (name, args) => {
   const r = await client.callTool({ name, arguments: args });

@@ -36,7 +36,7 @@ council (human key, --as <account>):
   lower-limits <gas> <fee_wei> | lower-budget <chain> <wei_per_day> <tx_per_day>   brakes, at once
   pause | unpause | roles | cancel-role <proposer> | cancel-upgrade
 
-every command: --config <file> (default ./keyfree.json)
+every command but hash: --config <file> (default ./keyfree.json)
 exit codes: 0 done, 1 error, 2 refused by the policy, 3 pending has something waiting its delay
 `;
 

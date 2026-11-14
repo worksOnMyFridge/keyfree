@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run your own policy</title>
+<meta name="description" content="Paste your contract, pick chains and limits, and get the code hash your Keyfree policy must allow, a ready setup/config.json and the exact commands. Everything is computed in your browser; nothing is sent anywhere.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1f23; --muted: #626872; --line: #e3e4e0;
+    --accent: #2f5bd3; --ok: #1d7a46; --ok-bg: #e5f4ea; --no: #b3261e; --no-bg: #fbe9e7; --warn: #8a5a00; --warn-bg: #fff3d6;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121417; --panel: #1b1e23; --ink: #e8e9eb; --muted: #9aa1ab; --line: #2b2f36;
+      --accent: #7fa2ff; --ok: #6fd39a; --ok-bg: #16301f; --no: #ff8a80; --no-bg: #3a1714; --warn: #ffcf70; --warn-bg: #3a2e12;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 28px 16px 48px; overflow-x: clip; }
+  nav { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 18px; font-size: 14px; }
+  .kicker { font: 600 12px/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.1; margin: 0 0 14px; letter-spacing: -0.02em; }
+  h2 { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 28px 0 10px; }
+  h3 { font-size: 15px; margin: 16px 0 6px; }
+  p.lead { font-size: 17px; color: var(--muted); margin: 0 0 18px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .panel + .panel { margin-top: 12px; }
+  .muted { color: var(--muted); }
+  .hint { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+  .box { border-left: 4px solid var(--warn); background: var(--panel); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 0 0 16px; }
+  .box b { color: var(--warn); }
+  button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.55; cursor: default; }
+  button.small { padding: 4px 10px; font-size: 13px; }
+  input[type=text], textarea { width: 100%; font-family: var(--mono); font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  textarea { min-height: 92px; resize: vertical; }
+  input[aria-invalid=true], textarea[aria-invalid=true] { border-color: var(--no); }
+  input:focus-visible, textarea:focus-visible, button:focus-visible, .drop:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .field { margin: 0 0 12px; min-width: 0; }
+  .field > label, .field > .lab { display: block; font-weight: 600; font-size: 14px; margin: 0 0 4px; overflow-wrap: anywhere; }
+  .field > label .t { font-weight: 400; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 0 16px; }
+  .msg { font-size: 13px; color: var(--no); margin: 4px 0 0; overflow-wrap: anywhere; }
+  .msg:empty { display: none; }
+  .note { font-size: 13px; color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 6px 10px; margin: 6px 0 0; }
+  .note:empty { display: none; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 12px; }
+  .tabs label { cursor: pointer; font-weight: 600; }
+  .drop { display: block; border: 2px dashed var(--line); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted); }
+  .drop.over { border-color: var(--accent); color: var(--ink); }
+  .drop input { display: block; max-width: 100%; margin: 8px auto 0; font: inherit; color: var(--ink); }
+  .chain { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 10px; }
+  .chain > label { font-weight: 700; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .chain .meta { color: var(--muted); font: 12px/1.4 var(--mono); overflow-wrap: anywhere; margin: 2px 0 8px; }
+  .hash { font: 700 15px/1.4 var(--mono); overflow-wrap: anywhere; word-break: break-all; }
+  .out { display: grid; gap: 4px; }
+  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; margin: 0 0 6px; }
+  .head b { overflow-wrap: anywhere; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  pre { margin: 0; padding: 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); overflow-x: auto; font: 13px/1.45 var(--mono); max-width: 100%; }
+  pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .empty { color: var(--muted); font-style: italic; }
+  .step { margin: 0 0 14px; }
+  .step .what { margin: 0 0 6px; }
+  .step .who { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
+  .step .n { font: 600 12px/1.4 var(--mono); color: var(--muted); }
+  footer { margin-top: 28px; color: var(--muted); font-size: 14px; }
+  footer p { margin: 0 0 8px; }
+</style>
+</head>
+<body data-state="loading">
+<main>
+  <nav><a href="../">&larr; Keyfree</a> <a href="../explorer/">Policy explorer</a> <a href="../challenge/">Take the agent's key</a></nav>
+  <p class="kicker">Keyfree · your own policy on testnet</p>
+  <h1>Run your own policy</h1>
+  <p class="lead">Paste your contract, pick chains and limits. You get the code hash your policy's allow list must hold,
+    a ready <code>setup/config.json</code>, and the exact commands in order. Everything is computed in this page: it asks
+    for no key and makes no network request at all.</p>
+
+  <div class="box"><b>Testnet only.</b> The guardian and the reserve should be accounts you create on other devices, not on
+    the machine where the agent runs. Before real money this needs a professional audit
+    (<a href="https://github.com/worksOnMyFridge/keyfree/blob/main/SECURITY.md">SECURITY.md</a> lists the known limits).</div>
+
+  <h2>1 · Your contract</h2>
+  <div class="panel">
+    <div class="tabs" role="radiogroup" aria-label="How to give the contract">
+      <label><input type="radio" name="src" id="src-hex" value="hex" checked> Paste init code</label>
+      <label><input type="radio" name="src" id="src-art" value="art"> Load a Foundry or Hardhat artifact</label>
+    </div>
+
+    <div id="part-hex">
+      <div class="field">
+        <label for="init">Init code (hex)</label>
+        <textarea id="init" spellcheck="false" autocomplete="off" placeholder="0x6080..."></textarea>
+        <p class="hint">Creation bytecode followed by the ABI-encoded constructor arguments, exactly what the deploy transaction carries.</p>
+        <p class="msg" id="init-msg" role="alert"></p>
+      </div>
+    </div>
+
+    <div id="part-art" hidden>
+      <div class="field">
+        <span class="lab">Artifact JSON</span>
+        <label class="drop" id="drop">Drop the file here, or choose it
+          <input type="file" id="file" accept=".json,application/json" aria-label="Artifact JSON file">
+        </label>
+        <p class="hint">Foundry <code>out/X.sol/X.json</code> or a Hardhat artifact. The file is read in this page and goes nowhere.</p>
+        <p class="msg" id="art-msg" role="alert"></p>
+      </div>
+      <div id="ctor"></div>
+    </div>
+  </div>
+
+  <h2>2 · Who decides and where</h2>
+  <div class="panel">
+    <div class="cols" id="accounts"></div>
+    <p class="hint">Account names are NEAR testnet ids (lowercase letters, digits, <code>-</code>, <code>_</code>, <code>.</code>; 2 to 64 characters; ending in <code>.testnet</code>).
+      The setup script creates the policy and the agent as sub-accounts of the owner, so both names must end in <code>.&lt;owner&gt;</code>.
+      The guardian and the reserve must already exist.</p>
+    <div class="cols" style="margin-top:12px">
+      <div class="field"><label for="rules-h">Rules delay, hours</label><input type="text" id="rules-h" value="1" inputmode="decimal" autocomplete="off"><p class="msg" id="rules-h-msg" role="alert"></p><p class="note" id="rules-h-note"></p></div>
+      <div class="field"><label for="upgrade-h">Upgrade and role delay, hours</label><input type="text" id="upgrade-h" value="24" inputmode="decimal" autocomplete="off"><p class="msg" id="upgrade-h-msg" role="alert"></p></div>
+    </div>
+    <h3>Chains</h3>
+    <div id="chains"></div>
+    <p class="msg" id="chains-msg" role="alert"></p>
+    <div class="cols">
+      <div class="field"><label for="gas-cap">Gas cap per transaction</label><input type="text" id="gas-cap" value="10000000" inputmode="numeric" autocomplete="off"><p class="msg" id="gas-cap-msg" role="alert"></p></div>
+      <div class="field"><label for="fee-cap">Fee cap, wei per gas</label><input type="text" id="fee-cap" value="50000000000" inputmode="numeric" autocomplete="off"><p class="msg" id="fee-cap-msg" role="alert"></p></div>
+    </div>
+  </div>
+
+  <h2>3 · What you get</h2>
+  <div class="panel">
+    <div class="head"><b>The code hash your allow list must hold</b><button type="button" class="small" id="copy-hash" disabled>Copy</button></div>
+    <div class="out">
+      <div class="hash" id="hash"><span class="empty">Give a valid contract in step 1.</span></div>
+      <div class="muted" id="size"></div>
+      <p class="note" id="size-warn"></p>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="head"><b>setup/config.json</b>
+      <span class="btns"><button type="button" class="small" id="copy-config" disabled>Copy</button><button type="button" class="small" id="download" disabled>Download config.json</button></span></div>
+    <pre id="config" class="wrap"><span class="empty">Fix the fields in step 2.</span></pre>
+    <p class="hint">Save it as <code>setup/config.json</code> in the repository. Everything not set above is copied from <code>setup/config.example.json</code>.</p>
+  </div>
+  <div class="panel">
+    <div class="head"><b>The commands, in order</b></div>
+    <p class="hint" style="margin-bottom:12px">Run them from the repository root (Node 20.3+). The owner's key is read from <code>~/.near-credentials/testnet/&lt;owner&gt;.json</code>.</p>
+    <div id="cmds"><p class="empty">Fix the fields above.</p></div>
+    <p class="hint" id="watch" hidden>Once it is installed, watch it live: <a id="watch-link" href="../explorer/">the explorer, opened on your policy</a>
+      shows its keys, its rules, what is waiting, and every request your agent makes with the policy's answer.</p>
+  </div>
+
+  <footer>
+    <p>The hash is keccak256 of the whole init code (creation bytecode plus constructor arguments), the same number
+      <code>keyfree hash</code> prints. This page runs offline: its security policy does not even allow it to open a connection.</p>
+  </footer>
+</main>
+<script>
+"use strict";
+// ---------- keccak256 (Ethereum variant: padding 0x01 ... 0x80, NOT SHA3-256) ----------
+const M64 = (1n << 64n) - 1n;
+const rol = (v, n) => { n = BigInt(n) % 64n; return n === 0n ? v : ((v << n) | (v >> (64n - n))) & M64; };
+const ROUND_CONSTANTS = (() => {
+  const rc = [];
+  let R = 1;
+  for (let round = 0; round < 24; round++) {
+    let c = 0n;
+    for (let j = 0; j < 7; j++) {
+      const bit = R & 1;
+      R = (R & 0x80) ? (((R << 1) ^ 0x71) & 0xff) : ((R << 1) & 0xff);
+      if (bit) c ^= 1n << BigInt((1 << j) - 1);
+    }
+    rc.push(c);
+  }
+  return rc;
+})();
+function keccakF(s) {
+  for (let round = 0; round < 24; round++) {
+    const C = [];
+    for (let x = 0; x < 5; x++) C[x] = s[x] ^ s[x + 5] ^ s[x + 10] ^ s[x + 15] ^ s[x + 20];
+    for (let x = 0; x < 5; x++) {
+      const D = C[(x + 4) % 5] ^ rol(C[(x + 1) % 5], 1);
+      for (let y = 0; y < 5; y++) s[x + 5 * y] ^= D;
+    }
+    let x = 1, y = 0, cur = s[1];
+    for (let t = 0; t < 24; t++) {
+      const nx = y, ny = (2 * x + 3 * y) % 5;
+      const tmp = s[nx + 5 * ny];
+      s[nx + 5 * ny] = rol(cur, ((t + 1) * (t + 2)) / 2);
+      cur = tmp; x = nx; y = ny;
+    }
+    for (let yy = 0; yy < 5; yy++) {
+      const T = [];
+      for (let xx = 0; xx < 5; xx++) T[xx] = s[xx + 5 * yy];
+      for (let xx = 0; xx < 5; xx++) s[xx + 5 * yy] = T[xx] ^ ((~T[(xx + 1) % 5] & M64) & T[(xx + 2) % 5]);
+    }
+    s[0] ^= ROUND_CONSTANTS[round];
+  }
+}
+function toBytes(input) {
+  if (typeof input === "string") {
+    const h = input.replace(/^0x/i, "");
+    if (!/^([0-9a-fA-F]{2})*$/.test(h)) throw new Error("not hex bytes");
+    const out = new Uint8Array(h.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(h.slice(2 * i, 2 * i + 2), 16);
+    return out;
+  }
+  return Uint8Array.from(input);
+}
+// input: hex string (0x optional) or an array / Uint8Array of bytes. Returns 64 hex characters, no 0x.
+function keccak256Hex(input) {
+  const msg = toBytes(input), rate = 136;
+  const padded = new Uint8Array(Math.floor(msg.length / rate) * rate + rate);
+  padded.set(msg);
+  padded[msg.length] ^= 0x01;
+  padded[padded.length - 1] ^= 0x80;
+  const s = new Array(25).fill(0n);
+  for (let off = 0; off < padded.length; off += rate) {
+    for (let i = 0; i < rate / 8; i++) {
+      let lane = 0n;
+      for (let b = 7; b >= 0; b--) lane = (lane << 8n) | BigInt(padded[off + 8 * i + b]);
+      s[i] ^= lane;
+    }
+    keccakF(s);
+  }
+  let out = "";
+  for (let i = 0; i < 4; i++) for (let b = 0; b < 8; b++) out += ((s[i] >> BigInt(8 * b)) & 0xffn).toString(16).padStart(2, "0");
+  return out;
+}
+
+// ---------- ABI encoding of constructor arguments (static types only) ----------
+const MAX_INIT = 49152; // EIP-3860
+const word = (v) => v.toString(16).padStart(64, "0");
+function staticType(type) {
+  let m;
+  if (type === "address" || type === "bool") return { kind: type };
+  if ((m = /^(u?int)(\d*)$/.exec(type))) {
+    const bits = m[2] === "" ? 256 : Number(m[2]);
+    if (bits >= 8 && bits <= 256 && bits % 8 === 0) return { kind: m[1], bits };
+  }
+  if ((m = /^bytes(\d+)$/.exec(type))) {
+    const n = Number(m[1]);
+    if (n >= 1 && n <= 32) return { kind: "bytes", n };
+  }
+  return null;
+}
+// A mixed-case address must carry a correct EIP-55 checksum.
+function checksumOk(addr) {
+  const h = keccak256Hex(new TextEncoder().encode(addr.slice(2).toLowerCase()));
+  for (let i = 0; i < 40; i++) {
+    const ch = addr[2 + i];
+    if (/[a-f]/i.test(ch) && ((parseInt(h[i], 16) >= 8) !== (ch === ch.toUpperCase()))) return false;
+  }
+  return true;
+}
+// One value (a string typed by the person) to one 32-byte word, 64 hex characters. Throws Error with a plain message.
+function encodeOne(type, raw) {
+  const t = staticType(type);
+  if (!t) throw new Error(`type ${type} is not supported here`);
+  const v = String(raw).trim();
+  if (v === "") throw new Error("Required.");
+  if (t.kind === "uint" || t.kind === "int") {
+    let n;
+    if ((t.kind === "uint" ? /^\d+$/ : /^-?\d+$/).test(v) || /^0x[0-9a-fA-F]+$/.test(v)) n = BigInt(v);
+    else throw new Error(t.kind === "uint" ? "A whole number, 0 or more (decimal or 0x hex)." : "A whole number (decimal or 0x hex); a minus sign is allowed.");
+    const bits = BigInt(t.bits);
+    if (t.kind === "uint") {
+      if (n >= (1n << bits)) throw new Error(`Too large for ${type} (max ${((1n << bits) - 1n).toString()}).`);
+      return word(n);
+    }
+    const lo = -(1n << (bits - 1n)), hi = (1n << (bits - 1n)) - 1n;
+    if (n < lo || n > hi) throw new Error(`Out of range for ${type} (${lo} to ${hi}).`);
+    return word((n + (1n << 256n)) % (1n << 256n));
+  }
+  if (t.kind === "address") {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(v)) throw new Error("An address: 0x and 40 hex characters.");
+    if (/[a-f]/.test(v.slice(2)) && /[A-F]/.test(v.slice(2)) && !checksumOk(v)) throw new Error("Mixed-case address with a wrong checksum.");
+    return v.slice(2).toLowerCase().padStart(64, "0");
+  }
+  if (t.kind === "bool") {
+    if (v !== "true" && v !== "false") throw new Error("Type true or false.");
+    return word(v === "true" ? 1n : 0n);
+  }
+  if (!new RegExp(`^0x[0-9a-fA-F]{${2 * t.n}}$`).test(v)) throw new Error(`Exactly ${t.n} byte${t.n === 1 ? "" : "s"}: 0x and ${2 * t.n} hex characters.`);
+  return v.slice(2).toLowerCase().padEnd(64, "0");
+}
+// types: ["uint256", ...]; values: strings. Returns hex without 0x, or throws on the first bad value.
+function encodeArgs(types, values) {
+  if (types.length !== values.length) throw new Error("Wrong number of values.");
+  return types.map((t, i) => encodeOne(t, values[i])).join("");
+}
+
+// ---------- config ----------
+// Copied unchanged from setup/config.example.json: these are not choices of the person using this page.
+const FIXED = {
+  policy_near: "5", agent_near: "1", council_near: "0.2",
+  mpc: "v1.signer-prod.testnet", path: "keyfree-1", near_rpc: "https://test.rpc.fastnear.com",
+  reference_policy: "policy13.keyfree-lab.testnet",
+  wasm_sha256: "72edd42bc4f18be81824ab7697ac74f885ede59d8c393325513b3cdb8f6db14c",
+  expect_build: "v20",
+};
+const CHAINS = [
+  { key: "base", name: "base-sepolia", label: "Base Sepolia", id: 84532, rpc: "https://sepolia.base.org", explorer: "https://sepolia.basescan.org" },
+  { key: "eth", name: "ethereum-sepolia", label: "Ethereum Sepolia", id: 11155111, rpc: "https://ethereum-sepolia-rpc.publicnode.com", explorer: "https://sepolia.etherscan.io" },
+];
+const DEFAULTS = { maxTx: "10", maxWei: "500000000000000", floor: "1000000" };
+const ACCOUNT_RE = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+function accountError(id, owner) {
+  if (id.length < 2 || id.length > 64) return "2 to 64 characters.";
+  if (!ACCOUNT_RE.test(id)) return "Lowercase letters, digits, - _ and . only; no doubled or edge separators.";
+  if (!id.endsWith(".testnet")) return "A testnet account ends in .testnet.";
+  if (owner !== undefined && !id.endsWith("." + owner)) return `Must be a sub-account of the owner: end in .${owner}`;
+  return "";
+}
+function posInt(v, { zero = false, max } = {}) {
+  const s = String(v).trim();
+  if (!/^\d+$/.test(s)) return { err: "Digits only, a whole number." };
+  const n = BigInt(s);
+  if (!zero && n === 0n) return { err: "Must be more than 0." };
+  if (max !== undefined && n > max) return { err: `At most ${max}.` };
+  return { n };
+}
+// Hours as a decimal string to whole seconds, exactly (BigInt).
+function hoursToSec(v) {
+  const m = /^(\d+)(?:\.(\d{1,6}))?$/.exec(String(v).trim());
+  if (!m) return { err: "Hours: a number such as 1, 24 or 0.5." };
+  const frac = m[2] ?? "";
+  const scale = 10n ** BigInt(frac.length);
+  const num = (BigInt(m[1]) * scale + BigInt(frac || "0")) * 3600n;
+  if (num % scale !== 0n) return { err: "That is not a whole number of seconds." };
+  const sec = num / scale;
+  if (sec === 0n) return { err: "Must be more than 0." };
+  if (sec > 31536000n) return { err: "At most one year (8760 hours)." };
+  return { sec: Number(sec) };
+}
+// input: { owner, policy, agent, guardian, reserve, rulesHours, upgradeHours, gasCap, feeCap,
+//          chains: [{ key, on, maxTx, maxWei, floor }] }. Returns { ok: true, config } or { ok: false, errors: { field: message } }.
+function buildConfig(input) {
+  const errors = {};
+  const owner = String(input.owner ?? "").trim();
+  const ownerErr = accountError(owner);
+  if (ownerErr) errors.owner = ownerErr;
+  for (const f of ["policy", "agent"]) {
+    const e = accountError(String(input[f] ?? "").trim(), ownerErr ? undefined : owner);
+    if (e) errors[f] = e;
+  }
+  for (const f of ["guardian", "reserve"]) {
+    const e = accountError(String(input[f] ?? "").trim());
+    if (e) errors[f] = e;
+  }
+  const rules = hoursToSec(input.rulesHours);
+  if (rules.err) errors.rulesHours = rules.err;
+  const upgrade = hoursToSec(input.upgradeHours);
+  if (upgrade.err) errors.upgradeHours = upgrade.err;
+  const gas = posInt(input.gasCap);
+  if (gas.err) errors.gasCap = gas.err;
+  const fee = posInt(input.feeCap);
+  if (fee.err) errors.feeCap = fee.err;
+  const chains = [];
+  const on = (input.chains || []).filter((c) => c.on);
+  if (on.length === 0) errors.chains = "Pick at least one chain: a chain without a budget signs nothing.";
+  for (const c of on) {
+    const def = CHAINS.find((d) => d.key === c.key);
+    const tx = posInt(c.maxTx, { max: 4294967295n });
+    if (tx.err) errors[`${c.key}-tx`] = tx.err;
+    const wei = posInt(c.maxWei);
+    if (wei.err) errors[`${c.key}-wei`] = wei.err;
+    const floor = posInt(c.floor, { zero: true });
+    if (floor.err) errors[`${c.key}-floor`] = floor.err;
+    if (!tx.err && !wei.err && !floor.err) {
+      chains.push({ name: def.name, chain_id: def.id, rpc: def.rpc, explorer: def.explorer,
+        fee_floor_wei: floor.n.toString(), max_wei_per_day: wei.n.toString(), max_tx_per_day: Number(tx.n) });
+    }
+  }
+  if (Object.keys(errors).length) return { ok: false, errors };
+  const config = {
+    owner, policy: input.policy.trim(), agent: input.agent.trim(), guardian: input.guardian.trim(), reserve: input.reserve.trim(),
+    policy_near: FIXED.policy_near, agent_near: FIXED.agent_near, council_near: FIXED.council_near,
+    mpc: FIXED.mpc, path: FIXED.path, near_rpc: FIXED.near_rpc, reference_policy: FIXED.reference_policy,
+    wasm_sha256: FIXED.wasm_sha256, expect_build: FIXED.expect_build,
+    upgrade_delay_sec: upgrade.sec, rules_delay_sec: rules.sec,
+    max_gas_limit: gas.n.toString(), max_fee_cap: fee.n.toString(),
+    chains,
+  };
+  return { ok: true, config };
+}
+
+// ---------- page ----------
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === "text") e.textContent = v; else if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids) e.append(k);
+  return e;
+};
+const setMsg = (id, text, input) => {
+  $(id).textContent = text || "";
+  if (input) { if (text) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid"); }
+};
+const state = { hash: null, config: null, cfg: null };
+let art = null; // { error } | { bytecode, mode: "none" | "typed" | "hexargs", ctor }
+const touched = {};
+
+// Hex text to bytes-as-hex without 0x: { hex } | { empty } | { err }. Unlinked library placeholders are named.
+function hexOnly(text) {
+  const t = text.replace(/\s+/g, "").replace(/^0x/i, "");
+  if (t === "") return { empty: true };
+  if (!/^[0-9a-fA-F]+$/.test(t)) return { err: "Not hex: only 0-9 and a-f are allowed (an optional 0x at the start)." };
+  if (t.length % 2) return { err: "An odd number of hex characters: a byte is two." };
+  return { hex: t.toLowerCase() };
+}
+function checkBytecode(text) {
+  if (text.includes("__")) return { err: "The bytecode has unlinked library placeholders (__$...$__). Link the libraries and build again: this page does not guess addresses." };
+  return hexOnly(text);
+}
+
+// Step 1: { hex } of the whole init code, or null with the messages written next to the fields.
+function computeCode() {
+  setMsg("init-msg", "", $("init")); setMsg("art-msg", "");
+  if (!$("src-art").checked) {
+    const r = checkBytecode($("init").value);
+    if (r.empty) return null;
+    if (r.err) { setMsg("init-msg", r.err, $("init")); return null; }
+    return { hex: r.hex };
+  }
+  if (!art) return null;
+  if (art.error) { setMsg("art-msg", art.error); return null; }
+  let args = "";
+  const fields = [...document.querySelectorAll("#ctor [data-arg]")];
+  if (art.mode === "typed") {
+    let bad = false;
+    const types = art.ctor.map((i) => i.type);
+    fields.forEach((f, i) => {
+      let m = "";
+      if (f.value.trim() === "") bad = true;
+      else { try { encodeOne(types[i], f.value); } catch (e) { m = e.message; bad = true; } }
+      setMsg(`arg-msg-${i}`, m, f);
+    });
+    if (bad) return null;
+    args = encodeArgs(types, fields.map((f) => f.value));
+  } else if (art.mode === "hexargs") {
+    const f = fields[0];
+    const r = hexOnly(f.value);
+    if (r.empty) { setMsg("arg-msg-0", "", f); return null; }
+    const m = r.err || (r.hex.length % 64 ? "ABI-encoded arguments are whole 32-byte words: a multiple of 64 hex characters." : "");
+    setMsg("arg-msg-0", m, f);
+    if (m) return null;
+    args = r.hex;
+  }
+  return { hex: art.bytecode + args };
+}
+
+function readSettings() {
+  return {
+    owner: $("owner").value, policy: $("policy").value, agent: $("agent").value, guardian: $("guardian").value, reserve: $("reserve").value,
+    rulesHours: $("rules-h").value, upgradeHours: $("upgrade-h").value, gasCap: $("gas-cap").value, feeCap: $("fee-cap").value,
+    chains: CHAINS.map((c) => ({ key: c.key, on: $(`chain-${c.key}`).checked, maxTx: $(`${c.key}-tx`).value, maxWei: $(`${c.key}-wei`).value, floor: $(`${c.key}-floor`).value })),
+  };
+}
+
+function render() {
+  const code = computeCode();
+  if (code) {
+    const hash = keccak256Hex(code.hex);
+    const size = code.hex.length / 2;
+    $("hash").textContent = hash;
+    $("size").textContent = `Init code: ${size} bytes (creation bytecode plus constructor arguments).`;
+    $("size-warn").textContent = size > MAX_INIT ? `Over ${MAX_INIT} bytes: EIP-3860 refuses init code this large, so this deploy fails on every chain that has it.` : "";
+    $("copy-hash").disabled = false;
+    state.hash = hash;
+  } else {
+    $("hash").replaceChildren(el("span", { class: "empty", text: "Give a valid contract in step 1." }));
+    $("size").textContent = ""; $("size-warn").textContent = "";
+    $("copy-hash").disabled = true;
+    state.hash = null;
+  }
+  const input = readSettings();
+  const built = buildConfig(input);
+  const errs = built.ok ? {} : built.errors;
+  for (const f of ["owner", "policy", "agent", "guardian", "reserve"]) setMsg(`${f}-msg`, errs[f], $(f));
+  setMsg("rules-h-msg", errs.rulesHours, $("rules-h"));
+  setMsg("upgrade-h-msg", errs.upgradeHours, $("upgrade-h"));
+  setMsg("gas-cap-msg", errs.gasCap, $("gas-cap"));
+  setMsg("fee-cap-msg", errs.feeCap, $("fee-cap"));
+  setMsg("chains-msg", errs.chains);
+  for (const c of CHAINS) for (const k of ["tx", "wei", "floor"]) setMsg(`${c.key}-${k}-msg`, errs[`${c.key}-${k}`], $(`${c.key}-${k}`));
+  const rules = hoursToSec(input.rulesHours);
+  $("rules-h-note").textContent = !rules.err && rules.sec < 3600 ? "A delay protects only while someone can react. Under 1 hour, a scheduled alarm cannot be counted on to catch a stolen owner key: fine for a trial only." : "";
+  if (built.ok) {
+    const text = JSON.stringify(built.config, null, 2) + "\n";
+    $("config").textContent = text;
+    $("copy-config").disabled = false; $("download").disabled = false;
+    state.config = text; state.cfg = built.config;
+  } else {
+    $("config").replaceChildren(el("span", { class: "empty", text: "Fix the fields marked in step 2." }));
+    $("copy-config").disabled = true; $("download").disabled = true;
+    state.config = null; state.cfg = null;
+  }
+  renderCommands();
+}
+
+function commandList() {
+  const cfg = state.cfg, owner = cfg.owner;
+  const h = cfg.rules_delay_sec / 3600;
+  const wait = `${Number.isInteger(h) ? h : +h.toFixed(4)} hour${h === 1 ? "" : "s"}`;
+  const byOwner = `Signed by the owner, ${owner}, with its key from ~/.near-credentials.`;
+  const list = [
+    { cmd: "npm install", what: "Installs the tools. Run it once, at the repository root.", who: "Nobody signs." },
+    { cmd: "node setup/policy.mjs plan", what: "Prints what each stage will do with your config. It works offline.", who: "Nobody signs." },
+    { cmd: "node setup/policy.mjs wasm", what: "Takes the policy code from the reference policy on chain and checks its sha256 against the reproducible build. Nothing else is ever installed.", who: "Nobody signs; it only reads." },
+    { cmd: "node setup/policy.mjs accounts", what: `Creates ${cfg.policy} (with a temporary key) and ${cfg.agent} (a function-call key only). ${cfg.guardian} and ${cfg.reserve} must already exist, made on other devices, or this stops.`, who: byOwner },
+    { cmd: "node setup/policy.mjs install", what: "Deploys the policy, initialises it and deletes its own key in one transaction, so it ends with no keys. Then it proposes the rules: each chain from its current nonce, a daily budget per chain, the gas caps and the factory's code. It prints the policy's ETH address.", who: byOwner },
+    { cmd: "node setup/policy.mjs apply", what: `Applies the rules it proposed. Run it after the rules delay (${wait}); any council member can cancel meanwhile.`, who: byOwner },
+  ];
+  for (const c of cfg.chains) {
+    list.push({ cmd: `node setup/policy.mjs factory ${c.name}`, what: `Once the policy's ETH address holds a little test ETH on ${c.name}, the agent deploys the factory without any private key, and then the factory rule is proposed.`, who: "The transaction is signed by NEAR MPC, only because the policy's rules allow it. You send the test ETH from a faucet." });
+  }
+  list.push(
+    { cmd: "node setup/policy.mjs apply", what: `Applies the factory rule, after the rules delay again (${wait}).`, who: byOwner },
+    { cmd: "node setup/policy.mjs keyfree", what: "Writes setup/keyfree.json for the keyfree tool (CLI and MCP).", who: "Nobody signs." },
+    { cmd: "node setup/policy.mjs check", what: "Reads the chain and reports keys, roles, rules, chains, budget, the MPC and the delays.", who: "Nobody signs; it only reads." },
+  );
+  if (state.hash) {
+    list.push(
+      { cmd: `keyfree rules allow-code ${state.hash} --as ${owner} --config setup/keyfree.json`, what: "Proposes the rule that allows your contract: its init code hash goes on the allow list. This is a widening, so it waits the rules delay and any council member may cancel it.", who: byOwner },
+      { cmd: `keyfree rules apply <id> --as ${owner} --config setup/keyfree.json`, what: `After the delay (${wait}), applies that proposal. Its id is listed by keyfree rules (same --as and --config).`, who: byOwner },
+    );
+  } else {
+    list.push({ blank: true, what: "The commands that allow your contract appear here once step 1 gives a valid hash." });
+  }
+  return list;
+}
+
+function renderCommands() {
+  const box = $("cmds");
+  // The explorer reads any testnet policy by name. The link carries only a name that passed the account checks.
+  $("watch").hidden = !state.cfg;
+  if (state.cfg) $("watch-link").setAttribute("href", `../explorer/?policy=${encodeURIComponent(state.cfg.policy)}`);
+  if (!state.cfg) { box.replaceChildren(el("p", { class: "empty", text: "Fix the fields in step 2." })); return; }
+  box.replaceChildren(el("div", { class: "step" }, el("p", { class: "what", text: "First save the JSON above as setup/config.json." })));
+  let n = 0;
+  for (const c of commandList()) {
+    if (c.blank) { box.append(el("div", { class: "step" }, el("p", { class: "empty", text: c.what }))); continue; }
+    n++;
+    const btn = el("button", { type: "button", class: "small", text: "Copy" });
+    btn.addEventListener("click", () => copy(c.cmd, btn));
+    box.append(el("div", { class: "step" },
+      el("div", { class: "head" }, el("span", { class: "n", text: `STEP ${n}` }), btn),
+      el("p", { class: "what", text: c.what }), el("pre", { class: "wrap", text: c.cmd }), el("p", { class: "who", text: c.who })));
+  }
+}
+
+async function copy(text, btn) {
+  let done = false;
+  try { await navigator.clipboard.writeText(text); done = true; } catch (e) { /* fall back below */ }
+  if (!done) {
+    const t = el("textarea", { "aria-hidden": "true" });
+    t.value = text; t.style.position = "fixed"; t.style.opacity = "0";
+    document.body.append(t); t.select();
+    try { done = document.execCommand("copy"); } catch (e) { /* nothing to do */ }
+    t.remove();
+  }
+  const old = btn.dataset.label || btn.textContent;
+  btn.dataset.label = old;
+  btn.textContent = done ? "Copied" : "Press Ctrl+C";
+  setTimeout(() => { btn.textContent = old; }, 1500);
+}
+
+function download() {
+  if (!state.config) return;
+  const url = URL.createObjectURL(new Blob([state.config], { type: "application/json" }));
+  const a = el("a", { href: url, download: "config.json" });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// ---------- artifact ----------
+function loadArtifactText(text) {
+  art = null;
+  $("ctor").replaceChildren();
+  let j;
+  try { j = JSON.parse(text); } catch (e) { art = { error: "This is not JSON. Choose the Foundry out/X.sol/X.json or a Hardhat artifact." }; return; }
+  const raw = typeof j?.bytecode === "string" ? j.bytecode : j?.bytecode?.object;
+  if (typeof raw !== "string") { art = { error: "No bytecode found: expected bytecode.object (Foundry) or bytecode (Hardhat)." }; return; }
+  const r = checkBytecode(raw);
+  if (r.err) { art = { error: r.err }; return; }
+  if (r.empty) { art = { error: "The artifact has no bytecode (an interface or abstract contract?)." }; return; }
+  const abi = Array.isArray(j.abi) ? j.abi : [];
+  const ctor = abi.find((x) => x && x.type === "constructor");
+  const inputs = ctor && Array.isArray(ctor.inputs) ? ctor.inputs.map((i) => ({ name: String(i.name ?? ""), type: String(i.type ?? "") })) : [];
+  if (inputs.length === 0) { art = { bytecode: r.hex, mode: "none", ctor: [] }; return; }
+  if (inputs.every((i) => staticType(i.type))) {
+    art = { bytecode: r.hex, mode: "typed", ctor: inputs };
+    inputs.forEach((inp, i) => {
+      const input = el("input", { type: "text", id: `arg-${i}`, "data-arg": String(i), autocomplete: "off", spellcheck: "false" });
+      const label = el("label", { for: `arg-${i}` }, `${inp.name || `argument ${i + 1}`} `, el("span", { class: "t", text: inp.type }));
+      $("ctor").append(el("div", { class: "field" }, label, input, el("p", { class: "msg", id: `arg-msg-${i}`, role: "alert" })));
+    });
+    return;
+  }
+  art = { bytecode: r.hex, mode: "hexargs", ctor: inputs };
+  const sig = `constructor(${inputs.map((i) => i.type).join(",")})`;
+  const input = el("textarea", { id: "arg-0", "data-arg": "0", autocomplete: "off", spellcheck: "false", placeholder: "0x..." });
+  $("ctor").append(el("div", { class: "field" },
+    el("label", { for: "arg-0", text: "ABI-encoded constructor arguments (hex)" }), input,
+    el("p", { class: "hint" }, `This constructor is ${sig}: it takes a type this page does not encode, and it will not guess. Make the bytes with `,
+      el("code", { text: 'cast abi-encode "constructor(string,uint256)" "name" 1' }), " (with your own types). From a terminal, ",
+      el("code", { text: "keyfree hash --artifact <file> --args '[...]'" }), " gives the same hash."),
+    el("p", { class: "msg", id: "arg-msg-0", role: "alert" })));
+}
+
+function readFile(file) {
+  if (!file) return;
+  setSource("art");
+  const fail = (m) => { art = { error: m }; $("ctor").replaceChildren(); render(); };
+  if (file.size > 20 * 1024 * 1024) return fail("That file is over 20 MB: it is not a contract artifact.");
+  const fr = new FileReader();
+  fr.onload = () => { loadArtifactText(String(fr.result)); render(); };
+  fr.onerror = () => fail("The file could not be read.");
+  fr.readAsText(file);
+}
+
+function setSource(which) {
+  $("src-art").checked = which === "art"; $("src-hex").checked = which === "hex";
+  $("part-hex").hidden = which !== "hex"; $("part-art").hidden = which !== "art";
+}
+
+// ---------- build the form ----------
+function field(id, label, value, extra = {}) {
+  const input = el("input", { type: "text", id, autocomplete: "off", spellcheck: "false", ...extra });
+  input.value = value;
+  return el("div", { class: "field" }, el("label", { for: id, text: label }), input, el("p", { class: "msg", id: `${id}-msg`, role: "alert" }));
+}
+(function buildForm() {
+  const acc = $("accounts");
+  acc.append(field("owner", "Owner (signs the setup)", "you.testnet"));
+  acc.append(field("policy", "Policy account", "policy.you.testnet"));
+  acc.append(field("agent", "Agent account", "agent.you.testnet"));
+  acc.append(field("guardian", "Guardian (can pause)", "guardian.you.testnet"));
+  acc.append(field("reserve", "Reserve (can step in)", "reserve.you.testnet"));
+  for (const id of ["policy", "agent", "guardian", "reserve"]) $(id).addEventListener("input", () => { touched[id] = true; });
+  // Until a name is typed by hand, it follows the owner, like the example config does.
+  $("owner").addEventListener("input", () => {
+    const o = $("owner").value.trim();
+    if (!/^[a-z0-9_.-]+$/.test(o)) return;
+    for (const id of ["policy", "agent", "guardian", "reserve"]) if (!touched[id]) $(id).value = `${id}.${o}`;
+  });
+  for (const c of CHAINS) {
+    const on = el("input", { type: "checkbox", id: `chain-${c.key}` });
+    on.checked = c.key === "base";
+    $("chains").append(el("div", { class: "chain" },
+      el("label", { for: `chain-${c.key}` }, on, `${c.label} `, el("span", { class: "muted", text: `chain ${c.id}` })),
+      el("div", { class: "meta", text: `${c.rpc} · ${c.explorer}` }),
+      el("div", { class: "cols" },
+        field(`${c.key}-tx`, "Max transactions a day", DEFAULTS.maxTx, { inputmode: "numeric" }),
+        field(`${c.key}-wei`, "Max wei a day", DEFAULTS.maxWei, { inputmode: "numeric" }),
+        field(`${c.key}-floor`, "Fee floor, wei", DEFAULTS.floor, { inputmode: "numeric" }))));
+  }
+})();
+
+document.addEventListener("input", (e) => { if (e.target.matches("input[type=text], textarea")) render(); });
+document.addEventListener("change", (e) => { if (e.target.matches("input[type=checkbox]")) render(); });
+$("src-hex").addEventListener("change", () => { setSource("hex"); render(); });
+$("src-art").addEventListener("change", () => { setSource("art"); render(); });
+$("file").addEventListener("change", () => readFile($("file").files[0]));
+const drop = $("drop");
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); readFile(e.dataTransfer.files[0]); });
+$("copy-hash").addEventListener("click", () => state.hash && copy(state.hash, $("copy-hash")));
+$("copy-config").addEventListener("click", () => state.config && copy(state.config, $("copy-config")));
+$("download").addEventListener("click", download);
+
+window.keyfreeStart = { keccak256Hex, encodeArgs, buildConfig };
+render();
+document.body.dataset.state = "done";
+</script>
+</body>
+</html>

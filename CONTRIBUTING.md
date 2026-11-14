@@ -33,7 +33,8 @@ request, with the dependency audits and a secret scan of the whole history.
    `contract/CHANGELOG.md`.
 3. The `build` workflow prints the sha256 and the code hash. Set them in `sandbox.yml`; the `sandbox` workflow must pass.
 4. Only after that, install it through the keyless upgrade (`v14/upgrade.mjs`), and repeat the live runs.
-5. Update the README, `CLAIMS.md`, the explorer's pinned build and `setup/config.example.json`.
+5. Update the README, `CLAIMS.md`, the explorer's pinned build, `setup/config.example.json`, the same values in
+   `start/index.html` and `challenge/setup.mjs`, and the page tests in `explorer/`.
 
 ## Claims must hold
 

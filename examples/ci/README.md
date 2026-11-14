@@ -4,8 +4,10 @@ A CI job that deploys contracts usually holds a deployer key in its secrets. Who
 dependency of the build, or the constructor arguments in a pull request can use that key for anything. Here the job
 holds no EVM key at all.
 
-- [`deploy.yml`](deploy.yml): a GitHub Actions workflow to copy into your repository.
-- [`keyfree-deploy.sh`](keyfree-deploy.sh): what the workflow runs; it works the same from any CI or a terminal.
+- [`deploy.yml`](deploy.yml): a GitHub Actions workflow to copy into your repository. It deploys in one step, with
+  the [`action`](../../action/README.md) in this repository.
+- [`keyfree-deploy.sh`](keyfree-deploy.sh): what the action runs; it also works the same from any other CI or a
+  terminal.
 
 ## What the job holds, and what it can do
 
@@ -33,8 +35,8 @@ cancel (`keyfree rules allow-code <hash>`).
    it) and the compiled artifact.
 3. A GitHub environment named `testnet` with the secret `KEYFREE_AGENT_KEY`. Protect it: allow deployments from
    `main` only and add a required reviewer. Without those rules the secret reaches a workflow on any branch.
-4. Copy `deploy.yml` to `.github/workflows/`, set `CHAIN` and `ARTIFACT`, and keep `ref` on a commit of this
-   repository you have read (the file pins one), never on a branch.
+4. Copy `deploy.yml` to `.github/workflows/`, set `chain` and `artifact` in its one action step, and keep the sha
+   after `@` on a full commit of this repository you have read (the file pins one), never a branch or a tag.
 
 Keep the council's keys out of CI. Run [`watch.yml`](../../.github/workflows/watch.yml) next to it, so a widening
 that waits its delay raises an alarm while it can still be cancelled.

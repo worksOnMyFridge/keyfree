@@ -1,0 +1,72 @@
+# Deploys one contract through a Keyfree policy: builds the keyfree tool from this commit, then asks the policy
+# and deploys only what the council allowed. The job holds no EVM key, only the agent's NEAR function-call key.
+# Pin this action to a full commit sha of this repository that you have read, never to a branch or a tag:
+# whoever can move a branch would run code next to your agent key.
+name: Keyfree deploy
+description: Deploy a contract through a Keyfree policy, with no EVM key in the job.
+
+inputs:
+  chain:
+    description: A chain name from your keyfree.json, e.g. base-sepolia.
+    required: true
+  artifact:
+    description: The compiled contract (Foundry or Hardhat JSON with abi and bytecode).
+    required: true
+  args:
+    description: Constructor arguments as a JSON array.
+    required: false
+    default: '[]'
+  config:
+    description: Path to your keyfree.json.
+    required: false
+    default: keyfree.json
+  agent-key:
+    description: The agent's key file contents, from a CI secret.
+    required: true
+  node-version:
+    description: Node.js version used to build and run the tool.
+    required: false
+    default: '22'
+
+outputs:
+  address:
+    description: The deployed contract address. Set only when the deploy succeeded.
+    value: ${{ steps.result.outputs.address }}
+  evm-url:
+    description: Explorer link for the deployment on the EVM chain. Set only when the deploy succeeded.
+    value: ${{ steps.result.outputs.evm-url }}
+  near-url:
+    description: Explorer link for the NEAR transaction. Set only when the deploy succeeded.
+    value: ${{ steps.result.outputs.near-url }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: ${{ inputs.node-version }}
+    - name: Build the keyfree tool
+      shell: bash
+      working-directory: ${{ github.action_path }}/../packages/keyfree
+      run: npm ci --ignore-scripts && npm run build
+    - name: Deploy through the policy
+      shell: bash
+      env:
+        KEYFREE: ${{ github.action_path }}/../packages/keyfree/dist/cli.js
+        CONFIG: ${{ inputs.config }}
+        CHAIN: ${{ inputs.chain }}
+        ARTIFACT: ${{ inputs.artifact }}
+        ARGS: ${{ inputs.args }}
+        AGENT_KEY_JSON: ${{ inputs.agent-key }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: bash "$ACTION_PATH/../examples/ci/keyfree-deploy.sh"
+    - name: Read the result
+      id: result
+      shell: bash
+      run: |
+        node -e '
+          const d = JSON.parse(require("fs").readFileSync("deploy.json", "utf8"));
+          const one = (v) => String(v ?? "").replace(/[\r\n]/g, " ");
+          const out = `address=${one(d.address)}\nevm-url=${one(d.links && d.links.evm)}\nnear-url=${one(d.links && d.links.near)}\n`;
+          require("fs").appendFileSync(process.env.GITHUB_OUTPUT, out);
+        '
