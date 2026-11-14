@@ -60,7 +60,10 @@ const view = async (method, args = {}) => {
 };
 const exists = (accountId) => provider.viewAccount({ accountId }).then(() => true, () => false);
 const keysOf = async (accountId) => (await provider.viewAccessKeyList({ accountId })).keys;
-const owner = () => loadAccount(CFG.owner);
+const owner = () => {
+  if (CFG.owner === "you.testnet") throw new Error('the config still names the example owner you.testnet: copy setup/config.example.json to setup/config.json and put your own testnet account in "owner", with sub-accounts of it for the policy and the agent');
+  return loadAccount(CFG.owner);
+};
 const agent = () => new Account(CFG.agent, provider, JSON.parse(fs.readFileSync(keyFile("agent"))).private_key);
 const result = (out) => JSON.parse(Buffer.from(out.status.SuccessValue ?? "", "base64").toString() || "null");
 const logs = (out) => { for (const r of out.receipts_outcome) for (const l of r.outcome.logs) if (l.startsWith("keyfree")) say(`  log: ${l}`); };
